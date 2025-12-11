@@ -480,7 +480,26 @@ pnpm start
 
 **⚠️ 重要：生产环境使用 `prisma migrate deploy`，不要使用 `prisma db push`！**
 
-详细部署指南请查看 [DEPLOYMENT.md](./DEPLOYMENT.md)
+### Nginx 反向代理配置
+
+如果使用 Nginx 作为反向代理，需要：
+
+1. **配置 `auth.ts`** - 已添加 `trustHost: true`（✅ 已完成）
+
+2. **设置环境变量** - `NEXTAUTH_URL` 必须设置为公网域名：
+
+   ```bash
+   NEXTAUTH_URL=https://your-domain.com  # ⚠️ 不能是 localhost
+   ```
+
+3. **配置 Nginx** - 确保传递正确的 Host 头：
+   ```nginx
+   proxy_set_header Host $host;
+   proxy_set_header X-Forwarded-Proto $scheme;
+   proxy_set_header X-Forwarded-Host $host;
+   ```
+
+详细部署指南和 Nginx 配置示例请查看 [DEPLOYMENT.md](./DEPLOYMENT.md)
 
 ### Vercel 部署 (推荐)
 

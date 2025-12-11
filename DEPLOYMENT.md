@@ -12,8 +12,9 @@
 
 2. **环境变量**
    - `DATABASE_URL` - MySQL 连接字符串（格式：`mysql://用户名:密码@主机:端口/数据库名`）
-   - `NEXTAUTH_URL` - 生产环境 URL（如：`https://your-domain.com`）
+   - `NEXTAUTH_URL` - 生产环境 URL（如：`https://your-domain.com`）**⚠️ 必须设置为公网域名，不能是 localhost**
    - `NEXTAUTH_SECRET` - 随机生成的密钥（可使用 `openssl rand -base64 32` 生成）
+   - `AUTH_TRUST_HOST` - 设置为 `true`（可选，代码中已配置 `trustHost: true`）
 
 ---
 
@@ -328,6 +329,141 @@ prisma/
 - [ ] 已运行 `prisma migrate deploy`
 - [ ] 应用已重新构建
 - [ ] 功能测试通过
+
+---
+
+## 🔧 Nginx 反向代理配置
+
+如果使用 Nginx 作为反向代理，需要正确配置：
+
+### Nginx 配置示例
+
+```nginx
+server {
+    listen 80;
+    server_name your-domain.com;
+
+    # 重定向到 HTTPS
+    return 301 https://$server_name$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name your-domain.com;
+
+    # SSL 证书配置
+    ssl_certificate /path/to/cert.pem;
+    ssl_certificate_key /path/to/key.pem;
+
+    # 日志
+    access_log /var/log/nginx/doumi-financial-access.log;
+    error_log /var/log/nginx/doumi-financial-error.log;
+
+    # 反向代理到 Next.js 应用
+    location / {
+        proxy_pass http://localhost:3001;  # Next.js 应用端口
+        proxy_http_version 1.1;
+
+        # 重要：传递原始 Host 头
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Port $server_port;
+
+        # WebSocket 支持（如果需要）
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+
+        # 超时设置
+        proxy_connect_timeout 60s;
+        proxy_send_timeout 60s;
+        proxy_read_timeout 60s;
+    }
+}
+```
+
+### 关键配置说明
+
+1. **`proxy_set_header Host $host`** - 传递原始 Host 头，NextAuth.js 需要这个来验证主机
+2. **`proxy_set_header X-Forwarded-Proto $scheme`** - 传递协议（http/https）
+3. **`proxy_set_header X-Forwarded-Host $host`** - 传递原始主机名
+
+### 环境变量配置
+
+在 `.env` 或系统环境变量中设置：
+
+```bash
+# ⚠️ 重要：必须设置为公网域名，不能是 localhost
+NEXTAUTH_URL=https://your-domain.com
+
+# 其他环境变量
+DATABASE_URL=mysql://user:password@host:3306/database
+NEXTAUTH_SECRET=your-secret-key
+
+# 可选：明确信任主机（代码中已配置 trustHost: true）
+AUTH_TRUST_HOST=true
+```
+
+### 验证配置
+
+部署后，检查：
+
+1. **访问应用**
+
+   ```bash
+   curl -I https://your-domain.com
+   ```
+
+2. **检查 NextAuth 端点**
+
+   ```bash
+   curl https://your-domain.com/api/auth/session
+   ```
+
+3. **查看日志**
+
+   ```bash
+   # Next.js 应用日志
+   pm2 logs app
+
+   # Nginx 日志
+   tail -f /var/log/nginx/doumi-financial-error.log
+   ```
+
+### 常见问题
+
+#### 错误：`UntrustedHost: Host must be trusted`
+
+**原因：**
+
+- `NEXTAUTH_URL` 设置为 `localhost` 或错误的 URL
+- Nginx 没有正确传递 Host 头
+- `trustHost: true` 未配置
+
+**解决：**
+
+1. 确保 `NEXTAUTH_URL` 设置为公网域名（如：`https://your-domain.com`）
+2. 确保 Nginx 配置了 `proxy_set_header Host $host`
+3. 确保 `auth.ts` 中配置了 `trustHost: true`（已配置）
+
+#### 错误：`NEXTAUTH_URL` 不匹配
+
+**原因：**
+
+- 环境变量未正确加载
+- 多个环境变量文件冲突
+
+**解决：**
+
+```bash
+# 检查环境变量
+echo $NEXTAUTH_URL
+
+# 在应用启动时打印环境变量（临时调试）
+# 在代码中添加：console.log('NEXTAUTH_URL:', process.env.NEXTAUTH_URL)
+```
 
 ---
 
