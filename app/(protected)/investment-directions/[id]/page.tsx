@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, use } from 'react';
+import { useState, useEffect, use, useCallback } from 'react';
 import {
   Card,
   Button,
@@ -33,7 +33,7 @@ import {
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
-const { Title, Text, Paragraph } = Typography;
+const { Title, Text } = Typography;
 const { TextArea } = Input;
 
 interface Fund {
@@ -123,18 +123,18 @@ export default function DirectionDetailPage({
   }, []);
 
   // 加载投资方向详情
-  const loadDirection = async () => {
+  const loadDirection = useCallback(async () => {
     try {
       const response = await fetch(`/api/investment-directions/${directionId}`);
       const data = await response.json();
       setDirection(data);
-    } catch (error) {
+    } catch {
       message.error('加载投资方向失败');
     }
-  };
+  }, [directionId]);
 
   // 加载分类目标
-  const loadCategoryTargets = async () => {
+  const loadCategoryTargets = useCallback(async () => {
     try {
       const response = await fetch(
         `/api/category-targets?directionId=${directionId}`
@@ -144,10 +144,10 @@ export default function DirectionDetailPage({
     } catch (error) {
       console.error('加载分类目标失败:', error);
     }
-  };
+  }, [directionId]);
 
   // 加载汇总统计
-  const loadSummary = async () => {
+  const loadSummary = useCallback(async () => {
     try {
       const response = await fetch(
         `/api/investment-directions/${directionId}/summary`
@@ -157,10 +157,10 @@ export default function DirectionDetailPage({
     } catch (error) {
       console.error('加载汇总统计失败:', error);
     }
-  };
+  }, [directionId]);
 
   // 加载基金列表
-  const loadFunds = async () => {
+  const loadFunds = useCallback(async () => {
     setLoading(true);
     try {
       const response = await fetch(`/api/funds?directionId=${directionId}`);
@@ -181,19 +181,19 @@ export default function DirectionDetailPage({
         })
       );
       setFundsStats(statsMap);
-    } catch (error) {
+    } catch {
       message.error('加载基金列表失败');
     } finally {
       setLoading(false);
     }
-  };
+  }, [directionId]);
 
   useEffect(() => {
     loadDirection();
     loadFunds();
     loadCategoryTargets();
     loadSummary();
-  }, [directionId]);
+  }, [directionId, loadDirection, loadFunds, loadCategoryTargets, loadSummary]);
 
   // 打开新建/编辑弹窗
   const handleOpenModal = (fund?: Fund) => {
@@ -240,7 +240,7 @@ export default function DirectionDetailPage({
       } else {
         message.error('操作失败');
       }
-    } catch (error) {
+    } catch {
       message.error('操作失败');
     }
   };
@@ -258,7 +258,7 @@ export default function DirectionDetailPage({
       } else {
         message.error('删除失败');
       }
-    } catch (error) {
+    } catch {
       message.error('删除失败');
     }
   };
@@ -296,7 +296,7 @@ export default function DirectionDetailPage({
       } else {
         message.error('设置失败');
       }
-    } catch (error) {
+    } catch {
       message.error('设置失败');
     }
   };
@@ -553,7 +553,7 @@ export default function DirectionDetailPage({
                 <Button
                   icon={<ArrowLeftOutlined />}
                   onClick={() => router.push('/investment-directions')}
-                  size={isMobile ? 'middle' : 'default'}
+                  size={isMobile ? 'small' : 'middle'}
                 >
                   返回
                 </Button>
@@ -574,7 +574,7 @@ export default function DirectionDetailPage({
             <Button
               type="primary"
               icon={<PlusOutlined />}
-              size={isMobile ? 'middle' : 'large'}
+              size={isMobile ? 'small' : 'middle'}
               onClick={() => handleOpenModal()}
               block={isMobile}
             >
@@ -875,7 +875,7 @@ export default function DirectionDetailPage({
             >
               <FundOutlined style={{ fontSize: 64, color: '#d9d9d9' }} />
               <Text type="secondary" style={{ marginTop: 16 }}>
-                还没有添加基金，点击"新建基金"开始
+                还没有添加基金，点击&ldquo;新建基金&rdquo;开始
               </Text>
             </Flex>
           </Card>
@@ -979,10 +979,9 @@ export default function DirectionDetailPage({
                 min={0}
                 precision={2}
                 formatter={(value) =>
-                  `¥ ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')
-                }
-                parser={(value) =>
-                  value?.replace(/¥\s?|(,*)/g, '') as unknown as number
+                  value
+                    ? `¥ ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+                    : ''
                 }
               />
             </Form.Item>

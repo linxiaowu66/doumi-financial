@@ -1,49 +1,31 @@
-import { PrismaClient, Prisma } from '../app/generated/prisma/client';
+import { PrismaClient } from '../app/generated/prisma/client';
 import 'dotenv/config';
+import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 
-const userData: Prisma.UserCreateInput[] = [
-  {
-    name: 'Alice',
-    email: 'alice@prisma.io',
-    posts: {
-      create: [
-        {
-          title: 'Join the Prisma Discord',
-          content: 'https://pris.ly/discord',
-          published: true,
-        },
-        {
-          title: 'Prisma on YouTube',
-          content: 'https://pris.ly/youtube',
-        },
-      ],
-    },
-  },
-  {
-    name: 'Bob',
-    email: 'bob@prisma.io',
-    posts: {
-      create: [
-        {
-          title: 'Follow Prisma on Twitter',
-          content: 'https://www.twitter.com/prisma',
-          published: true,
-        },
-      ],
-    },
-  },
-];
-
 async function main() {
   console.log('Start seeding...');
-  for (const u of userData) {
+
+  // 创建示例用户（如果不存在）
+  const existingUser = await prisma.user.findUnique({
+    where: { email: 'demo@example.com' },
+  });
+
+  if (!existingUser) {
+    const hashedPassword = await bcrypt.hash('demo123456', 10);
     const user = await prisma.user.create({
-      data: u,
+      data: {
+        email: 'demo@example.com',
+        name: '演示用户',
+        password: hashedPassword,
+      },
     });
-    console.log(`Created user with id: ${user.id}`);
+    console.log(`Created demo user with id: ${user.id}`);
+  } else {
+    console.log('Demo user already exists');
   }
+
   console.log('Seeding finished.');
 }
 

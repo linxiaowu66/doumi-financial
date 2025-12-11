@@ -45,11 +45,9 @@ export async function POST(request: Request) {
       message: '注册成功',
       user,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('注册失败:', error);
-    return NextResponse.json(
-      { error: '注册失败', message: error.message || '未知错误' },
-      { status: 500 }
-    );
+    const message = error instanceof Error ? error.message : '未知错误';
+    return NextResponse.json({ error: '注册失败', message }, { status: 500 });
   }
 }

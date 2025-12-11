@@ -22,7 +22,6 @@ import {
   PlusOutlined,
   EditOutlined,
   DeleteOutlined,
-  DollarOutlined,
   FundOutlined,
   ArrowRightOutlined,
 } from '@ant-design/icons';
@@ -57,7 +56,7 @@ export default function InvestmentDirectionsPage() {
       const response = await fetch('/api/investment-directions');
       const data = await response.json();
       setDirections(data);
-    } catch (error) {
+    } catch {
       message.error('加载失败');
     } finally {
       setLoading(false);
@@ -109,7 +108,7 @@ export default function InvestmentDirectionsPage() {
       } else {
         message.error('操作失败');
       }
-    } catch (error) {
+    } catch {
       message.error('操作失败');
     }
   };
@@ -127,7 +126,7 @@ export default function InvestmentDirectionsPage() {
       } else {
         message.error('删除失败');
       }
-    } catch (error) {
+    } catch {
       message.error('删除失败');
     }
   };
@@ -337,9 +336,6 @@ export default function InvestmentDirectionsPage() {
                 precision={2}
                 formatter={(value) =>
                   `¥ ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')
-                }
-                parser={(value) =>
-                  value?.replace(/¥\s?|(,*)/g, '') as unknown as number
                 }
               />
             </Form.Item>

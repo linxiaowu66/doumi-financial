@@ -35,7 +35,6 @@ export async function GET(
     fund.transactions.forEach((tx) => {
       const amount = new Decimal(tx.amount);
       const shares = new Decimal(tx.shares);
-      const price = new Decimal(tx.price);
 
       if (tx.type === 'BUY') {
         // 买入：增加份额和成本

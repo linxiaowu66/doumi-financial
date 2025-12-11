@@ -10,7 +10,6 @@ import {
   Space,
   App,
   Modal,
-  Progress,
 } from 'antd';
 import {
   FundOutlined,
@@ -46,15 +45,11 @@ interface UpdateResult {
 
 export default function HomePage() {
   const { message } = App.useApp();
-  const { data: session, status } = useSession();
+  const { status } = useSession();
   const router = useRouter();
   const [directions, setDirections] = useState<DirectionSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
-  const [updateProgress, setUpdateProgress] = useState({
-    current: 0,
-    total: 0,
-  });
   const [updateResults, setUpdateResults] = useState<UpdateResult[]>([]);
   const [showResultModal, setShowResultModal] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
@@ -112,7 +107,6 @@ export default function HomePage() {
       cancelText: '取消',
       onOk: async () => {
         setUpdating(true);
-        setUpdateProgress({ current: 0, total: totalFunds });
         setUpdateResults([]);
 
         try {
@@ -133,7 +127,7 @@ export default function HomePage() {
           } else {
             message.error(data.error || '更新失败');
           }
-        } catch (error) {
+        } catch {
           message.error('更新失败，请重试');
         } finally {
           setUpdating(false);

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, use } from 'react';
+import { useState, useEffect, use, useCallback } from 'react';
 import {
   Card,
   Button,
@@ -27,13 +27,11 @@ import {
   ArrowLeftOutlined,
   PlusOutlined,
   DeleteOutlined,
-  RiseOutlined,
-  FallOutlined,
   DollarOutlined,
 } from '@ant-design/icons';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import dayjs from 'dayjs';
+import dayjs, { Dayjs } from 'dayjs';
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
@@ -105,7 +103,6 @@ export default function FundDetailPage({
     []
   );
   const [loading, setLoading] = useState(false);
-  const [planLoading, setPlanLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [planModalOpen, setPlanModalOpen] = useState(false);
   const [executePlanModalOpen, setExecutePlanModalOpen] = useState(false);
@@ -132,8 +129,73 @@ export default function FundDetailPage({
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
+  // 判断是否需要更新净值（今天未更新过则需要更新）
+  const shouldUpdateNetWorth = (
+    lastUpdateTime: string | null | undefined
+  ): boolean => {
+    if (!lastUpdateTime) {
+      return true; // 从未更新过，需要获取
+    }
+
+    const lastUpdate = dayjs(lastUpdateTime);
+    const now = dayjs();
+
+    // 如果上次更新不是今天，需要重新获取
+    return !lastUpdate.isSame(now, 'day');
+  };
+
+  // 获取基金最新净值
+  const fetchCurrentPrice = useCallback(
+    async (code: string) => {
+      setFetchingPrice(true);
+      try {
+        const response = await fetch(`/api/fund-price?code=${code}`);
+        const data = await response.json();
+
+        if (response.ok && data.netWorth) {
+          const price = parseFloat(data.netWorth);
+          setCurrentPrice(price);
+
+          // 保存净值到数据库
+          await fetch(`/api/funds/${fundId}/net-worth`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              netWorth: data.netWorth,
+              netWorthDate: data.netWorthDate,
+            }),
+          });
+
+          // 更新fund对象
+          setFund((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  latestNetWorth: price,
+                  netWorthDate: data.netWorthDate,
+                  netWorthUpdateAt: new Date().toISOString(),
+                }
+              : null
+          );
+
+          message.success(
+            `已获取最新净值：¥${price}（${data.netWorthDate || ''}）`
+          );
+        } else {
+          message.warning('无法获取最新净值，请手动输入');
+        }
+      } catch (error) {
+        console.error('获取净值失败:', error);
+        message.warning('获取净值失败，请手动输入');
+      } finally {
+        setFetchingPrice(false);
+      }
+    },
+    [fundId]
+  );
+
   // 加载基金详情
-  const loadFund = async () => {
+  const loadFund = useCallback(async () => {
     try {
       const response = await fetch(`/api/funds/${fundId}`);
       const data = await response.json();
@@ -153,75 +215,13 @@ export default function FundDetailPage({
           console.log('净值已是最新，无需重复获取');
         }
       }
-    } catch (error) {
+    } catch {
       message.error('加载基金详情失败');
     }
-  };
-
-  // 判断是否需要更新净值（今天未更新过则需要更新）
-  const shouldUpdateNetWorth = (
-    lastUpdateTime: string | null | undefined
-  ): boolean => {
-    if (!lastUpdateTime) {
-      return true; // 从未更新过，需要获取
-    }
-
-    const lastUpdate = dayjs(lastUpdateTime);
-    const now = dayjs();
-
-    // 如果上次更新不是今天，需要重新获取
-    return !lastUpdate.isSame(now, 'day');
-  };
-
-  // 获取基金最新净值
-  const fetchCurrentPrice = async (code: string) => {
-    setFetchingPrice(true);
-    try {
-      const response = await fetch(`/api/fund-price?code=${code}`);
-      const data = await response.json();
-
-      if (response.ok && data.netWorth) {
-        const price = parseFloat(data.netWorth);
-        setCurrentPrice(price);
-
-        // 保存净值到数据库
-        await fetch(`/api/funds/${fundId}/net-worth`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            netWorth: data.netWorth,
-            netWorthDate: data.netWorthDate,
-          }),
-        });
-
-        // 更新fund对象
-        setFund((prev) =>
-          prev
-            ? {
-                ...prev,
-                latestNetWorth: price,
-                netWorthDate: data.netWorthDate,
-                netWorthUpdateAt: new Date().toISOString(),
-              }
-            : null
-        );
-
-        message.success(
-          `已获取最新净值：¥${price}（${data.netWorthDate || ''}）`
-        );
-      } else {
-        message.warning('无法获取最新净值，请手动输入');
-      }
-    } catch (error) {
-      console.error('获取净值失败:', error);
-      message.warning('获取净值失败，请手动输入');
-    } finally {
-      setFetchingPrice(false);
-    }
-  };
+  }, [fundId, fetchCurrentPrice]);
 
   // 加载交易记录
-  const loadTransactions = async () => {
+  const loadTransactions = useCallback(async () => {
     setLoading(true);
     try {
       const response = await fetch(`/api/transactions?fundId=${fundId}`);
@@ -234,39 +234,36 @@ export default function FundDetailPage({
       const statsRes = await fetch(`/api/funds/${fundId}/stats${priceParam}`);
       const statsData = await statsRes.json();
       setStats(statsData);
-    } catch (error) {
+    } catch {
       message.error('加载交易记录失败');
     } finally {
       setLoading(false);
     }
-  };
+  }, [fundId, currentPrice]);
 
   // 加载计划买入列表
-  const loadPlannedPurchases = async () => {
-    setPlanLoading(true);
+  const loadPlannedPurchases = useCallback(async () => {
     try {
       const response = await fetch(
         `/api/planned-purchases?fundId=${fundId}&status=PENDING`
       );
       const data = await response.json();
       setPlannedPurchases(data);
-    } catch (error) {
+    } catch {
       message.error('加载计划买入失败');
-    } finally {
-      setPlanLoading(false);
     }
-  };
+  }, [fundId]);
 
   useEffect(() => {
     loadFund();
     loadPlannedPurchases();
-  }, [fundId]);
+  }, [fundId, loadFund, loadPlannedPurchases]);
 
   useEffect(() => {
     if (currentPrice > 0) {
       loadTransactions();
     }
-  }, [currentPrice]);
+  }, [currentPrice, loadTransactions]);
 
   // 打开交易弹窗
   const handleOpenModal = (type: string) => {
@@ -280,7 +277,16 @@ export default function FundDetailPage({
   };
 
   // 提交交易
-  const handleSubmit = async (values: any) => {
+  const handleSubmit = async (values: {
+    type: string;
+    amount: number;
+    fee: number;
+    price: number;
+    shares: number;
+    date: Dayjs;
+    dividendReinvest: boolean;
+    remark: string;
+  }) => {
     try {
       let calculatedShares = 0;
       let calculatedAmount = 0;
@@ -331,7 +337,7 @@ export default function FundDetailPage({
       } else {
         message.error('添加失败');
       }
-    } catch (error) {
+    } catch {
       message.error('添加失败');
     }
   };
@@ -349,7 +355,7 @@ export default function FundDetailPage({
       } else {
         message.error('删除失败');
       }
-    } catch (error) {
+    } catch {
       message.error('删除失败');
     }
   };
@@ -374,7 +380,7 @@ export default function FundDetailPage({
       } else {
         message.error('创建失败');
       }
-    } catch (error) {
+    } catch {
       message.error('创建失败');
     }
   };
@@ -392,7 +398,7 @@ export default function FundDetailPage({
       } else {
         message.error('删除失败');
       }
-    } catch (error) {
+    } catch {
       message.error('删除失败');
     }
   };
@@ -408,7 +414,11 @@ export default function FundDetailPage({
   };
 
   // 执行计划买入
-  const handleExecutePlan = async (values: any) => {
+  const handleExecutePlan = async (values: {
+    price: number;
+    fee: number;
+    date: Dayjs;
+  }) => {
     if (!executingPlan) return;
 
     try {
@@ -434,7 +444,7 @@ export default function FundDetailPage({
       } else {
         message.error('执行失败');
       }
-    } catch (error) {
+    } catch {
       message.error('执行失败');
     }
   };
@@ -730,7 +740,7 @@ export default function FundDetailPage({
                 onClick={() =>
                   router.push(`/investment-directions/${fund?.direction.id}`)
                 }
-                size={isMobile ? 'middle' : 'default'}
+                size={isMobile ? 'small' : 'middle'}
               >
                 返回
               </Button>
@@ -754,21 +764,21 @@ export default function FundDetailPage({
                 type="primary"
                 icon={<PlusOutlined />}
                 onClick={() => handleOpenModal('BUY')}
-                size={isMobile ? 'middle' : 'default'}
+                size={isMobile ? 'small' : 'middle'}
                 style={{ flex: isMobile ? 1 : 'none' }}
               >
                 买入
               </Button>
               <Button
                 onClick={() => handleOpenModal('SELL')}
-                size={isMobile ? 'middle' : 'default'}
+                size={isMobile ? 'small' : 'middle'}
                 style={{ flex: isMobile ? 1 : 'none' }}
               >
                 卖出
               </Button>
               <Button
                 onClick={() => handleOpenModal('DIVIDEND')}
-                size={isMobile ? 'middle' : 'default'}
+                size={isMobile ? 'small' : 'middle'}
                 style={{ flex: isMobile ? 1 : 'none' }}
               >
                 分红
@@ -1189,7 +1199,7 @@ export default function FundDetailPage({
                         type="primary"
                         onClick={() => handleOpenExecuteModal(plan)}
                         block
-                        size="middle"
+                        size={isMobile ? 'small' : 'middle'}
                       >
                         执行买入
                       </Button>

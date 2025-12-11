@@ -1,12 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, Suspense } from 'react';
 import { Card, Form, Input, Button, message, Tabs } from 'antd';
 import { UserOutlined, LockOutlined, MailOutlined } from '@ant-design/icons';
 import { signIn } from 'next-auth/react';
 import { useRouter, useSearchParams } from 'next/navigation';
 
-export default function AuthPage() {
+function AuthPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [loading, setLoading] = useState(false);
@@ -31,7 +31,7 @@ export default function AuthPage() {
         router.push(callbackUrl);
         router.refresh();
       }
-    } catch (error) {
+    } catch {
       message.error('登录失败，请重试');
     } finally {
       setLoading(false);
@@ -61,7 +61,7 @@ export default function AuthPage() {
 
       message.success('注册成功，请登录');
       setActiveTab('signin');
-    } catch (error) {
+    } catch {
       message.error('注册失败，请重试');
     } finally {
       setLoading(false);
@@ -217,5 +217,17 @@ export default function AuthPage() {
         />
       </Card>
     </div>
+  );
+}
+
+export default function AuthPage() {
+  return (
+    <Suspense
+      fallback={
+        <div style={{ textAlign: 'center', padding: 40 }}>加载中...</div>
+      }
+    >
+      <AuthPageContent />
+    </Suspense>
   );
 }

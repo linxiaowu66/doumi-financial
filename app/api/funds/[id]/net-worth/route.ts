@@ -25,10 +25,11 @@ export async function PUT(
     });
 
     return NextResponse.json(fund);
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('更新基金净值失败:', error);
+    const message = error instanceof Error ? error.message : '未知错误';
     return NextResponse.json(
-      { error: '更新基金净值失败', message: error.message || '未知错误' },
+      { error: '更新基金净值失败', message },
       { status: 500 }
     );
   }

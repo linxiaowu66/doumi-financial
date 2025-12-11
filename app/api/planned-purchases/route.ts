@@ -8,7 +8,10 @@ export async function GET(request: Request) {
     const fundId = searchParams.get('fundId');
     const status = searchParams.get('status');
 
-    const where: any = {};
+    const where: {
+      fundId?: number;
+      status?: string;
+    } = {};
     if (fundId) where.fundId = parseInt(fundId);
     if (status) where.status = status;
 

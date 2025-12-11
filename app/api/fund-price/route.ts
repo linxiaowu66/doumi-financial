@@ -36,12 +36,13 @@ export async function GET(request: Request) {
       expectGrowth: fundData.gszzl || '', // 估算涨幅
       updateTime: fundData.gztime || '', // 更新时间
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('获取基金净值失败:', error);
+    const message = error instanceof Error ? error.message : '未知错误';
     return NextResponse.json(
       {
         error: '获取基金净值失败',
-        message: error.message || '未知错误',
+        message,
       },
       { status: 500 }
     );

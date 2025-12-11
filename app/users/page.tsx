@@ -1,3 +1,5 @@
+import Link from 'next/link';
+
 export default async function UsersPage() {
   // 注意：这里需要配置 MySQL 数据库后才能正常工作
   // 请在 .env 文件中配置 DATABASE_URL
@@ -111,12 +113,12 @@ export default async function UsersPage() {
           )}
 
           <div className="mt-8">
-            <a
+            <Link
               href="/"
               className="inline-block px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
             >
               ← 返回首页
-            </a>
+            </Link>
           </div>
         </div>
       </div>

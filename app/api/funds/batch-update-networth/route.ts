@@ -112,10 +112,11 @@ export async function POST(request: Request) {
       failCount,
       results,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('批量更新净值失败:', error);
+    const message = error instanceof Error ? error.message : '未知错误';
     return NextResponse.json(
-      { error: '批量更新失败', details: error.message },
+      { error: '批量更新失败', details: message },
       { status: 500 }
     );
   }

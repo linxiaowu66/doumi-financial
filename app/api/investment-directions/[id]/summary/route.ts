@@ -126,12 +126,13 @@ export async function GET(
       totalProfitRate: totalProfitRate.toFixed(2), // 累计收益率(%)
       fundCount: direction.funds.length, // 基金数量
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('获取投资方向汇总统计失败:', error);
+    const message = error instanceof Error ? error.message : '未知错误';
     return NextResponse.json(
       {
         error: '获取投资方向汇总统计失败',
-        message: error.message || '未知错误',
+        message,
       },
       { status: 500 }
     );
