@@ -434,22 +434,82 @@ pnpm prisma db push         # 推送 schema 到数据库（不创建迁移）
 
 ## 🌐 部署
 
-### Vercel (推荐)
+### 快速开始
+
+**首次部署：**
+
+```bash
+# 1. 安装依赖
+pnpm install
+
+# 2. 配置环境变量（.env 文件）
+DATABASE_URL="mysql://user:password@host:3306/database"
+NEXTAUTH_URL="https://your-domain.com"
+NEXTAUTH_SECRET="your-secret-key"
+
+# 3. 生成 Prisma Client
+pnpm prisma generate
+
+# 4. 应用数据库迁移（创建所有表）
+pnpm prisma migrate deploy
+
+# 5. 构建并启动
+pnpm build
+pnpm start
+```
+
+**后续代码发布（数据库有更新）：**
+
+```bash
+# 1. 拉取最新代码
+git pull origin main
+
+# 2. 安装依赖（如有新依赖）
+pnpm install
+
+# 3. 生成 Prisma Client（如 schema 有变更）
+pnpm prisma generate
+
+# 4. 应用数据库迁移（自动检测并应用新迁移）
+pnpm prisma migrate deploy
+
+# 5. 重新构建并启动
+pnpm build
+pnpm start
+```
+
+**⚠️ 重要：生产环境使用 `prisma migrate deploy`，不要使用 `prisma db push`！**
+
+详细部署指南请查看 [DEPLOYMENT.md](./DEPLOYMENT.md)
+
+### Vercel 部署 (推荐)
 
 1. 将代码推送到 GitHub
 2. 在 Vercel 导入项目
 3. 配置环境变量：
-   - `DATABASE_URL`
-   - `NEXTAUTH_URL`
-   - `NEXTAUTH_SECRET`
-4. 部署
+   - `DATABASE_URL` - MySQL 数据库连接字符串
+   - `NEXTAUTH_URL` - 生产环境 URL（如：`https://your-domain.com`）
+   - `NEXTAUTH_SECRET` - 随机生成的密钥（用于加密 session）
+4. 配置构建命令：
+   ```bash
+   pnpm prisma generate && pnpm build
+   ```
+5. 配置部署后命令（在 Vercel 的 Settings > Git > Deploy Hooks）：
+   ```bash
+   pnpm prisma migrate deploy
+   ```
+   或者在 Vercel 的 Environment Variables 中添加 `POSTINSTALL_COMMAND`：
+   ```
+   POSTINSTALL_COMMAND=prisma migrate deploy
+   ```
 
-### 其他平台
+### 其他平台部署
 
 确保：
 
 - 配置所有必需的环境变量
 - 运行 `pnpm prisma generate` 在构建时生成 Prisma Client
+- 运行 `pnpm prisma migrate deploy` 在生产环境应用数据库迁移
 - MySQL 数据库可访问
 - 生产环境使用强密码和安全的 `NEXTAUTH_SECRET`
 
