@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
+import { updateActualAmountByFundId } from '@/lib/investment-direction';
 
 // DELETE - 删除计划买入
 export async function DELETE(
@@ -96,6 +97,9 @@ export async function POST(
         purchasedAt: new Date(date),
       },
     });
+
+    // 更新投资方向的实际投入金额
+    await updateActualAmountByFundId(plan.fundId);
 
     return NextResponse.json({ transaction, plan });
   } catch (error) {

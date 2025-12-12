@@ -20,12 +20,12 @@
     "bcryptjs": "^3.0.3",
     "dayjs": "^1.11.19",
     "dotenv": "^16.4.7",
-    "linxiaowu-stock-api": "^2.1.2",
     "mysql2": "^3.11.5",
     "next": "16.0.8",
     "next-auth": "5.0.0-beta.30",
     "react": "19.2.1",
-    "react-dom": "19.2.1"
+    "react-dom": "19.2.1",
+    "recharts": "^3.5.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

@@ -21,6 +21,8 @@ import {
   Tag,
   Breadcrumb,
   Divider,
+  Radio,
+  Spin,
 } from 'antd';
 import {
   PlusOutlined,
@@ -33,6 +35,16 @@ import {
 } from '@ant-design/icons';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+} from 'recharts';
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
@@ -43,6 +55,8 @@ interface Fund {
   name: string;
   category: string | null;
   remark: string | null;
+  latestNetWorth?: number | null;
+  netWorthDate?: string | null;
   createdAt: string;
   _count?: {
     transactions: number;
@@ -62,6 +76,9 @@ interface FundStats {
   holdingShares: number;
   holdingCost: number;
   avgCostPrice: number;
+  holdingProfitRate: number; // 持仓收益率
+  totalProfitRate: number; // 累计收益率
+  totalProfit: number; // 累计收益金额
   totalDividend: number;
   transactionCount: number;
 }
@@ -109,6 +126,16 @@ export default function DirectionDetailPage({
   const [editingFund, setEditingFund] = useState<Fund | null>(null);
   const [form] = Form.useForm();
   const [targetForm] = Form.useForm();
+  const [chartData, setChartData] = useState<
+    Array<{
+      date: string;
+      dailyProfit: number;
+      cumulativeProfit: number;
+      cumulativeProfitRate: number;
+    }>
+  >([]);
+  const [chartDays, setChartDays] = useState<number>(30);
+  const [chartLoading, setChartLoading] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [categoryOptions, setCategoryOptions] = useState<
     Array<{ label: string; value: string }>
@@ -189,7 +216,15 @@ export default function DirectionDetailPage({
       await Promise.all(
         data.map(async (fund: Fund) => {
           try {
-            const statsRes = await fetch(`/api/funds/${fund.id}/stats`);
+            const statsRes = await fetch(
+              `/api/funds/${fund.id}/stats${
+                fund.latestNetWorth
+                  ? `?currentPrice=${encodeURIComponent(
+                      fund.latestNetWorth.toString()
+                    )}`
+                  : ''
+              }`
+            );
             const stats = await statsRes.json();
             statsMap.set(fund.id, stats);
           } catch (err) {
@@ -205,12 +240,42 @@ export default function DirectionDetailPage({
     }
   }, [directionId]);
 
+  // 加载图表数据
+  const loadChartData = useCallback(async () => {
+    setChartLoading(true);
+    try {
+      const response = await fetch(
+        `/api/investment-directions/${directionId}/daily-profit?days=${chartDays}`
+      );
+      const data = await response.json();
+      if (response.ok && data.data) {
+        setChartData(data.data);
+      } else {
+        console.error('加载图表数据失败:', data.error);
+        message.warning(data.error || '加载图表数据失败');
+      }
+    } catch (error) {
+      console.error('加载图表数据失败:', error);
+      message.error('加载图表数据失败');
+    } finally {
+      setChartLoading(false);
+    }
+  }, [directionId, chartDays]);
+
   useEffect(() => {
     loadDirection();
     loadFunds();
     loadCategoryTargets();
     loadSummary();
-  }, [directionId, loadDirection, loadFunds, loadCategoryTargets, loadSummary]);
+    loadChartData();
+  }, [
+    directionId,
+    loadDirection,
+    loadFunds,
+    loadCategoryTargets,
+    loadSummary,
+    loadChartData,
+  ]);
 
   // 打开新建/编辑弹窗
   const handleOpenModal = (fund?: Fund) => {
@@ -334,17 +399,31 @@ export default function DirectionDetailPage({
       title: '基金代码',
       dataIndex: 'code',
       key: 'code',
-      width: 120,
+      width: 80,
     },
     {
       title: '基金名称',
       dataIndex: 'name',
       key: 'name',
+      width: 110,
+      ellipsis: true,
       render: (text: string, record: Fund) => (
-        <Space>
-          <Text strong>{text}</Text>
+        <Space style={{ width: '100%' }} size="small">
+          <Text
+            strong
+            style={{
+              maxWidth: record.remark ? '150px' : '200px',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              display: 'inline-block',
+            }}
+            title={text}
+          >
+            {text}
+          </Text>
           {record.remark && (
-            <Tag color="blue" style={{ fontSize: 12 }}>
+            <Tag color="blue" style={{ fontSize: 12, flexShrink: 0 }}>
               有备注
             </Tag>
           )}
@@ -352,37 +431,62 @@ export default function DirectionDetailPage({
       ),
     },
     {
-      title: '持仓成本价',
-      key: 'avgCostPrice',
+      title: '持仓收益率',
+      key: 'holdingProfitRate',
       align: 'right' as const,
       width: 130,
       render: (_: unknown, record: Fund) => {
         const stats = fundsStats.get(record.id);
-        return stats?.avgCostPrice ? `¥${stats.avgCostPrice.toFixed(4)}` : '-';
+        if (!stats?.holdingProfitRate && stats?.holdingProfitRate !== 0) {
+          return '-';
+        }
+        const rate = stats.holdingProfitRate;
+        const color = rate >= 0 ? '#cf1322' : '#3f8600'; // 正红负绿
+        return (
+          <span style={{ color }}>
+            {rate >= 0 ? '+' : ''}
+            {rate.toFixed(2)}%
+          </span>
+        );
       },
     },
     {
-      title: '持仓金额',
-      key: 'holdingCost',
+      title: '累计收益率',
+      key: 'totalProfitRate',
       align: 'right' as const,
       width: 130,
       render: (_: unknown, record: Fund) => {
         const stats = fundsStats.get(record.id);
-        return stats?.holdingCost
-          ? `¥${stats.holdingCost.toLocaleString()}`
-          : '-';
+        if (!stats?.totalProfitRate && stats?.totalProfitRate !== 0) {
+          return '-';
+        }
+        const rate = stats.totalProfitRate;
+        const color = rate >= 0 ? '#cf1322' : '#3f8600'; // 正红负绿
+        return (
+          <span style={{ color }}>
+            {rate >= 0 ? '+' : ''}
+            {rate.toFixed(2)}%
+          </span>
+        );
       },
     },
     {
-      title: '持仓份额',
-      key: 'holdingShares',
+      title: '累计收益金额',
+      key: 'totalProfit',
       align: 'right' as const,
-      width: 120,
+      width: 130,
       render: (_: unknown, record: Fund) => {
         const stats = fundsStats.get(record.id);
-        return stats?.holdingShares
-          ? stats.holdingShares.toLocaleString()
-          : '-';
+        if (!stats?.totalProfit && stats?.totalProfit !== 0) {
+          return '-';
+        }
+        const profit = stats.totalProfit;
+        const color = profit >= 0 ? '#cf1322' : '#3f8600'; // 正红负绿
+        return (
+          <span style={{ color }}>
+            {profit >= 0 ? '+' : ''}¥{profit.toLocaleString()}
+          </span>
+        );
       },
     },
     {
@@ -406,7 +510,7 @@ export default function DirectionDetailPage({
       title: '操作',
       key: 'action',
       align: 'center' as const,
-      width: 180,
+      width: 120,
       fixed: 'right' as const,
       render: (_: unknown, record: Fund) => (
         <Space>
@@ -415,17 +519,15 @@ export default function DirectionDetailPage({
             icon={<LineChartOutlined />}
             onClick={() => router.push(`/funds/${record.id}`)}
             size="small"
-          >
-            详情
-          </Button>
+            title="详情"
+          />
           <Button
             type="link"
             icon={<EditOutlined />}
             onClick={() => handleOpenModal(record)}
             size="small"
-          >
-            编辑
-          </Button>
+            title="编辑"
+          />
           <Popconfirm
             title="确定要删除吗？"
             description="删除后该基金的所有交易记录也会被删除"
@@ -433,9 +535,13 @@ export default function DirectionDetailPage({
             okText="确定"
             cancelText="取消"
           >
-            <Button type="link" danger icon={<DeleteOutlined />} size="small">
-              删除
-            </Button>
+            <Button
+              type="link"
+              danger
+              icon={<DeleteOutlined />}
+              size="small"
+              title="删除"
+            />
           </Popconfirm>
         </Space>
       ),
@@ -665,6 +771,115 @@ export default function DirectionDetailPage({
             </Card>
           </Col>
         </Row>
+
+        {/* 盈亏折线图 */}
+        <Card
+          title={
+            <Space>
+              <LineChartOutlined />
+              <span>盈亏趋势</span>
+            </Space>
+          }
+          style={{ marginBottom: isMobile ? 12 : 24 }}
+          extra={
+            <Radio.Group
+              value={chartDays}
+              onChange={(e) => setChartDays(e.target.value)}
+              size="small"
+            >
+              <Radio.Button value={30}>30天</Radio.Button>
+              <Radio.Button value={180}>180天</Radio.Button>
+              <Radio.Button value={365}>1年</Radio.Button>
+            </Radio.Group>
+          }
+        >
+          <Spin spinning={chartLoading}>
+            {chartData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={isMobile ? 250 : 400}>
+                <LineChart data={chartData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis
+                    dataKey="date"
+                    tick={{ fontSize: isMobile ? 10 : 12 }}
+                    angle={isMobile ? -45 : 0}
+                    textAnchor={isMobile ? 'end' : 'middle'}
+                    height={isMobile ? 60 : 40}
+                  />
+                  <YAxis
+                    yAxisId="left"
+                    tick={{ fontSize: isMobile ? 10 : 12 }}
+                    label={{
+                      value: '金额 (¥)',
+                      angle: -90,
+                      position: 'insideLeft',
+                      style: { fontSize: isMobile ? 10 : 12 },
+                    }}
+                  />
+                  <YAxis
+                    yAxisId="right"
+                    orientation="right"
+                    tick={{ fontSize: isMobile ? 10 : 12 }}
+                    label={{
+                      value: '收益率 (%)',
+                      angle: 90,
+                      position: 'insideRight',
+                      style: { fontSize: isMobile ? 10 : 12 },
+                    }}
+                  />
+                  <Tooltip
+                    formatter={(value: number, name: string, props: any) => {
+                      // name参数是dataKey的值
+                      const dataKey = props.dataKey || name;
+                      if (dataKey === 'cumulativeProfitRate') {
+                        return [`${value.toFixed(2)}%`, '累计收益率'];
+                      }
+                      if (dataKey === 'dailyProfit') {
+                        return [`¥${value.toLocaleString()}`, '每日盈亏'];
+                      }
+                      if (dataKey === 'cumulativeProfit') {
+                        return [`¥${value.toLocaleString()}`, '累计盈亏'];
+                      }
+                      return [`¥${value.toLocaleString()}`, name];
+                    }}
+                    labelFormatter={(label) => `日期: ${label}`}
+                  />
+                  <Legend />
+                  <Line
+                    yAxisId="left"
+                    type="monotone"
+                    dataKey="dailyProfit"
+                    stroke="#1890ff"
+                    strokeWidth={2}
+                    name="每日盈亏"
+                    dot={false}
+                  />
+                  <Line
+                    yAxisId="left"
+                    type="monotone"
+                    dataKey="cumulativeProfit"
+                    stroke="#52c41a"
+                    strokeWidth={2}
+                    name="累计盈亏"
+                    dot={false}
+                  />
+                  <Line
+                    yAxisId="right"
+                    type="monotone"
+                    dataKey="cumulativeProfitRate"
+                    stroke="#faad14"
+                    strokeWidth={2}
+                    name="累计收益率"
+                    dot={false}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : (
+              <div style={{ textAlign: 'center', padding: 40, color: '#999' }}>
+                暂无数据
+              </div>
+            )}
+          </Spin>
+        </Card>
 
         {/* 汇总收益统计卡片 */}
         {summary && (

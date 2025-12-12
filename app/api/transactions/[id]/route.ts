@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
+import { updateActualAmountByFundId } from '@/lib/investment-direction';
 
 // DELETE - 删除交易记录
 export async function DELETE(
@@ -9,9 +10,22 @@ export async function DELETE(
   try {
     const { id } = await params;
 
+    // 先获取交易记录以获取 fundId
+    const transaction = await prisma.transaction.findUnique({
+      where: { id: parseInt(id) },
+      select: { fundId: true },
+    });
+
+    if (!transaction) {
+      return NextResponse.json({ error: '交易记录不存在' }, { status: 404 });
+    }
+
     await prisma.transaction.delete({
       where: { id: parseInt(id) },
     });
+
+    // 更新投资方向的实际投入金额
+    await updateActualAmountByFundId(transaction.fundId);
 
     return NextResponse.json({ success: true });
   } catch (error) {
@@ -31,6 +45,16 @@ export async function PUT(
     const { type, amount, shares, price, fee, date, dividendReinvest, remark } =
       body;
 
+    // 先获取交易记录以获取 fundId
+    const oldTransaction = await prisma.transaction.findUnique({
+      where: { id: parseInt(id) },
+      select: { fundId: true },
+    });
+
+    if (!oldTransaction) {
+      return NextResponse.json({ error: '交易记录不存在' }, { status: 404 });
+    }
+
     const transaction = await prisma.transaction.update({
       where: { id: parseInt(id) },
       data: {
@@ -44,6 +68,9 @@ export async function PUT(
         remark,
       },
     });
+
+    // 更新投资方向的实际投入金额
+    await updateActualAmountByFundId(oldTransaction.fundId);
 
     return NextResponse.json(transaction);
   } catch (error) {

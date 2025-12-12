@@ -10,27 +10,28 @@ datasource db {
 
 // 用户表
 model User {
-  id                    Int                  @id @default(autoincrement())
-  email                 String               @unique
-  name                  String?
-  password              String               // 加密后的密码
-  createdAt             DateTime             @default(now())
-  updatedAt             DateTime             @updatedAt
-  investmentDirections  InvestmentDirection[] // 用户的投资方向
+  id                   Int                   @id @default(autoincrement())
+  email                String                @unique
+  name                 String?
+  password             String // 加密后的密码
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  investmentDirections InvestmentDirection[] // 用户的投资方向
 }
 
 // 投资方向（海外长钱、稳钱账户、长钱账户等）
 model InvestmentDirection {
-  id              Int              @id @default(autoincrement())
-  userId          Int?             // 所属用户（临时可选）
-  user            User?            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  name            String           // 投资方向名称
-  expectedAmount  Decimal          @db.Decimal(15, 2) // 预期投入金额
-  actualAmount    Decimal          @default(0) @db.Decimal(15, 2) // 实际投入金额
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
-  funds           Fund[]           // 该方向下的基金
+  id              Int                    @id @default(autoincrement())
+  userId          Int? // 所属用户（临时可选）
+  user            User?                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name            String // 投资方向名称
+  expectedAmount  Decimal                @db.Decimal(15, 2) // 预期投入金额
+  actualAmount    Decimal                @default(0) @db.Decimal(15, 2) // 实际投入金额
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+  funds           Fund[] // 该方向下的基金
   categoryTargets CategoryTarget[] // 该方向下的分类目标
+  dailyProfits    DirectionDailyProfit[] // 每日盈亏记录
 
   @@index([userId])
 }
@@ -38,9 +39,9 @@ model InvestmentDirection {
 // 基金分类目标仓位（标普、纳指等每个分类的投入上限）
 model CategoryTarget {
   id           Int                 @id @default(autoincrement())
-  directionId  Int                 // 所属投资方向
+  directionId  Int // 所属投资方向
   direction    InvestmentDirection @relation(fields: [directionId], references: [id], onDelete: Cascade)
-  categoryName String              // 分类名称（如：标普、纳指、沪深300）
+  categoryName String // 分类名称（如：标普、纳指、沪深300）
   targetAmount Decimal             @db.Decimal(15, 2) // 目标投入金额
   createdAt    DateTime            @default(now())
   updatedAt    DateTime            @updatedAt
@@ -51,36 +52,36 @@ model CategoryTarget {
 
 // 基金
 model Fund {
-  id                Int                  @id @default(autoincrement())
-  directionId       Int                  // 所属投资方向
-  direction         InvestmentDirection  @relation(fields: [directionId], references: [id], onDelete: Cascade)
-  code              String               // 基金代码
-  name              String               // 基金名称
-  category          String?              // 分类标识（如"标普"）
-  remark            String?              @db.Text // 备注
-  latestNetWorth    Decimal?             @db.Decimal(10, 4) // 最新净值
-  netWorthDate      String?              // 净值日期
-  netWorthUpdateAt  DateTime?            // 净值更新时间
-  createdAt         DateTime             @default(now())
-  updatedAt         DateTime             @updatedAt
-  transactions      Transaction[]        // 交易记录
-  plannedPurchases  PlannedPurchase[]    // 计划买入
+  id               Int                 @id @default(autoincrement())
+  directionId      Int // 所属投资方向
+  direction        InvestmentDirection @relation(fields: [directionId], references: [id], onDelete: Cascade)
+  code             String // 基金代码
+  name             String // 基金名称
+  category         String? // 分类标识（如"标普"）
+  remark           String?             @db.Text // 备注
+  latestNetWorth   Decimal?            @db.Decimal(10, 4) // 最新净值
+  netWorthDate     String? // 净值日期
+  netWorthUpdateAt DateTime? // 净值更新时间
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+  transactions     Transaction[] // 交易记录
+  plannedPurchases PlannedPurchase[] // 计划买入
 }
 
 // 交易记录（买入、卖出、分红）
 model Transaction {
-  id                Int      @id @default(autoincrement())
-  fundId            Int      // 所属基金
-  fund              Fund     @relation(fields: [fundId], references: [id], onDelete: Cascade)
-  type              String   // 交易类型：BUY(买入)、SELL(卖出)、DIVIDEND(分红)
-  amount            Decimal  @db.Decimal(15, 2) // 交易金额
-  shares            Decimal  @db.Decimal(15, 4) // 份额
-  price             Decimal  @db.Decimal(10, 4) // 单价/净值
-  fee               Decimal  @default(0) @db.Decimal(10, 2) // 手续费
-  date              DateTime // 交易日期
-  dividendReinvest  Boolean  @default(false) // 分红是否再投资（仅分红时有效）
-  remark            String?  @db.Text // 备注
-  createdAt         DateTime @default(now())
+  id               Int      @id @default(autoincrement())
+  fundId           Int // 所属基金
+  fund             Fund     @relation(fields: [fundId], references: [id], onDelete: Cascade)
+  type             String // 交易类型：BUY(买入)、SELL(卖出)、DIVIDEND(分红)
+  amount           Decimal  @db.Decimal(15, 2) // 交易金额
+  shares           Decimal  @db.Decimal(15, 4) // 份额
+  price            Decimal  @db.Decimal(10, 4) // 单价/净值
+  fee              Decimal  @default(0) @db.Decimal(10, 2) // 手续费
+  date             DateTime // 交易日期
+  dividendReinvest Boolean  @default(false) // 分红是否再投资（仅分红时有效）
+  remark           String?  @db.Text // 备注
+  createdAt        DateTime @default(now())
 
   @@index([fundId])
   @@index([date])
@@ -88,14 +89,33 @@ model Transaction {
 
 // 计划买入
 model PlannedPurchase {
-  id             Int       @id @default(autoincrement())
-  fundId         Int       // 所属基金
-  fund           Fund      @relation(fields: [fundId], references: [id], onDelete: Cascade)
-  plannedAmount  Decimal   @db.Decimal(15, 2) // 计划买入金额
-  status         String    @default("PENDING") // 状态：PENDING(待买入)、COMPLETED(已完成)
-  createdAt      DateTime  @default(now())
-  purchasedAt    DateTime? // 实际买入时间
+  id            Int       @id @default(autoincrement())
+  fundId        Int // 所属基金
+  fund          Fund      @relation(fields: [fundId], references: [id], onDelete: Cascade)
+  plannedAmount Decimal   @db.Decimal(15, 2) // 计划买入金额
+  status        String    @default("PENDING") // 状态：PENDING(待买入)、COMPLETED(已完成)
+  createdAt     DateTime  @default(now())
+  purchasedAt   DateTime? // 实际买入时间
 
   @@index([fundId])
   @@index([status])
+}
+
+// 投资方向每日盈亏记录
+model DirectionDailyProfit {
+  id                   Int                 @id @default(autoincrement())
+  directionId          Int // 所属投资方向
+  direction            InvestmentDirection @relation(fields: [directionId], references: [id], onDelete: Cascade)
+  date                 DateTime // 日期（只保留日期部分，时间设为00:00:00）
+  dailyProfit          Decimal             @db.Decimal(15, 2) // 每日盈亏金额
+  cumulativeProfit     Decimal             @db.Decimal(15, 2) // 累计盈亏金额
+  cumulativeProfitRate Decimal             @db.Decimal(10, 4) // 累计收益率（百分比）
+  totalInvested        Decimal             @db.Decimal(15, 2) // 累计投入金额
+  currentValue         Decimal             @db.Decimal(15, 2) // 当前市值
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+
+  @@unique([directionId, date])
+  @@index([directionId])
+  @@index([date])
 }

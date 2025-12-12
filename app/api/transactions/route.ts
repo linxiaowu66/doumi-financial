@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
+import { updateActualAmountByFundId } from '@/lib/investment-direction';
 
 // POST - 创建交易记录
 export async function POST(request: Request) {
@@ -48,6 +49,9 @@ export async function POST(request: Request) {
         fund: true,
       },
     });
+
+    // 更新投资方向的实际投入金额
+    await updateActualAmountByFundId(parseInt(fundId));
 
     return NextResponse.json(transaction);
   } catch (error) {

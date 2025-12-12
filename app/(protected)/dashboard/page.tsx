@@ -105,33 +105,36 @@ export default function HomePage() {
       )} 分钟。是否继续？`,
       okText: '开始更新',
       cancelText: '取消',
-      onOk: async () => {
-        setUpdating(true);
-        setUpdateResults([]);
+      onOk: () => {
+        return new Promise(async (resolve, reject) => {
+          setUpdating(true);
+          setUpdateResults([]);
 
-        try {
-          const response = await fetch('/api/funds/batch-update-networth', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({}),
-          });
+          try {
+            const response = await fetch('/api/funds/batch-update-networth', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({}),
+            });
 
-          const data = await response.json();
+            const data = await response.json();
 
-          if (response.ok) {
-            setUpdateResults(data.results);
-            setShowResultModal(true);
-            message.success(data.message);
-            // 刷新投资方向数据
-            loadDirections();
-          } else {
-            message.error(data.error || '更新失败');
+            if (response.ok) {
+              setUpdateResults(data.results);
+              setShowResultModal(true);
+              message.success(data.message);
+              // 刷新投资方向数据
+              loadDirections();
+            } else {
+              message.error(data.error || '更新失败');
+            }
+          } catch {
+            message.error('更新失败，请重试');
+          } finally {
+            setUpdating(false);
+            resolve(true);
           }
-        } catch {
-          message.error('更新失败，请重试');
-        } finally {
-          setUpdating(false);
-        }
+        });
       },
     });
   };
