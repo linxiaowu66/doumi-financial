@@ -125,7 +125,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
             : '1px solid rgba(255, 255, 255, 0.1)',
         }}
       >
-        {collapsed && !isMobile ? '💰' : '💰 豆米财经'}
+        {collapsed && !isMobile ? '💰' : '💰 豆米理财'}
       </div>
       <Menu
         theme={isMobile ? 'light' : 'dark'}

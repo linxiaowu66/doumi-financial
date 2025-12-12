@@ -86,7 +86,7 @@ function AuthPageContent() {
         }}
       >
         <div style={{ textAlign: 'center', marginBottom: 24 }}>
-          <h1 style={{ fontSize: 28, marginBottom: 8 }}>💰 豆米财经</h1>
+          <h1 style={{ fontSize: 28, marginBottom: 8 }}>💰 豆米理财</h1>
           <p style={{ color: '#666', margin: 0 }}>个人投资管理系统</p>
         </div>
 

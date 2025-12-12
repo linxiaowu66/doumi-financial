@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: '豆米财经 - 个人投资管理系统',
+  title: '豆米理财 - 个人投资管理系统',
   description: '基于 Next.js 16 + Prisma 6 + Ant Design 6 的个人投资管理系统',
 };
 

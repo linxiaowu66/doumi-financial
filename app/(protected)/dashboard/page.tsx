@@ -171,7 +171,7 @@ export default function HomePage() {
           </div>
           {!isMobile && (
             <p style={{ color: '#666', margin: 0 }}>
-              欢迎使用豆米财经投资管理系统，管理您的投资组合
+              欢迎使用豆米理财投资管理系统，管理您的投资组合
             </p>
           )}
         </div>

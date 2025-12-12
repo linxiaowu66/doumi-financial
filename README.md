@@ -1,4 +1,4 @@
-# 豆米财经 - 个人投资管理系统
+# 豆米理财 - 个人投资管理系统
 
 基于 Next.js 16 + Prisma 6 + Ant Design 6 + MySQL 构建的现代化个人投资管理系统，支持基金投资管理、交易记录、收益统计等功能。
 
@@ -500,6 +500,51 @@ pnpm start
    ```
 
 详细部署指南和 Nginx 配置示例请查看 [DEPLOYMENT.md](./DEPLOYMENT.md)
+
+### PM2 部署（推荐用于服务器）
+
+使用 PM2 管理 Node.js 进程：
+
+```bash
+# 1. 安装 PM2
+npm install -g pm2
+
+# 2. 配置环境变量（.env 文件）
+DATABASE_URL="mysql://user:password@host:3306/database"
+NEXTAUTH_URL="https://your-domain.com"
+NEXTAUTH_SECRET="your-secret-key"
+
+# 3. 初始化数据库
+pnpm prisma generate
+pnpm prisma migrate deploy
+
+# 4. 构建应用
+pnpm build
+
+# 5. 启动应用（使用配置文件）
+pm2 start ecosystem.config.js
+
+# 6. 配置开机自启
+pm2 startup
+pm2 save
+```
+
+**后续更新：**
+
+```bash
+# 使用自动化部署脚本
+./deploy.sh
+
+# 或手动更新
+git pull origin main
+pnpm install
+pnpm prisma generate
+pnpm prisma migrate deploy
+pnpm build
+pm2 reload doumi-financial
+```
+
+详细 PM2 部署指南请查看 [PM2_DEPLOYMENT.md](./PM2_DEPLOYMENT.md)
 
 ### Vercel 部署 (推荐)
 

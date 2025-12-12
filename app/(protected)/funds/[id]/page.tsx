@@ -28,6 +28,8 @@ import {
   PlusOutlined,
   DeleteOutlined,
   DollarOutlined,
+  RiseOutlined,
+  FallOutlined,
 } from '@ant-design/icons';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -959,10 +961,23 @@ export default function FundDetailPage({
                 }
                 value={stats?.holdingProfit || 0}
                 precision={isMobile ? 0 : 2}
-                prefix="¥"
+                prefix={
+                  <span>
+                    {(stats?.holdingProfit || 0) >= 0 ? (
+                      <RiseOutlined
+                        style={{ color: '#cf1322', marginRight: 4 }}
+                      />
+                    ) : (
+                      <FallOutlined
+                        style={{ color: '#3f8600', marginRight: 4 }}
+                      />
+                    )}
+                    <span style={{ color: 'inherit' }}>¥</span>
+                  </span>
+                }
                 valueStyle={{
                   color:
-                    (stats?.holdingProfit || 0) >= 0 ? '#52c41a' : '#ff4d4f',
+                    (stats?.holdingProfit || 0) >= 0 ? '#cf1322' : '#3f8600',
                   fontSize: isMobile ? 16 : 20,
                 }}
               />
@@ -974,12 +989,19 @@ export default function FundDetailPage({
                 }
                 value={stats?.holdingProfitRate || 0}
                 precision={2}
+                prefix={
+                  (stats?.holdingProfitRate || 0) >= 0 ? (
+                    <RiseOutlined style={{ color: '#cf1322' }} />
+                  ) : (
+                    <FallOutlined style={{ color: '#3f8600' }} />
+                  )
+                }
                 suffix="%"
                 valueStyle={{
                   color:
                     (stats?.holdingProfitRate || 0) >= 0
-                      ? '#52c41a'
-                      : '#ff4d4f',
+                      ? '#cf1322'
+                      : '#3f8600',
                   fontSize: isMobile ? 16 : 20,
                 }}
               />
@@ -991,10 +1013,16 @@ export default function FundDetailPage({
                     title="累计收益"
                     value={stats?.totalProfit || 0}
                     precision={2}
-                    prefix="¥"
+                    prefix={
+                      (stats?.totalProfit || 0) >= 0 ? (
+                        <RiseOutlined style={{ color: '#cf1322' }} />
+                      ) : (
+                        <FallOutlined style={{ color: '#3f8600' }} />
+                      )
+                    }
                     valueStyle={{
                       color:
-                        (stats?.totalProfit || 0) >= 0 ? '#52c41a' : '#ff4d4f',
+                        (stats?.totalProfit || 0) >= 0 ? '#cf1322' : '#3f8600',
                     }}
                   />
                 </Col>
@@ -1003,12 +1031,19 @@ export default function FundDetailPage({
                     title="累计收益率"
                     value={stats?.totalProfitRate || 0}
                     precision={2}
+                    prefix={
+                      (stats?.totalProfitRate || 0) >= 0 ? (
+                        <RiseOutlined style={{ color: '#cf1322' }} />
+                      ) : (
+                        <FallOutlined style={{ color: '#3f8600' }} />
+                      )
+                    }
                     suffix="%"
                     valueStyle={{
                       color:
                         (stats?.totalProfitRate || 0) >= 0
-                          ? '#52c41a'
-                          : '#ff4d4f',
+                          ? '#cf1322'
+                          : '#3f8600',
                     }}
                   />
                 </Col>
@@ -1041,13 +1076,26 @@ export default function FundDetailPage({
                   }
                   value={stats?.totalSellProfit || 0}
                   precision={isMobile ? 0 : 2}
-                  prefix="¥"
+                  prefix={
+                    <span>
+                      {(stats?.totalSellProfit || 0) >= 0 ? (
+                        <RiseOutlined
+                          style={{ color: '#cf1322', marginRight: 4 }}
+                        />
+                      ) : (
+                        <FallOutlined
+                          style={{ color: '#3f8600', marginRight: 4 }}
+                        />
+                      )}
+                      <span style={{ color: 'inherit' }}>¥</span>
+                    </span>
+                  }
                   styles={{
                     content: {
                       color:
                         (stats?.totalSellProfit || 0) >= 0
-                          ? '#52c41a'
-                          : '#ff4d4f',
+                          ? '#cf1322'
+                          : '#3f8600',
                       fontSize: isMobile ? 16 : 20,
                     },
                   }}

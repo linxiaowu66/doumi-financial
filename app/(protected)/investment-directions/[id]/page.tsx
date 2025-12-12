@@ -9,6 +9,7 @@ import {
   Form,
   Input,
   InputNumber,
+  Select,
   message,
   Flex,
   Typography,
@@ -109,6 +110,10 @@ export default function DirectionDetailPage({
   const [form] = Form.useForm();
   const [targetForm] = Form.useForm();
   const [isMobile, setIsMobile] = useState(false);
+  const [categoryOptions, setCategoryOptions] = useState<
+    Array<{ label: string; value: string }>
+  >([]);
+  const [categorySearchValue, setCategorySearchValue] = useState<string>('');
 
   // 检测屏幕尺寸
   useEffect(() => {
@@ -167,6 +172,18 @@ export default function DirectionDetailPage({
       const data = await response.json();
       setFunds(data);
 
+      // 提取已有的分类列表（去重，过滤空值）
+      const categories = Array.from(
+        new Set(
+          data
+            .map((fund: Fund) => fund.category)
+            .filter((cat: string | null) => cat && cat.trim() !== '')
+        )
+      ) as string[];
+      setCategoryOptions(
+        categories.sort().map((cat) => ({ label: cat, value: cat }))
+      );
+
       // 加载每个基金的统计信息
       const statsMap = new Map<number, FundStats>();
       await Promise.all(
@@ -209,6 +226,7 @@ export default function DirectionDetailPage({
       setEditingFund(null);
       form.resetFields();
     }
+    setCategorySearchValue('');
     setModalOpen(true);
   };
 
@@ -914,7 +932,91 @@ export default function DirectionDetailPage({
                   name="category"
                   tooltip="用于分组展示，如：标普、纳指、沪深300等"
                 >
-                  <Input placeholder="如：标普" size="large" />
+                  <Select
+                    placeholder="选择或输入分类"
+                    size="large"
+                    showSearch
+                    allowClear
+                    options={categoryOptions}
+                    onSearch={(value) => {
+                      setCategorySearchValue(value);
+                    }}
+                    onBlur={() => {
+                      // 当失去焦点时，如果输入的值不在选项中，自动添加
+                      if (
+                        categorySearchValue &&
+                        categorySearchValue.trim() !== ''
+                      ) {
+                        const trimmedValue = categorySearchValue.trim();
+                        const exists = categoryOptions.some(
+                          (opt) => opt.value === trimmedValue
+                        );
+                        if (!exists) {
+                          const newOption = {
+                            label: trimmedValue,
+                            value: trimmedValue,
+                          };
+                          setCategoryOptions((prev) => {
+                            const newOptions = [...prev, newOption];
+                            // 按字母顺序排序
+                            return newOptions.sort((a, b) =>
+                              a.value.localeCompare(b.value)
+                            );
+                          });
+                          // 自动选中新创建的分类
+                          form.setFieldValue('category', trimmedValue);
+                        }
+                        setCategorySearchValue('');
+                      }
+                    }}
+                    onKeyDown={(e) => {
+                      // 当用户按回车时，如果输入的值不在选项中，自动添加并选中
+                      if (e.key === 'Enter' && categorySearchValue) {
+                        const trimmedValue = categorySearchValue.trim();
+                        if (trimmedValue !== '') {
+                          const exists = categoryOptions.some(
+                            (opt) => opt.value === trimmedValue
+                          );
+                          if (!exists) {
+                            const newOption = {
+                              label: trimmedValue,
+                              value: trimmedValue,
+                            };
+                            setCategoryOptions((prev) => {
+                              const newOptions = [...prev, newOption];
+                              return newOptions.sort((a, b) =>
+                                a.value.localeCompare(b.value)
+                              );
+                            });
+                            form.setFieldValue('category', trimmedValue);
+                          }
+                          setCategorySearchValue('');
+                          e.preventDefault();
+                        }
+                      }
+                    }}
+                    filterOption={(input, option) => {
+                      if (!option?.value) return false;
+                      return (option.value as string)
+                        .toLowerCase()
+                        .includes(input.toLowerCase());
+                    }}
+                    notFoundContent={
+                      categorySearchValue ? (
+                        <div style={{ padding: '8px 0', textAlign: 'center' }}>
+                          <span style={{ color: '#999', fontSize: 12 }}>
+                            按回车创建新分类 "{categorySearchValue}"
+                          </span>
+                        </div>
+                      ) : null
+                    }
+                    onSelect={(value) => {
+                      setCategorySearchValue('');
+                    }}
+                    onClear={() => {
+                      setCategorySearchValue('');
+                    }}
+                  />
                 </Form.Item>
               </Col>
             </Row>
