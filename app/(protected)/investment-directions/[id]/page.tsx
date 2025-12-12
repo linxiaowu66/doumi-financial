@@ -32,6 +32,7 @@ import {
   FundOutlined,
   DollarOutlined,
   LineChartOutlined,
+  QuestionCircleOutlined,
 } from '@ant-design/icons';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -431,7 +432,16 @@ export default function DirectionDetailPage({
       ),
     },
     {
-      title: '持仓收益率',
+      title: (
+        <Space>
+          持仓收益率
+          <Tooltip title="(当前市值 - 持仓成本) ÷ 持仓成本 × 100%，反映当前持仓的收益率">
+            <QuestionCircleOutlined
+              style={{ color: '#1890ff', cursor: 'help', fontSize: 12 }}
+            />
+          </Tooltip>
+        </Space>
+      ),
       key: 'holdingProfitRate',
       align: 'right' as const,
       width: 130,
@@ -451,7 +461,16 @@ export default function DirectionDetailPage({
       },
     },
     {
-      title: '累计收益率',
+      title: (
+        <Space>
+          累计收益率
+          <Tooltip title="累计总收益 ÷ 总投入 × 100%，包括持仓收益、卖出收益和分红">
+            <QuestionCircleOutlined
+              style={{ color: '#1890ff', cursor: 'help', fontSize: 12 }}
+            />
+          </Tooltip>
+        </Space>
+      ),
       key: 'totalProfitRate',
       align: 'right' as const,
       width: 130,
@@ -471,7 +490,16 @@ export default function DirectionDetailPage({
       },
     },
     {
-      title: '累计收益金额',
+      title: (
+        <Space>
+          累计收益金额
+          <Tooltip title="持仓收益 + 卖出收益 + 分红的总和，反映该基金的整体盈亏">
+            <QuestionCircleOutlined
+              style={{ color: '#1890ff', cursor: 'help', fontSize: 12 }}
+            />
+          </Tooltip>
+        </Space>
+      ),
       key: 'totalProfit',
       align: 'right' as const,
       width: 130,
@@ -723,7 +751,20 @@ export default function DirectionDetailPage({
           <Col xs={12} sm={12} md={6}>
             <Card>
               <Statistic
-                title="预期投入"
+                title={
+                  <Space>
+                    预期投入
+                    <Tooltip title="您为该投资方向设定的目标投入金额，用于跟踪投资进度">
+                      <QuestionCircleOutlined
+                        style={{
+                          color: '#1890ff',
+                          cursor: 'help',
+                          fontSize: 12,
+                        }}
+                      />
+                    </Tooltip>
+                  </Space>
+                }
                 value={direction?.expectedAmount || 0}
                 precision={isMobile ? 0 : 2}
                 prefix="¥"
@@ -736,7 +777,20 @@ export default function DirectionDetailPage({
           <Col xs={12} sm={12} md={6}>
             <Card>
               <Statistic
-                title="实际投入"
+                title={
+                  <Space>
+                    实际投入
+                    <Tooltip title="该投资方向下所有基金的买入交易金额总和，不包括卖出和分红">
+                      <QuestionCircleOutlined
+                        style={{
+                          color: '#1890ff',
+                          cursor: 'help',
+                          fontSize: 12,
+                        }}
+                      />
+                    </Tooltip>
+                  </Space>
+                }
                 value={totalHoldingCost}
                 precision={isMobile ? 0 : 2}
                 prefix="¥"
@@ -749,7 +803,20 @@ export default function DirectionDetailPage({
           <Col xs={12} sm={12} md={6}>
             <Card>
               <Statistic
-                title="投入进度"
+                title={
+                  <Space>
+                    投入进度
+                    <Tooltip title="实际投入 ÷ 预期投入 × 100%，反映投资计划的完成度">
+                      <QuestionCircleOutlined
+                        style={{
+                          color: '#1890ff',
+                          cursor: 'help',
+                          fontSize: 12,
+                        }}
+                      />
+                    </Tooltip>
+                  </Space>
+                }
                 value={
                   direction?.expectedAmount
                     ? (totalHoldingCost / Number(direction.expectedAmount)) *
@@ -906,7 +973,20 @@ export default function DirectionDetailPage({
             <Row gutter={[16, 16]}>
               <Col xs={24} sm={12} md={6}>
                 <Statistic
-                  title="总投入"
+                  title={
+                    <Space>
+                      总投入
+                      <Tooltip title="所有买入交易的金额总和，包括已卖出的基金">
+                        <QuestionCircleOutlined
+                          style={{
+                            color: '#1890ff',
+                            cursor: 'help',
+                            fontSize: 12,
+                          }}
+                        />
+                      </Tooltip>
+                    </Space>
+                  }
                   value={parseFloat(summary.totalInvested)}
                   precision={2}
                   prefix="¥"
@@ -915,7 +995,20 @@ export default function DirectionDetailPage({
               </Col>
               <Col xs={24} sm={12} md={6}>
                 <Statistic
-                  title="当前市值"
+                  title={
+                    <Space>
+                      当前市值
+                      <Tooltip title="当前持仓份额 × 最新净值，反映持仓的当前价值">
+                        <QuestionCircleOutlined
+                          style={{
+                            color: '#1890ff',
+                            cursor: 'help',
+                            fontSize: 12,
+                          }}
+                        />
+                      </Tooltip>
+                    </Space>
+                  }
                   value={parseFloat(summary.totalCurrentValue)}
                   precision={2}
                   prefix="¥"
@@ -924,7 +1017,20 @@ export default function DirectionDetailPage({
               </Col>
               <Col xs={24} sm={12} md={6}>
                 <Statistic
-                  title="持仓成本"
+                  title={
+                    <Space>
+                      持仓成本
+                      <Tooltip title="当前持仓份额的成本价总和，不包括已卖出的基金">
+                        <QuestionCircleOutlined
+                          style={{
+                            color: '#1890ff',
+                            cursor: 'help',
+                            fontSize: 12,
+                          }}
+                        />
+                      </Tooltip>
+                    </Space>
+                  }
                   value={parseFloat(summary.totalCost)}
                   precision={2}
                   prefix="¥"
@@ -933,7 +1039,20 @@ export default function DirectionDetailPage({
               </Col>
               <Col xs={24} sm={12} md={6}>
                 <Statistic
-                  title="持仓收益"
+                  title={
+                    <Space>
+                      持仓收益
+                      <Tooltip title="当前市值 - 持仓成本，反映当前持仓的盈亏情况">
+                        <QuestionCircleOutlined
+                          style={{
+                            color: '#1890ff',
+                            cursor: 'help',
+                            fontSize: 12,
+                          }}
+                        />
+                      </Tooltip>
+                    </Space>
+                  }
                   value={parseFloat(summary.holdingProfit)}
                   precision={2}
                   prefix="¥"
@@ -950,7 +1069,20 @@ export default function DirectionDetailPage({
               </Col>
               <Col xs={24} sm={12} md={6}>
                 <Statistic
-                  title="累计总收益"
+                  title={
+                    <Space>
+                      累计总收益
+                      <Tooltip title="持仓收益 + 卖出收益 + 现金分红 + 分红再投资，反映整体投资盈亏">
+                        <QuestionCircleOutlined
+                          style={{
+                            color: '#1890ff',
+                            cursor: 'help',
+                            fontSize: 12,
+                          }}
+                        />
+                      </Tooltip>
+                    </Space>
+                  }
                   value={parseFloat(summary.totalProfit)}
                   precision={2}
                   prefix="¥"
@@ -968,7 +1100,20 @@ export default function DirectionDetailPage({
               </Col>
               <Col xs={24} sm={12} md={6}>
                 <Statistic
-                  title="累计收益率"
+                  title={
+                    <Space>
+                      累计收益率
+                      <Tooltip title="累计总收益 ÷ 总投入 × 100%，反映投资回报率">
+                        <QuestionCircleOutlined
+                          style={{
+                            color: '#1890ff',
+                            cursor: 'help',
+                            fontSize: 12,
+                          }}
+                        />
+                      </Tooltip>
+                    </Space>
+                  }
                   value={parseFloat(summary.totalProfitRate)}
                   precision={2}
                   suffix="%"
@@ -986,7 +1131,20 @@ export default function DirectionDetailPage({
               </Col>
               <Col xs={24} sm={12} md={6}>
                 <Statistic
-                  title="卖出收益"
+                  title={
+                    <Space>
+                      卖出收益
+                      <Tooltip title="已卖出基金的收益总和，卖出收益 = 卖出金额 - 成本 - 手续费">
+                        <QuestionCircleOutlined
+                          style={{
+                            color: '#1890ff',
+                            cursor: 'help',
+                            fontSize: 12,
+                          }}
+                        />
+                      </Tooltip>
+                    </Space>
+                  }
                   value={parseFloat(summary.totalSellProfit)}
                   precision={2}
                   prefix="¥"
@@ -994,7 +1152,20 @@ export default function DirectionDetailPage({
               </Col>
               <Col xs={24} sm={12} md={6}>
                 <Statistic
-                  title="现金分红"
+                  title={
+                    <Space>
+                      现金分红
+                      <Tooltip title="基金派发的现金分红总额，已到账的现金收益">
+                        <QuestionCircleOutlined
+                          style={{
+                            color: '#1890ff',
+                            cursor: 'help',
+                            fontSize: 12,
+                          }}
+                        />
+                      </Tooltip>
+                    </Space>
+                  }
                   value={parseFloat(summary.totalDividendCash)}
                   precision={2}
                   prefix="¥"

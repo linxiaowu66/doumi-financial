@@ -33,13 +33,36 @@ export async function POST(request: Request) {
       );
     }
 
+    // 对于现金分红，price可以为0（因为不需要净值）
+    // 对于其他类型，price必须有效
+    let finalPrice = 0;
+    if (type === 'DIVIDEND' && !dividendReinvest) {
+      // 现金分红：price设为0
+      finalPrice = 0;
+    } else {
+      // 其他类型：price必须有效
+      if (price === undefined || price === null) {
+        return NextResponse.json(
+          { error: '净值不能为空' },
+          { status: 400 }
+        );
+      }
+      finalPrice = parseFloat(price);
+      if (isNaN(finalPrice) || finalPrice <= 0) {
+        return NextResponse.json(
+          { error: '净值必须大于0' },
+          { status: 400 }
+        );
+      }
+    }
+
     const transaction = await prisma.transaction.create({
       data: {
         fundId: parseInt(fundId),
         type,
         amount: parseFloat(amount),
         shares: parseFloat(shares),
-        price: parseFloat(price),
+        price: finalPrice,
         fee: fee ? parseFloat(fee) : 0,
         date: new Date(date),
         dividendReinvest: dividendReinvest || false,

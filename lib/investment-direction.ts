@@ -3,7 +3,11 @@ import { Decimal } from '@prisma/client/runtime/library';
 
 /**
  * 计算并更新投资方向的实际投入金额
- * 实际投入 = 该投资方向下所有基金的买入交易金额总和
+ * 实际投入 = 买入金额 - 卖出金额 + 分红再投资金额
+ * - 买入：增加投入
+ * - 卖出：减少投入（资金收回）
+ * - 分红再投资：增加投入（收益再投入）
+ * - 现金分红：不影响投入（只是收益提取）
  */
 export async function updateInvestmentDirectionActualAmount(
   directionId: number
@@ -15,11 +19,7 @@ export async function updateInvestmentDirectionActualAmount(
       include: {
         funds: {
           include: {
-            transactions: {
-              where: {
-                type: 'BUY', // 只计算买入交易
-              },
-            },
+            transactions: true, // 获取所有交易记录
           },
         },
       },
@@ -30,14 +30,26 @@ export async function updateInvestmentDirectionActualAmount(
       return;
     }
 
-    // 计算所有买入交易的总金额
+    // 计算实际投入金额
+    // 实际投入 = 买入金额 - 卖出金额 + 分红再投资金额
     let totalInvested = new Decimal(0);
 
     for (const fund of direction.funds) {
       for (const tx of fund.transactions) {
+        const amount = new Decimal(tx.amount.toString());
+        
         if (tx.type === 'BUY') {
-          totalInvested = totalInvested.plus(new Decimal(tx.amount.toString()));
+          // 买入：增加投入
+          totalInvested = totalInvested.plus(amount);
+        } else if (tx.type === 'SELL') {
+          // 卖出：减少投入（资金收回）
+          // 卖出金额 = 份额 * 净值 - 手续费，这里amount已经是扣除手续费后的金额
+          totalInvested = totalInvested.minus(amount);
+        } else if (tx.type === 'DIVIDEND' && tx.dividendReinvest) {
+          // 分红再投资：增加投入（收益再投入）
+          totalInvested = totalInvested.plus(amount);
         }
+        // 现金分红不影响实际投入
       }
     }
 

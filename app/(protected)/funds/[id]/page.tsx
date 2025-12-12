@@ -118,6 +118,9 @@ export default function FundDetailPage({
   const [form] = Form.useForm();
   const [planForm] = Form.useForm();
   const [executeForm] = Form.useForm();
+  
+  // 监听分红类型，用于动态显示/隐藏净值字段
+  const dividendReinvest = Form.useWatch('dividendReinvest', form);
 
   // 检测屏幕尺寸
   useEffect(() => {
@@ -323,7 +326,8 @@ export default function FundDetailPage({
           type: values.type,
           amount: calculatedAmount,
           shares: calculatedShares,
-          price: values.price,
+          // 现金分红时，price设为0（数据库要求必填，但现金分红不需要净值）
+          price: values.type === 'DIVIDEND' && !values.dividendReinvest ? 0 : values.price,
           fee: values.fee || 0,
           date: values.date.toISOString(),
           dividendReinvest: values.dividendReinvest || false,
@@ -1497,13 +1501,20 @@ export default function FundDetailPage({
                   name="dividendReinvest"
                   rules={[{ required: true, message: '请选择分红类型' }]}
                 >
-                  <Radio.Group>
+                  <Radio.Group
+                    onChange={(e) => {
+                      // 当切换到现金分红时，清除净值字段
+                      if (e.target.value === false) {
+                        form.setFieldValue('price', undefined);
+                      }
+                    }}
+                  >
                     <Radio value={false}>现金分红</Radio>
                     <Radio value={true}>分红再投资</Radio>
                   </Radio.Group>
                 </Form.Item>
                 <Row gutter={16}>
-                  <Col span={12}>
+                  <Col span={dividendReinvest ? 12 : 24}>
                     <Form.Item
                       label="分红金额"
                       name="amount"
@@ -1518,21 +1529,23 @@ export default function FundDetailPage({
                       />
                     </Form.Item>
                   </Col>
-                  <Col span={12}>
-                    <Form.Item
-                      label="当日净值"
-                      name="price"
-                      rules={[{ required: true, message: '请输入当日净值' }]}
-                      tooltip="分红再投资时用于计算份额"
-                    >
-                      <InputNumber
-                        style={{ width: '100%' }}
-                        min={0}
-                        precision={4}
-                        placeholder="输入净值"
-                      />
-                    </Form.Item>
-                  </Col>
+                  {dividendReinvest && (
+                    <Col span={12}>
+                      <Form.Item
+                        label="当日净值"
+                        name="price"
+                        rules={[{ required: true, message: '请输入当日净值' }]}
+                        tooltip="分红再投资时用于计算份额"
+                      >
+                        <InputNumber
+                          style={{ width: '100%' }}
+                          min={0}
+                          precision={4}
+                          placeholder="输入净值"
+                        />
+                      </Form.Item>
+                    </Col>
+                  )}
                 </Row>
               </>
             )}

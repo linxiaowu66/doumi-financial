@@ -17,6 +17,7 @@ import {
   Statistic,
   Row,
   Col,
+  Tooltip,
 } from 'antd';
 import {
   PlusOutlined,
@@ -24,6 +25,7 @@ import {
   DeleteOutlined,
   FundOutlined,
   ArrowRightOutlined,
+  QuestionCircleOutlined,
 } from '@ant-design/icons';
 import Link from 'next/link';
 
@@ -155,21 +157,48 @@ export default function InvestmentDirectionsPage() {
       ),
     },
     {
-      title: '预期金额 (元)',
+      title: (
+        <Space>
+          预期金额 (元)
+          <Tooltip title="您为该投资方向设定的目标投入金额，用于跟踪投资进度">
+            <QuestionCircleOutlined
+              style={{ color: '#1890ff', cursor: 'help' }}
+            />
+          </Tooltip>
+        </Space>
+      ),
       dataIndex: 'expectedAmount',
       key: 'expectedAmount',
       align: 'right' as const,
       render: (amount: number) => `¥${Number(amount).toLocaleString()}`,
     },
     {
-      title: '实际投入 (元)',
+      title: (
+        <Space>
+          实际投入 (元)
+          <Tooltip title="实际投入 = 买入金额 - 卖出金额 + 分红再投资金额。卖出会减少投入（资金收回），分红再投资会增加投入（收益再投入），现金分红不影响投入">
+            <QuestionCircleOutlined
+              style={{ color: '#1890ff', cursor: 'help' }}
+            />
+          </Tooltip>
+        </Space>
+      ),
       dataIndex: 'actualAmount',
       key: 'actualAmount',
       align: 'right' as const,
       render: (amount: number) => `¥${Number(amount).toLocaleString()}`,
     },
     {
-      title: '投入进度',
+      title: (
+        <Space>
+          投入进度
+          <Tooltip title="实际投入 ÷ 预期投入 × 100%，反映投资计划的完成度">
+            <QuestionCircleOutlined
+              style={{ color: '#1890ff', cursor: 'help' }}
+            />
+          </Tooltip>
+        </Space>
+      ),
       key: 'progress',
       align: 'right' as const,
       render: (_: unknown, record: InvestmentDirection) => {
@@ -263,7 +292,16 @@ export default function InvestmentDirectionsPage() {
           <Col span={8}>
             <Card>
               <Statistic
-                title="预期总投入"
+                title={
+                  <Space>
+                    预期总投入
+                    <Tooltip title="所有投资方向的目标投入金额总和">
+                      <QuestionCircleOutlined
+                        style={{ color: '#1890ff', cursor: 'help' }}
+                      />
+                    </Tooltip>
+                  </Space>
+                }
                 value={totalExpected}
                 precision={2}
                 prefix="¥"
@@ -274,7 +312,16 @@ export default function InvestmentDirectionsPage() {
           <Col span={8}>
             <Card>
               <Statistic
-                title="实际总投入"
+                title={
+                  <Space>
+                    实际总投入
+                    <Tooltip title="所有投资方向的买入交易金额总和，不包括卖出和分红">
+                      <QuestionCircleOutlined
+                        style={{ color: '#1890ff', cursor: 'help' }}
+                      />
+                    </Tooltip>
+                  </Space>
+                }
                 value={totalActual}
                 precision={2}
                 prefix="¥"

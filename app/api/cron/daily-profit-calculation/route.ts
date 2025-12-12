@@ -107,9 +107,6 @@ export async function POST(request: Request) {
     // 1. 更新所有基金的净值
     try {
       const funds = await prisma.fund.findMany({
-        where: {
-          code: { not: null },
-        },
         select: {
           id: true,
           code: true,
