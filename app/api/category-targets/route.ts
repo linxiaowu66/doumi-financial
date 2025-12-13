@@ -22,7 +22,11 @@ export async function GET(request: Request) {
     return NextResponse.json(targets);
   } catch (error) {
     console.error('获取分类目标失败:', error);
-    return NextResponse.json({ error: '获取分类目标失败' }, { status: 500 });
+    const errorMessage = error instanceof Error ? error.message : '未知错误';
+    return NextResponse.json(
+      { error: '获取分类目标失败', message: errorMessage },
+      { status: 500 }
+    );
   }
 }
 
@@ -30,11 +34,19 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { directionId, categoryName, targetAmount } = body;
+    const { directionId, categoryName, targetPercent } = body;
 
-    if (!directionId || !categoryName || !targetAmount) {
+    if (!directionId || !categoryName || targetPercent === undefined || targetPercent === null) {
       return NextResponse.json(
-        { error: '投资方向、分类名称和目标金额不能为空' },
+        { error: '投资方向、分类名称和目标仓位百分比不能为空' },
+        { status: 400 }
+      );
+    }
+
+    const percentValue = parseFloat(targetPercent);
+    if (percentValue < 0 || percentValue > 100) {
+      return NextResponse.json(
+        { error: '目标仓位百分比必须在 0-100 之间' },
         { status: 400 }
       );
     }
@@ -48,12 +60,12 @@ export async function POST(request: Request) {
         },
       },
       update: {
-        targetAmount: parseFloat(targetAmount),
+        targetPercent: percentValue,
       },
       create: {
         directionId: parseInt(directionId),
         categoryName,
-        targetAmount: parseFloat(targetAmount),
+        targetPercent: percentValue,
       },
     });
 

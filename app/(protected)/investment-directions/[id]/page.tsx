@@ -34,6 +34,7 @@ import {
   DollarOutlined,
   LineChartOutlined,
   QuestionCircleOutlined,
+  ExclamationCircleOutlined,
 } from '@ant-design/icons';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -51,6 +52,13 @@ import {
 const { Title, Text } = Typography;
 const { TextArea } = Input;
 
+interface Transaction {
+  id: number;
+  type: string;
+  date: string;
+  price: number;
+}
+
 interface Fund {
   id: number;
   code: string;
@@ -60,10 +68,27 @@ interface Fund {
   latestNetWorth?: number | null;
   netWorthDate?: string | null;
   createdAt: string;
+  transactions?: Transaction[];
   _count?: {
     transactions: number;
     plannedPurchases: number;
   };
+}
+
+interface FundAlert {
+  fundId: number;
+  fundName: string;
+  reason: 'days' | 'price' | 'position'; // days: 超过25天, price: 下跌超过5%, position: 仓位超标
+  daysSinceLastBuy?: number;
+  priceDropPercent?: number;
+  positionExcessPercent?: number; // 仓位超标百分比
+}
+
+interface CategoryPositionAlert {
+  categoryName: string;
+  currentValue: number; // 当前市值（持仓成本 + 持仓收益）
+  targetAmount: number; // 目标金额
+  excessPercent: number; // 超标百分比
 }
 
 interface InvestmentDirection {
@@ -78,6 +103,8 @@ interface FundStats {
   holdingShares: number;
   holdingCost: number;
   avgCostPrice: number;
+  holdingValue?: number; // 持仓市值
+  holdingProfit?: number; // 持仓收益
   holdingProfitRate: number; // 持仓收益率
   totalProfitRate: number; // 累计收益率
   totalProfit: number; // 累计收益金额
@@ -89,7 +116,7 @@ interface CategoryTarget {
   id: number;
   directionId: number;
   categoryName: string;
-  targetAmount: number;
+  targetPercent: number; // 目标仓位百分比（0-100）
 }
 
 interface DirectionSummary {
@@ -143,6 +170,12 @@ export default function DirectionDetailPage({
     Array<{ label: string; value: string }>
   >([]);
   const [categorySearchValue, setCategorySearchValue] = useState<string>('');
+  const [categoryAlerts, setCategoryAlerts] = useState<
+    Map<string, FundAlert[]>
+  >(new Map());
+  const [categoryPositionAlerts, setCategoryPositionAlerts] = useState<
+    Map<string, CategoryPositionAlert>
+  >(new Map());
 
   // 检测屏幕尺寸
   useEffect(() => {
@@ -173,10 +206,22 @@ export default function DirectionDetailPage({
       const response = await fetch(
         `/api/category-targets?directionId=${directionId}`
       );
+      if (!response.ok) {
+        console.error('加载分类目标失败:', response.status, response.statusText);
+        setCategoryTargets([]);
+        return;
+      }
       const data = await response.json();
-      setCategoryTargets(data);
+      // 确保 data 是数组
+      if (Array.isArray(data)) {
+        setCategoryTargets(data);
+      } else {
+        console.error('分类目标数据格式错误:', data);
+        setCategoryTargets([]);
+      }
     } catch (error) {
       console.error('加载分类目标失败:', error);
+      setCategoryTargets([]);
     }
   }, [directionId]);
 
@@ -235,12 +280,163 @@ export default function DirectionDetailPage({
         })
       );
       setFundsStats(statsMap);
+
+      // 检查提醒条件
+      checkFundAlerts(data);
+      // 检查仓位超标提醒
+      checkCategoryPositionAlerts(data, statsMap);
     } catch {
       message.error('加载基金列表失败');
     } finally {
       setLoading(false);
     }
   }, [directionId]);
+
+  // 检查基金提醒条件
+  const checkFundAlerts = useCallback((fundsData: Fund[]) => {
+    const alertsMap = new Map<string, FundAlert[]>();
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    fundsData.forEach((fund) => {
+      if (!fund.category || !fund.transactions || fund.transactions.length === 0) {
+        return;
+      }
+
+      // 找到最后一次买入交易
+      const buyTransactions = fund.transactions.filter(
+        (tx) => tx.type === 'BUY'
+      );
+      if (buyTransactions.length === 0) {
+        return;
+      }
+
+      // 按日期排序，获取最后一次买入
+      const lastBuy = buyTransactions.sort(
+        (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+      )[0];
+
+      const lastBuyDate = new Date(lastBuy.date);
+      lastBuyDate.setHours(0, 0, 0, 0);
+
+      // 计算距离上次买入的天数
+      const daysDiff = Math.floor(
+        (today.getTime() - lastBuyDate.getTime()) / (1000 * 60 * 60 * 24)
+      );
+
+      // 检查条件1：距离上次买入超过25天
+      const condition1 = daysDiff > 25;
+
+      // 检查条件2：当前净值相比上次买入净值下跌超过5%
+      let condition2 = false;
+      let priceDropPercent = 0;
+      if (fund.latestNetWorth && lastBuy.price) {
+        const currentPrice = parseFloat(fund.latestNetWorth.toString());
+        const buyPrice = parseFloat(lastBuy.price.toString());
+        priceDropPercent = ((buyPrice - currentPrice) / buyPrice) * 100;
+        condition2 = priceDropPercent > 5;
+      }
+
+      // 如果满足任一条件，添加到提醒列表
+      if (condition1 || condition2) {
+        const category = fund.category;
+        if (!alertsMap.has(category)) {
+          alertsMap.set(category, []);
+        }
+
+        // 如果两个条件都满足，优先显示天数提醒
+        const alert: FundAlert = {
+          fundId: fund.id,
+          fundName: fund.name,
+          reason: condition1 ? 'days' : 'price',
+          daysSinceLastBuy: condition1 ? daysDiff : undefined,
+          priceDropPercent: condition2 ? priceDropPercent : undefined,
+        };
+
+        // 如果两个条件都满足，添加两条提醒记录
+        if (condition1 && condition2) {
+          alertsMap.get(category)!.push({
+            ...alert,
+            reason: 'days',
+            priceDropPercent: undefined,
+          });
+          alertsMap.get(category)!.push({
+            ...alert,
+            reason: 'price',
+            daysSinceLastBuy: undefined,
+          });
+        } else {
+          alertsMap.get(category)!.push(alert);
+        }
+      }
+    });
+
+    setCategoryAlerts(alertsMap);
+  }, []);
+
+  // 检查分类仓位超标提醒
+  const checkCategoryPositionAlerts = useCallback(
+    (fundsData: Fund[], statsMap: Map<number, FundStats>) => {
+      const positionAlertsMap = new Map<string, CategoryPositionAlert>();
+
+      if (!direction?.expectedAmount) {
+        return;
+      }
+
+      // 按分类分组
+      const groupedByCategory = fundsData.reduce((acc, fund) => {
+        if (!fund.category) return acc;
+        if (!acc[fund.category]) {
+          acc[fund.category] = [];
+        }
+        acc[fund.category].push(fund);
+        return acc;
+      }, {} as Record<string, Fund[]>);
+
+      // 检查每个分类
+      Object.entries(groupedByCategory).forEach(([category, categoryFunds]) => {
+        const categoryTarget = categoryTargets.find(
+          (t) => t.categoryName === category
+        );
+        const targetPercent = categoryTarget?.targetPercent || 0;
+
+        if (targetPercent <= 0) {
+          return; // 没有设置目标，不检查
+        }
+
+        // 计算目标金额
+        const targetAmount =
+          (Number(direction.expectedAmount) * targetPercent) / 100;
+
+        // 计算当前市值（持仓成本 + 持仓收益）
+        let currentValue = 0;
+        categoryFunds.forEach((fund) => {
+          const stats = statsMap.get(fund.id);
+          if (stats) {
+            // 当前市值 = 持仓成本 + 持仓收益
+            // 持仓收益 = 持仓成本 * 持仓收益率 / 100
+            const holdingProfit =
+              (stats.holdingCost * stats.holdingProfitRate) / 100;
+            currentValue += stats.holdingCost + holdingProfit;
+          }
+        });
+
+        // 检查是否超过目标仓位的110%（即超过10%）
+        if (targetAmount > 0 && currentValue > targetAmount * 1.1) {
+          const excessPercent = ((currentValue - targetAmount) / targetAmount) * 100;
+          positionAlertsMap.set(category, {
+            categoryName: category,
+            currentValue,
+            targetAmount,
+            excessPercent,
+          });
+        }
+      });
+
+      setCategoryPositionAlerts(positionAlertsMap);
+    },
+    [direction, categoryTargets]
+  );
 
   // 加载图表数据
   const loadChartData = useCallback(async () => {
@@ -278,6 +474,13 @@ export default function DirectionDetailPage({
     loadSummary,
     loadChartData,
   ]);
+
+  // 当基金统计或分类目标变化时，重新检查仓位超标
+  useEffect(() => {
+    if (funds.length > 0 && fundsStats.size > 0 && categoryTargets.length >= 0 && direction) {
+      checkCategoryPositionAlerts(funds, fundsStats);
+    }
+  }, [funds, fundsStats, categoryTargets, direction, checkCategoryPositionAlerts]);
 
   // 打开新建/编辑弹窗
   const handleOpenModal = (fund?: Fund) => {
@@ -351,17 +554,17 @@ export default function DirectionDetailPage({
   // 打开设置分类目标弹窗
   const handleOpenTargetModal = (
     categoryName: string,
-    currentTarget?: number
+    currentTargetPercent?: number
   ) => {
     setEditingCategory(categoryName);
     targetForm.setFieldsValue({
-      targetAmount: currentTarget || 0,
+      targetPercent: currentTargetPercent || 0,
     });
     setTargetModalOpen(true);
   };
 
   // 保存分类目标
-  const handleSaveTarget = async (values: { targetAmount: number }) => {
+  const handleSaveTarget = async (values: { targetPercent: number }) => {
     try {
       const response = await fetch('/api/category-targets', {
         method: 'POST',
@@ -369,7 +572,7 @@ export default function DirectionDetailPage({
         body: JSON.stringify({
           directionId,
           categoryName: editingCategory,
-          targetAmount: values.targetAmount,
+          targetPercent: values.targetPercent,
         }),
       });
 
@@ -379,7 +582,8 @@ export default function DirectionDetailPage({
         targetForm.resetFields();
         loadCategoryTargets();
       } else {
-        message.error('设置失败');
+        const errorData = await response.json();
+        message.error(errorData.error || '设置失败');
       }
     } catch {
       message.error('设置失败');
@@ -1189,11 +1393,16 @@ export default function DirectionDetailPage({
             return sum + (stats?.holdingCost || 0);
           }, 0);
 
-          // 获取该分类的目标金额
+          // 获取该分类的目标百分比
           const categoryTarget = categoryTargets.find(
             (t) => t.categoryName === category
           );
-          const targetAmount = categoryTarget?.targetAmount || 0;
+          const targetPercent = categoryTarget?.targetPercent || 0;
+          // 根据投资方向的预期投入金额和目标百分比计算目标金额
+          const targetAmount =
+            targetPercent > 0 && direction?.expectedAmount
+              ? (Number(direction.expectedAmount) * targetPercent) / 100
+              : 0;
           const progress =
             targetAmount > 0
               ? (categoryHoldingCost / Number(targetAmount)) * 100
@@ -1212,6 +1421,79 @@ export default function DirectionDetailPage({
                   <Space wrap>
                     <Tag color="blue">{category}</Tag>
                     <Text type="secondary">{categoryFunds.length} 只基金</Text>
+                    {categoryAlerts.has(category) && (
+                      <Tooltip
+                        title={
+                          <div>
+                            {Array.from(
+                              new Map(
+                                categoryAlerts.get(category)!.map((alert) => [
+                                  alert.fundId,
+                                  alert,
+                                ])
+                              ).values()
+                            ).map((alert) => (
+                              <div key={`${alert.fundId}-${alert.reason}`} style={{ marginBottom: 4 }}>
+                                <strong>{alert.fundName}</strong>:
+                                {alert.reason === 'days' && (
+                                  <span>
+                                    {' '}
+                                    距离上次买入已超过
+                                    {alert.daysSinceLastBuy}天
+                                  </span>
+                                )}
+                                {alert.reason === 'price' && (
+                                  <span>
+                                    {' '}
+                                    净值相比上次买入下跌
+                                    {alert.priceDropPercent?.toFixed(2)}%
+                                  </span>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        }
+                      >
+                        <Tag
+                          color="orange"
+                          icon={<ExclamationCircleOutlined />}
+                          style={{ cursor: 'help' }}
+                        >
+                          有{new Set(categoryAlerts.get(category)!.map(a => a.fundId)).size}只基金需要关注
+                        </Tag>
+                      </Tooltip>
+                    )}
+                    {categoryPositionAlerts.has(category) && (
+                      <Tooltip
+                        title={
+                          <div>
+                            <div style={{ marginBottom: 4 }}>
+                              <strong>仓位超标提醒</strong>
+                            </div>
+                            <div>
+                              当前市值: ¥{categoryPositionAlerts.get(category)!.currentValue.toLocaleString()}
+                            </div>
+                            <div>
+                              目标仓位: ¥{categoryPositionAlerts.get(category)!.targetAmount.toLocaleString()}
+                            </div>
+                            <div>
+                              超标: {categoryPositionAlerts.get(category)!.excessPercent.toFixed(2)}%
+                            </div>
+                            <div style={{ marginTop: 8, fontSize: 12, color: '#999' }}>
+                              建议进行仓位平衡，避免仓位过大
+                            </div>
+                          </div>
+                        }
+                      >
+                        <Tag
+                          color="red"
+                          icon={<ExclamationCircleOutlined />}
+                          style={{ cursor: 'help' }}
+                        >
+                          仓位超标
+                        </Tag>
+                      </Tooltip>
+                    )}
                   </Space>
                   <Space wrap>
                     {targetAmount > 0 ? (
@@ -1240,7 +1522,7 @@ export default function DirectionDetailPage({
                       size="small"
                       type="link"
                       onClick={() =>
-                        handleOpenTargetModal(category, targetAmount)
+                        handleOpenTargetModal(category, targetPercent)
                       }
                     >
                       设置目标
@@ -1456,24 +1738,43 @@ export default function DirectionDetailPage({
             style={{ marginTop: 24 }}
           >
             <Form.Item
-              label="目标投入金额 (元)"
-              name="targetAmount"
-              rules={[{ required: true, message: '请输入目标投入金额' }]}
-              tooltip="该分类下所有基金的投入总额不应超过此目标"
+              label="目标仓位百分比 (%)"
+              name="targetPercent"
+              rules={[
+                { required: true, message: '请输入目标仓位百分比' },
+                {
+                  type: 'number',
+                  min: 0,
+                  max: 100,
+                  message: '百分比必须在 0-100 之间',
+                },
+              ]}
+              tooltip={`该分类的目标仓位百分比。当前投资方向的预期投入为 ¥${direction?.expectedAmount?.toLocaleString() || 0}，设置后将自动计算目标金额。`}
             >
               <InputNumber
-                placeholder="请输入金额"
+                placeholder="请输入百分比（0-100）"
                 size="large"
                 style={{ width: '100%' }}
                 min={0}
+                max={100}
                 precision={2}
-                formatter={(value) =>
-                  value
-                    ? `¥ ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')
-                    : ''
-                }
+                formatter={(value) => (value ? `${value}%` : '')}
+                parser={(value) => value!.replace('%', '')}
+                addonAfter="%"
               />
             </Form.Item>
+            {direction?.expectedAmount && targetForm.getFieldValue('targetPercent') > 0 && (
+              <Form.Item label="计算后的目标金额">
+                <Text type="secondary">
+                  ¥
+                  {(
+                    (Number(direction.expectedAmount) *
+                      targetForm.getFieldValue('targetPercent')) /
+                    100
+                  ).toLocaleString()}
+                </Text>
+              </Form.Item>
+            )}
 
             <Form.Item style={{ marginBottom: 0, marginTop: 24 }}>
               <Flex justify="flex-end" gap="small">

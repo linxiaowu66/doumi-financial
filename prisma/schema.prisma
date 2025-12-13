@@ -42,7 +42,7 @@ model CategoryTarget {
   directionId  Int // 所属投资方向
   direction    InvestmentDirection @relation(fields: [directionId], references: [id], onDelete: Cascade)
   categoryName String // 分类名称（如：标普、纳指、沪深300）
-  targetAmount Decimal             @db.Decimal(15, 2) // 目标投入金额
+  targetPercent Decimal            @db.Decimal(5, 2) // 目标仓位百分比（0-100）
   createdAt    DateTime            @default(now())
   updatedAt    DateTime            @updatedAt
 
