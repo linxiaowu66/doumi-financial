@@ -23,6 +23,7 @@ import {
   Divider,
   Radio,
   Spin,
+  Tooltip,
 } from 'antd';
 import {
   PlusOutlined,
@@ -42,7 +43,7 @@ import {
   XAxis,
   YAxis,
   CartesianGrid,
-  Tooltip,
+  Tooltip as RechartsTooltip,
   Legend,
   ResponsiveContainer,
 } from 'recharts';
@@ -893,7 +894,7 @@ export default function DirectionDetailPage({
                       style: { fontSize: isMobile ? 10 : 12 },
                     }}
                   />
-                  <Tooltip
+                  <RechartsTooltip
                     formatter={(value: number, name: string, props: any) => {
                       // name参数是dataKey的值
                       const dataKey = props.dataKey || name;
