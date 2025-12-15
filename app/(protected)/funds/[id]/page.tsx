@@ -118,7 +118,7 @@ export default function FundDetailPage({
   const [form] = Form.useForm();
   const [planForm] = Form.useForm();
   const [executeForm] = Form.useForm();
-  
+
   // 监听分红类型，用于动态显示/隐藏净值字段
   const dividendReinvest = Form.useWatch('dividendReinvest', form);
 
@@ -327,7 +327,10 @@ export default function FundDetailPage({
           amount: calculatedAmount,
           shares: calculatedShares,
           // 现金分红时，price设为0（数据库要求必填，但现金分红不需要净值）
-          price: values.type === 'DIVIDEND' && !values.dividendReinvest ? 0 : values.price,
+          price:
+            values.type === 'DIVIDEND' && !values.dividendReinvest
+              ? 0
+              : values.price,
           fee: values.fee || 0,
           date: values.date.toISOString(),
           dividendReinvest: values.dividendReinvest || false,
@@ -513,6 +516,47 @@ export default function FundDetailPage({
                   {Number(transaction.shares).toLocaleString()}
                 </div>
               </Col>
+              <Col span={12}>
+                <div style={{ fontSize: 11, color: '#999' }}>差值</div>
+                <div style={{ fontSize: 14 }}>
+                  {(() => {
+                    const currentPriceNum = Number(transaction.price);
+                    // 找到所有买入交易，按日期正序排列（最早的在前）
+                    const buyTransactions = transactions
+                      .filter((t) => t.type === 'BUY')
+                      .sort(
+                        (a, b) =>
+                          new Date(a.date).getTime() -
+                          new Date(b.date).getTime()
+                      );
+                    const currentIndex = buyTransactions.findIndex(
+                      (t) => t.id === transaction.id
+                    );
+
+                    if (currentIndex === -1) return '-';
+
+                    // 第一笔交易没有差值
+                    if (currentIndex === 0) return '-';
+
+                    // 与上一笔买入交易的净值比较
+                    const prevTransaction = buyTransactions[currentIndex - 1];
+                    const comparePrice = Number(prevTransaction.price);
+                    const diff = currentPriceNum - comparePrice;
+
+                    const diffPercent =
+                      comparePrice > 0 ? (diff / comparePrice) * 100 : 0;
+                    const color = diff >= 0 ? '#cf1322' : '#3f8600';
+
+                    return (
+                      <span style={{ color }}>
+                        {diff >= 0 ? '+' : ''}
+                        {diff.toFixed(4)} ({diff >= 0 ? '+' : ''}
+                        {diffPercent.toFixed(2)}%)
+                      </span>
+                    );
+                  })()}
+                </div>
+              </Col>
               {transaction.fee > 0 && (
                 <Col span={12}>
                   <div style={{ fontSize: 11, color: '#999' }}>手续费</div>
@@ -605,14 +649,20 @@ export default function FundDetailPage({
       title: '日期',
       dataIndex: 'date',
       key: 'date',
-      width: 120,
-      render: (date: string) => dayjs(date).format('YYYY/M/D'),
+      width: 110,
+      align: 'center',
+      render: (date: string) => (
+        <span style={{ whiteSpace: 'nowrap' }}>
+          {dayjs(date).format('YYYY/M/D')}
+        </span>
+      ),
     },
     {
       title: '类型',
       dataIndex: 'type',
       key: 'type',
-      width: 100,
+      width: 90,
+      align: 'center',
       render: (type: string, record: Transaction) => {
         const typeMap: Record<string, { text: string; color: string }> = {
           BUY: { text: '买入', color: 'green' },
@@ -630,8 +680,8 @@ export default function FundDetailPage({
       title: '买入金额',
       dataIndex: 'amount',
       key: 'buyAmount',
-      align: 'right',
-      width: 130,
+      align: 'center',
+      width: 110,
       render: (amount: number, record: Transaction) =>
         record.type === 'BUY' ? `¥${Number(amount).toLocaleString()}` : '-',
     },
@@ -639,8 +689,8 @@ export default function FundDetailPage({
       title: '手续费',
       dataIndex: 'fee',
       key: 'fee',
-      align: 'right',
-      width: 100,
+      align: 'center',
+      width: 85,
       render: (fee: number) =>
         Number(fee) > 0 ? `¥${Number(fee).toFixed(2)}` : '-',
     },
@@ -648,16 +698,72 @@ export default function FundDetailPage({
       title: '净值',
       dataIndex: 'price',
       key: 'price',
-      align: 'right',
-      width: 100,
+      align: 'center',
+      width: 90,
       render: (price: number) => Number(price).toFixed(4),
+    },
+    {
+      title: '差值',
+      key: 'priceDiff',
+      align: 'center',
+      width: 100,
+      render: (_: unknown, record: Transaction, index: number) => {
+        // 只对买入交易显示差值
+        if (record.type !== 'BUY') {
+          return '-';
+        }
+
+        const currentPriceNum = Number(record.price);
+
+        // 找到所有买入交易，按日期正序排列（最早的在前）
+        const buyTransactions = transactions
+          .filter((t) => t.type === 'BUY')
+          .sort(
+            (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+          );
+
+        // 找到当前交易在买入交易中的索引
+        const currentIndex = buyTransactions.findIndex(
+          (t) => t.id === record.id
+        );
+
+        if (currentIndex === -1) {
+          return '-';
+        }
+
+        // 第一笔交易没有差值
+        if (currentIndex === 0) {
+          return '-';
+        }
+
+        // 与上一笔买入交易的净值比较
+        const prevTransaction = buyTransactions[currentIndex - 1];
+        const comparePrice = Number(prevTransaction.price);
+        const diff = currentPriceNum - comparePrice;
+
+        const diffPercent = comparePrice > 0 ? (diff / comparePrice) * 100 : 0;
+        const color = diff >= 0 ? '#cf1322' : '#3f8600'; // 正红负绿
+
+        return (
+          <div>
+            <div style={{ color, fontSize: 13 }}>
+              {diff >= 0 ? '+' : ''}
+              {diff.toFixed(4)}
+            </div>
+            <div style={{ color, fontSize: 11, opacity: 0.7 }}>
+              ({diff >= 0 ? '+' : ''}
+              {diffPercent.toFixed(2)}%)
+            </div>
+          </div>
+        );
+      },
     },
     {
       title: '份额',
       dataIndex: 'shares',
       key: 'shares',
-      align: 'right',
-      width: 130,
+      align: 'center',
+      width: 110,
       render: (shares: number) => {
         const sharesNum = Number(shares);
         const isNegative = sharesNum < 0;
@@ -672,6 +778,7 @@ export default function FundDetailPage({
       title: '备注',
       dataIndex: 'remark',
       key: 'remark',
+      align: 'center',
       ellipsis: true,
       render: (remark: string) => remark || '-',
     },
@@ -679,8 +786,7 @@ export default function FundDetailPage({
       title: '操作',
       key: 'action',
       align: 'center',
-      width: 100,
-      fixed: 'right',
+      width: 80,
       render: (_: unknown, record: Transaction) => (
         <Popconfirm
           title="确定要删除吗？"
@@ -1010,6 +1116,60 @@ export default function FundDetailPage({
                 }}
               />
             </Col>
+            {(() => {
+              // 计算最近一笔买入交易
+              const latestBuyTransaction = transactions
+                .filter((t) => t.type === 'BUY')
+                .sort(
+                  (a, b) =>
+                    new Date(b.date).getTime() - new Date(a.date).getTime()
+                )[0];
+
+              if (!latestBuyTransaction || !currentPrice || currentPrice <= 0) {
+                return null;
+              }
+
+              const latestBuyPrice = Number(latestBuyTransaction.price);
+              const priceDiff = currentPrice - latestBuyPrice;
+              const priceDiffPercent =
+                latestBuyPrice > 0 ? (priceDiff / latestBuyPrice) * 100 : 0;
+
+              return (
+                <Col xs={12} sm={12} md={8}>
+                  <Statistic
+                    title={
+                      <span style={{ fontSize: isMobile ? 12 : 14 }}>
+                        最近买入净值
+                      </span>
+                    }
+                    value={latestBuyPrice}
+                    precision={4}
+                    prefix="¥"
+                    styles={{
+                      content: {
+                        color: '#722ed1',
+                        fontSize: isMobile ? 16 : 20,
+                      },
+                    }}
+                    suffix={
+                      <div
+                        style={{ fontSize: isMobile ? 11 : 12, marginTop: 4 }}
+                      >
+                        <span
+                          style={{
+                            color: priceDiff >= 0 ? '#cf1322' : '#3f8600',
+                          }}
+                        >
+                          {priceDiff >= 0 ? '+' : ''}
+                          {priceDiff.toFixed(4)} ({priceDiff >= 0 ? '+' : ''}
+                          {priceDiffPercent.toFixed(2)}%)
+                        </span>
+                      </div>
+                    }
+                  />
+                </Col>
+              );
+            })()}
             {!isMobile && (
               <>
                 <Col xs={24} sm={12} md={8}>
@@ -1353,7 +1513,6 @@ export default function FundDetailPage({
                 showSizeChanger: true,
                 showTotal: (total) => `共 ${total} 条记录`,
               }}
-              scroll={{ x: 1000 }}
             />
           )}
         </Card>
