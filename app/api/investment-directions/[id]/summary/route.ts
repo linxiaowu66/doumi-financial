@@ -30,9 +30,10 @@ export async function GET(
     }
 
     // 初始化统计数据
-    let totalInvested = new Decimal(0); // 总投入
+    // 总投入：历史上所有买入交易的金额总和（包括已清仓的基金），用于计算累计收益率
+    let totalInvested = new Decimal(0);
     let totalCurrentValue = new Decimal(0); // 当前总市值
-    let totalCost = new Decimal(0); // 持仓总成本
+    let totalCost = new Decimal(0); // 持仓总成本（当前持仓的成本，不包括已清仓的基金）
     let totalSellProfit = new Decimal(0); // 累计卖出收益
     let totalDividendCash = new Decimal(0); // 累计现金分红
     let totalDividendReinvest = new Decimal(0); // 累计分红再投资
@@ -55,6 +56,7 @@ export async function GET(
           // 买入：增加份额和成本
           fundShares = fundShares.plus(shares);
           fundCost = fundCost.plus(amount);
+          // 累加总投入（包括已清仓的基金，用于计算累计收益率）
           totalInvested = totalInvested.plus(amount);
         } else if (tx.type === 'SELL') {
           // 卖出：减少份额和成本
@@ -115,7 +117,7 @@ export async function GET(
       directionName: direction.name,
       expectedAmount: direction.expectedAmount.toString(),
       actualAmount: direction.actualAmount.toString(),
-      totalInvested: totalInvested.toFixed(2), // 实际总投入
+      totalInvested: totalInvested.toFixed(2), // 历史总投入（所有买入金额总和，包括已清仓的基金）
       totalCurrentValue: totalCurrentValue.toFixed(2), // 当前总市值
       totalCost: totalCost.toFixed(2), // 持仓总成本
       holdingProfit: holdingProfit.toFixed(2), // 持仓收益
