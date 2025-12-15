@@ -1155,7 +1155,11 @@ export default function DirectionDetailPage({
                     }}
                   />
                   <RechartsTooltip
-                    formatter={(value: number, name: string, props: any) => {
+                    formatter={(
+                      value: number,
+                      name: string,
+                      props: { dataKey?: string }
+                    ) => {
                       // name参数是dataKey的值
                       const dataKey = props.dataKey || name;
                       if (dataKey === 'cumulativeProfitRate') {
@@ -1777,12 +1781,12 @@ export default function DirectionDetailPage({
                       categorySearchValue ? (
                         <div style={{ padding: '8px 0', textAlign: 'center' }}>
                           <span style={{ color: '#999', fontSize: 12 }}>
-                            按回车创建新分类 "{categorySearchValue}"
+                            按回车创建新分类 &quot;{categorySearchValue}&quot;
                           </span>
                         </div>
                       ) : null
                     }
-                    onSelect={(value) => {
+                    onSelect={() => {
                       setCategorySearchValue('');
                     }}
                     onClear={() => {
@@ -1856,7 +1860,7 @@ export default function DirectionDetailPage({
                 direction?.expectedAmount?.toLocaleString() || 0
               }，设置后将自动计算目标金额。`}
             >
-              <InputNumber
+              <InputNumber<number>
                 placeholder="请输入百分比（0-100）"
                 size="large"
                 style={{ width: '100%' }}
@@ -1864,7 +1868,11 @@ export default function DirectionDetailPage({
                 max={100}
                 precision={2}
                 formatter={(value) => (value ? `${value}%` : '')}
-                parser={(value) => value!.replace('%', '')}
+                parser={(value) => {
+                  const num = parseFloat(value!.replace('%', ''));
+                  if (isNaN(num)) return 0;
+                  return Math.max(0, Math.min(100, num));
+                }}
                 addonAfter="%"
               />
             </Form.Item>
