@@ -129,7 +129,7 @@ export async function GET() {
     const dates = Object.keys(groupedByDate).sort().reverse();
     let todayProfit = new Decimal(0);
     let lastTradeDate = '';
-    
+
     if (dates.length > 0) {
       lastTradeDate = dates[0];
       const latestDayRecords = groupedByDate[lastTradeDate];
@@ -175,4 +175,3 @@ export async function GET() {
     );
   }
 }
-
