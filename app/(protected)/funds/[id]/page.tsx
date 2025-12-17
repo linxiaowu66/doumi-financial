@@ -114,6 +114,7 @@ export default function FundDetailPage({
   const [transactionType, setTransactionType] = useState<string>('BUY');
   const [currentPrice, setCurrentPrice] = useState<number>(0); // 当前净值
   const [fetchingPrice, setFetchingPrice] = useState(false); // 正在获取净值
+  const [fetchingHistoryPrice, setFetchingHistoryPrice] = useState(false); // 正在获取历史净值
   const [isMobile, setIsMobile] = useState(false); // 移动端检测
   const [form] = Form.useForm();
   const [planForm] = Form.useForm();
@@ -121,6 +122,8 @@ export default function FundDetailPage({
 
   // 监听分红类型，用于动态显示/隐藏净值字段
   const dividendReinvest = Form.useWatch('dividendReinvest', form);
+  const dividendShares = Form.useWatch('dividendShares', form); // 监听再投资份数
+  const dividendDate = Form.useWatch('date', form); // 监听交易日期
 
   // 检测屏幕尺寸
   useEffect(() => {
@@ -199,6 +202,48 @@ export default function FundDetailPage({
     [fundId]
   );
 
+  // 获取指定日期的历史净值
+  const fetchHistoricalPrice = useCallback(
+    async (code: string, date: string) => {
+      setFetchingHistoryPrice(true);
+      try {
+        const response = await fetch(
+          `/api/fund-price-history?code=${code}&date=${date}`
+        );
+        const data = await response.json();
+
+        if (response.ok && data.netWorth) {
+          // 如果使用的是最近交易日的净值，显示提示信息
+          if (data.matchType === 'nearest' && data.message) {
+            message.info(data.message);
+          }
+          return {
+            netWorth: parseFloat(data.netWorth),
+            date: data.date,
+            matchType: data.matchType,
+          };
+        } else {
+          const errorMsg = data.error || '无法获取该日期的净值数据';
+          if (data.availableDates && data.availableDates.length > 0) {
+            message.warning(
+              `${errorMsg}。最近的可用日期：${data.availableDates.slice(0, 3).join(', ')}`
+            );
+          } else {
+            message.warning(errorMsg);
+          }
+          return null;
+        }
+      } catch (error) {
+        console.error('获取历史净值失败:', error);
+        message.warning('获取历史净值失败');
+        return null;
+      } finally {
+        setFetchingHistoryPrice(false);
+      }
+    },
+    []
+  );
+
   // 加载基金详情
   const loadFund = useCallback(async () => {
     try {
@@ -270,6 +315,54 @@ export default function FundDetailPage({
     }
   }, [currentPrice, loadTransactions]);
 
+  // 当分红再投资时，监听日期和份数变化，自动获取净值并计算分红金额
+  useEffect(() => {
+    const autoCalculateDividendAmount = async () => {
+      // 只在分红再投资模式下触发
+      if (
+        transactionType === 'DIVIDEND' &&
+        dividendReinvest &&
+        dividendDate &&
+        dividendShares &&
+        dividendShares > 0 &&
+        fund?.code
+      ) {
+        const dateStr = dayjs(dividendDate).format('YYYY-MM-DD');
+        const result = await fetchHistoricalPrice(fund.code, dateStr);
+
+        if (result) {
+          // 计算分红金额 = 份数 × 净值
+          const amount = dividendShares * result.netWorth;
+          form.setFieldsValue({
+            price: result.netWorth,
+            amount: amount,
+          });
+          
+          // 只在精确匹配时显示成功消息（最近日期的消息已在fetchHistoricalPrice中显示）
+          if (result.matchType === 'exact') {
+            message.success(
+              `已获取 ${dateStr} 净值：¥${result.netWorth.toFixed(4)}，计算分红金额：¥${amount.toFixed(2)}`
+            );
+          } else {
+            message.success(
+              `计算分红金额：¥${amount.toFixed(2)}`
+            );
+          }
+        }
+      }
+    };
+
+    autoCalculateDividendAmount();
+  }, [
+    transactionType,
+    dividendReinvest,
+    dividendDate,
+    dividendShares,
+    fund?.code,
+    fetchHistoricalPrice,
+    form,
+  ]);
+
   // 打开交易弹窗
   const handleOpenModal = (type: string) => {
     setTransactionType(type);
@@ -290,6 +383,7 @@ export default function FundDetailPage({
     shares: number;
     date: Dayjs;
     dividendReinvest: boolean;
+    dividendShares?: number; // 分红再投资的份数
     remark: string;
   }) => {
     try {
@@ -310,8 +404,12 @@ export default function FundDetailPage({
         // 分红
         calculatedAmount = values.amount;
         if (values.dividendReinvest) {
-          // 分红再投资：金额 / 净值 = 份额
-          calculatedShares = values.amount / values.price;
+          // 分红再投资：使用用户输入的份数（已经自动计算好的金额）
+          calculatedShares = values.dividendShares || 0;
+          // 如果amount没有值（可能自动计算失败），手动计算
+          if (!calculatedAmount && values.price) {
+            calculatedAmount = calculatedShares * values.price;
+          }
         } else {
           // 现金分红：份额为0
           calculatedShares = 0;
@@ -1662,9 +1760,14 @@ export default function FundDetailPage({
                 >
                   <Radio.Group
                     onChange={(e) => {
-                      // 当切换到现金分红时，清除净值字段
+                      // 当切换分红类型时，清空相关字段
                       if (e.target.value === false) {
+                        // 现金分红：清除净值和份数字段
                         form.setFieldValue('price', undefined);
+                        form.setFieldValue('dividendShares', undefined);
+                      } else {
+                        // 分红再投资：清空分红金额，因为会自动计算
+                        form.setFieldValue('amount', undefined);
                       }
                     }}
                   >
@@ -1672,40 +1775,75 @@ export default function FundDetailPage({
                     <Radio value={true}>分红再投资</Radio>
                   </Radio.Group>
                 </Form.Item>
-                <Row gutter={16}>
-                  <Col span={dividendReinvest ? 12 : 24}>
+
+                {dividendReinvest ? (
+                  // 分红再投资：输入份数，自动计算金额
+                  <>
                     <Form.Item
-                      label="分红金额"
-                      name="amount"
-                      rules={[{ required: true, message: '请输入分红金额' }]}
+                      label="再投资份数"
+                      name="dividendShares"
+                      rules={[
+                        { required: true, message: '请输入再投资份数' },
+                      ]}
+                      tooltip="从支付宝等平台查看分红后增加的份数"
                     >
                       <InputNumber
                         style={{ width: '100%' }}
                         min={0}
-                        precision={2}
-                        placeholder="输入金额"
-                        prefix="¥"
+                        precision={4}
+                        placeholder="输入再投资的份数"
                       />
                     </Form.Item>
-                  </Col>
-                  {dividendReinvest && (
-                    <Col span={12}>
-                      <Form.Item
-                        label="当日净值"
-                        name="price"
-                        rules={[{ required: true, message: '请输入当日净值' }]}
-                        tooltip="分红再投资时用于计算份额"
-                      >
-                        <InputNumber
-                          style={{ width: '100%' }}
-                          min={0}
-                          precision={4}
-                          placeholder="输入净值"
-                        />
-                      </Form.Item>
-                    </Col>
-                  )}
-                </Row>
+                    <Row gutter={16}>
+                      <Col span={12}>
+                        <Form.Item
+                          label="当日净值"
+                          name="price"
+                          tooltip="系统会根据日期自动获取，也可手动修改"
+                        >
+                          <InputNumber
+                            style={{ width: '100%' }}
+                            min={0}
+                            precision={4}
+                            placeholder="自动获取"
+                            disabled={fetchingHistoryPrice}
+                          />
+                        </Form.Item>
+                      </Col>
+                      <Col span={12}>
+                        <Form.Item
+                          label="分红金额"
+                          name="amount"
+                          tooltip="根据份数和净值自动计算"
+                        >
+                          <InputNumber
+                            style={{ width: '100%' }}
+                            min={0}
+                            precision={2}
+                            placeholder="自动计算"
+                            prefix="¥"
+                            disabled
+                          />
+                        </Form.Item>
+                      </Col>
+                    </Row>
+                  </>
+                ) : (
+                  // 现金分红：直接输入金额
+                  <Form.Item
+                    label="分红金额"
+                    name="amount"
+                    rules={[{ required: true, message: '请输入分红金额' }]}
+                  >
+                    <InputNumber
+                      style={{ width: '100%' }}
+                      min={0}
+                      precision={2}
+                      placeholder="输入金额"
+                      prefix="¥"
+                    />
+                  </Form.Item>
+                )}
               </>
             )}
 
