@@ -34,6 +34,18 @@ interface DirectionSummary {
   };
 }
 
+interface DashboardSummary {
+  totalProfit: string; // 累计盈亏
+  totalProfitRate: string; // 累计盈亏率(%)
+  todayProfit: string; // 最近交易日盈亏
+  todayProfitRate: string; // 最近交易日盈亏率(%)
+  lastTradeDate: string; // 最近交易日日期
+  totalCurrentValue: string; // 当前总市值
+  totalCost: string; // 持仓总成本
+  totalInvested: string; // 历史总投入
+  directionCount: number; // 投资方向数量
+}
+
 interface UpdateResult {
   fundName: string;
   code: string;
@@ -48,6 +60,7 @@ export default function HomePage() {
   const { status } = useSession();
   const router = useRouter();
   const [directions, setDirections] = useState<DirectionSummary[]>([]);
+  const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
   const [updateResults, setUpdateResults] = useState<UpdateResult[]>([]);
@@ -71,6 +84,7 @@ export default function HomePage() {
       router.push('/auth/signin');
     } else if (status === 'authenticated') {
       loadDirections();
+      loadSummary();
     }
   }, [status, router]);
 
@@ -83,6 +97,16 @@ export default function HomePage() {
       console.error('加载投资方向失败:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadSummary = async () => {
+    try {
+      const response = await fetch('/api/dashboard/summary');
+      const data = await response.json();
+      setSummary(data);
+    } catch (error) {
+      console.error('加载汇总数据失败:', error);
     }
   };
 
@@ -123,8 +147,9 @@ export default function HomePage() {
               setUpdateResults(data.results);
               setShowResultModal(true);
               message.success(data.message);
-              // 刷新投资方向数据
+              // 刷新投资方向数据和汇总数据
               loadDirections();
+              loadSummary();
             } else {
               message.error(data.error || '更新失败');
             }
@@ -243,6 +268,88 @@ export default function HomePage() {
             </Card>
           </Col>
         </Row>
+
+        {/* 盈亏统计卡片 */}
+        {summary && (
+          <Row gutter={[16, 16]} style={{ marginBottom: isMobile ? 16 : 24 }}>
+            <Col xs={12} sm={12} lg={12}>
+              <Card>
+                <Statistic
+                  title={
+                    summary.lastTradeDate
+                      ? `${summary.lastTradeDate.slice(5)} 盈亏`
+                      : '最近盈亏'
+                  }
+                  value={parseFloat(summary.todayProfit)}
+                  precision={2}
+                  prefix={
+                    parseFloat(summary.todayProfit) >= 0 ? (
+                      <RiseOutlined />
+                    ) : (
+                      '¥'
+                    )
+                  }
+                  valueStyle={{
+                    color:
+                      parseFloat(summary.todayProfit) >= 0
+                        ? '#cf1322'
+                        : '#3f8600',
+                    fontSize: isMobile ? 20 : 28,
+                    fontWeight: 'bold',
+                  }}
+                  suffix={
+                    <div
+                      style={{
+                        fontSize: isMobile ? 14 : 16,
+                        fontWeight: 'normal',
+                        marginLeft: 8,
+                      }}
+                    >
+                      ({parseFloat(summary.todayProfitRate) >= 0 ? '+' : ''}
+                      {parseFloat(summary.todayProfitRate).toFixed(2)}%)
+                    </div>
+                  }
+                />
+              </Card>
+            </Col>
+            <Col xs={12} sm={12} lg={12}>
+              <Card>
+                <Statistic
+                  title="累计盈亏"
+                  value={parseFloat(summary.totalProfit)}
+                  precision={2}
+                  prefix={
+                    parseFloat(summary.totalProfit) >= 0 ? (
+                      <RiseOutlined />
+                    ) : (
+                      '¥'
+                    )
+                  }
+                  valueStyle={{
+                    color:
+                      parseFloat(summary.totalProfit) >= 0
+                        ? '#cf1322'
+                        : '#3f8600',
+                    fontSize: isMobile ? 20 : 28,
+                    fontWeight: 'bold',
+                  }}
+                  suffix={
+                    <div
+                      style={{
+                        fontSize: isMobile ? 14 : 16,
+                        fontWeight: 'normal',
+                        marginLeft: 8,
+                      }}
+                    >
+                      ({parseFloat(summary.totalProfitRate) >= 0 ? '+' : ''}
+                      {parseFloat(summary.totalProfitRate).toFixed(2)}%)
+                    </div>
+                  }
+                />
+              </Card>
+            </Col>
+          </Row>
+        )}
 
         {/* 投资方向列表 */}
         <Card
