@@ -1,6 +1,6 @@
-'use client';
+"use client";
 
-import { useState, useEffect, use, useCallback, useRef } from 'react';
+import { useState, useEffect, use, useCallback, useRef } from "react";
 import {
   Card,
   Button,
@@ -24,7 +24,7 @@ import {
   Radio,
   Spin,
   Tooltip,
-} from 'antd';
+} from "antd";
 import {
   PlusOutlined,
   EditOutlined,
@@ -35,9 +35,9 @@ import {
   LineChartOutlined,
   QuestionCircleOutlined,
   ExclamationCircleOutlined,
-} from '@ant-design/icons';
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+} from "@ant-design/icons";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   LineChart,
   Line,
@@ -47,7 +47,7 @@ import {
   Tooltip as RechartsTooltip,
   Legend,
   ResponsiveContainer,
-} from 'recharts';
+} from "recharts";
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
@@ -78,7 +78,7 @@ interface Fund {
 interface FundAlert {
   fundId: number;
   fundName: string;
-  reason: 'days' | 'price' | 'position'; // days: 超过25天, price: 下跌超过5%, position: 仓位超标
+  reason: "days" | "price" | "position"; // days: 超过25天, price: 下跌超过5%, position: 仓位超标
   daysSinceLastBuy?: number;
   priceDropPercent?: number;
   positionExcessPercent?: number; // 仓位超标百分比
@@ -151,7 +151,7 @@ export default function DirectionDetailPage({
   const [loading, setLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [targetModalOpen, setTargetModalOpen] = useState(false);
-  const [editingCategory, setEditingCategory] = useState<string>('');
+  const [editingCategory, setEditingCategory] = useState<string>("");
   const [editingFund, setEditingFund] = useState<Fund | null>(null);
   const [form] = Form.useForm();
   const [targetForm] = Form.useForm();
@@ -169,13 +169,30 @@ export default function DirectionDetailPage({
   const [categoryOptions, setCategoryOptions] = useState<
     Array<{ label: string; value: string }>
   >([]);
-  const [categorySearchValue, setCategorySearchValue] = useState<string>('');
+  const [categorySearchValue, setCategorySearchValue] = useState<string>("");
   const [categoryAlerts, setCategoryAlerts] = useState<
     Map<string, FundAlert[]>
   >(new Map());
   const [categoryPositionAlerts, setCategoryPositionAlerts] = useState<
     Map<string, CategoryPositionAlert>
   >(new Map());
+
+  // 处理负数零的工具函数
+  // 使用更大的阈值（0.01），确保接近0的值都被归一化
+  const normalizeZero = (value: number | undefined | null): number => {
+    if (value === undefined || value === null) return 0;
+    return Math.abs(value) < 0.01 ? 0 : value;
+  };
+
+  // 判断基金是否清仓
+  const isFundLiquidated = (stats: FundStats | undefined): boolean => {
+    if (!stats) return false;
+    const shares = normalizeZero(stats.holdingShares);
+    const cost = normalizeZero(stats.holdingCost || 0);
+    const value = normalizeZero(stats.holdingValue || 0);
+    // 清仓条件：持仓份额为0，且持仓成本为0，且持仓市值为0
+    return shares === 0 && cost === 0 && value === 0;
+  };
 
   // 检测屏幕尺寸
   useEffect(() => {
@@ -184,9 +201,9 @@ export default function DirectionDetailPage({
     };
 
     checkMobile();
-    window.addEventListener('resize', checkMobile);
+    window.addEventListener("resize", checkMobile);
 
-    return () => window.removeEventListener('resize', checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
   }, []);
 
   // 保存和恢复滚动位置
@@ -224,10 +241,10 @@ export default function DirectionDetailPage({
       }
     };
 
-    window.addEventListener('scroll', throttledHandleScroll, { passive: true });
+    window.addEventListener("scroll", throttledHandleScroll, { passive: true });
 
     return () => {
-      window.removeEventListener('scroll', throttledHandleScroll);
+      window.removeEventListener("scroll", throttledHandleScroll);
     };
   }, [directionId]);
 
@@ -238,7 +255,7 @@ export default function DirectionDetailPage({
       const data = await response.json();
       setDirection(data);
     } catch {
-      message.error('加载投资方向失败');
+      message.error("加载投资方向失败");
     }
   }, [directionId]);
 
@@ -250,7 +267,7 @@ export default function DirectionDetailPage({
       );
       if (!response.ok) {
         console.error(
-          '加载分类目标失败:',
+          "加载分类目标失败:",
           response.status,
           response.statusText
         );
@@ -262,11 +279,11 @@ export default function DirectionDetailPage({
       if (Array.isArray(data)) {
         setCategoryTargets(data);
       } else {
-        console.error('分类目标数据格式错误:', data);
+        console.error("分类目标数据格式错误:", data);
         setCategoryTargets([]);
       }
     } catch (error) {
-      console.error('加载分类目标失败:', error);
+      console.error("加载分类目标失败:", error);
       setCategoryTargets([]);
     }
   }, [directionId]);
@@ -280,7 +297,7 @@ export default function DirectionDetailPage({
       const data = await response.json();
       setSummary(data);
     } catch (error) {
-      console.error('加载汇总统计失败:', error);
+      console.error("加载汇总统计失败:", error);
     }
   }, [directionId]);
 
@@ -313,7 +330,7 @@ export default function DirectionDetailPage({
 
           // 找到该基金的最后一次买入交易
           const buyTransactions = fund.transactions.filter(
-            (tx) => tx.type === 'BUY'
+            (tx) => tx.type === "BUY"
           );
           if (buyTransactions.length === 0) {
             return;
@@ -355,7 +372,7 @@ export default function DirectionDetailPage({
 
           // 找到该基金的最后一次买入交易
           const buyTransactions = fund.transactions.filter(
-            (tx) => tx.type === 'BUY'
+            (tx) => tx.type === "BUY"
           );
           if (buyTransactions.length === 0) {
             return;
@@ -383,7 +400,7 @@ export default function DirectionDetailPage({
             alertsMap.get(category)!.push({
               fundId: fund.id,
               fundName: fund.name,
-              reason: 'price',
+              reason: "price",
               priceDropPercent: priceDropPercent,
             });
           }
@@ -430,7 +447,7 @@ export default function DirectionDetailPage({
           alertsMap.get(category)!.push({
             fundId: 0, // 0 表示分类级别的提醒
             fundName: category,
-            reason: 'days',
+            reason: "days",
             daysSinceLastBuy: daysDiff,
           });
         }
@@ -530,7 +547,7 @@ export default function DirectionDetailPage({
         new Set(
           data
             .map((fund: Fund) => fund.category)
-            .filter((cat: string | null) => cat && cat.trim() !== '')
+            .filter((cat: string | null) => cat && cat.trim() !== "")
         )
       ) as string[];
       setCategoryOptions(
@@ -548,7 +565,7 @@ export default function DirectionDetailPage({
                   ? `?currentPrice=${encodeURIComponent(
                       fund.latestNetWorth.toString()
                     )}`
-                  : ''
+                  : ""
               }`
             );
             const stats = await statsRes.json();
@@ -565,7 +582,7 @@ export default function DirectionDetailPage({
         try {
           checkFundAlertsRef.current(data, statsMap);
         } catch (err) {
-          console.error('检查基金提醒失败:', err);
+          console.error("检查基金提醒失败:", err);
         }
       }
       // 检查仓位超标提醒
@@ -573,12 +590,12 @@ export default function DirectionDetailPage({
         try {
           checkCategoryPositionAlertsRef.current(data, statsMap);
         } catch (err) {
-          console.error('检查仓位超标提醒失败:', err);
+          console.error("检查仓位超标提醒失败:", err);
         }
       }
     } catch (error) {
-      console.error('加载基金列表失败:', error);
-      message.error('加载基金列表失败');
+      console.error("加载基金列表失败:", error);
+      message.error("加载基金列表失败");
     } finally {
       setLoading(false);
     }
@@ -595,12 +612,12 @@ export default function DirectionDetailPage({
       if (response.ok && data.data) {
         setChartData(data.data);
       } else {
-        console.error('加载图表数据失败:', data.error);
-        message.warning(data.error || '加载图表数据失败');
+        console.error("加载图表数据失败:", data.error);
+        message.warning(data.error || "加载图表数据失败");
       }
     } catch (error) {
-      console.error('加载图表数据失败:', error);
-      message.error('加载图表数据失败');
+      console.error("加载图表数据失败:", error);
+      message.error("加载图表数据失败");
     } finally {
       setChartLoading(false);
     }
@@ -653,7 +670,7 @@ export default function DirectionDetailPage({
       setEditingFund(null);
       form.resetFields();
     }
-    setCategorySearchValue('');
+    setCategorySearchValue("");
     setModalOpen(true);
   };
 
@@ -665,12 +682,12 @@ export default function DirectionDetailPage({
     remark?: string;
   }) => {
     try {
-      const url = editingFund ? `/api/funds/${editingFund.id}` : '/api/funds';
-      const method = editingFund ? 'PUT' : 'POST';
+      const url = editingFund ? `/api/funds/${editingFund.id}` : "/api/funds";
+      const method = editingFund ? "PUT" : "POST";
 
       const response = await fetch(url, {
         method,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...values,
           directionId,
@@ -678,15 +695,15 @@ export default function DirectionDetailPage({
       });
 
       if (response.ok) {
-        message.success(editingFund ? '更新成功' : '创建成功');
+        message.success(editingFund ? "更新成功" : "创建成功");
         setModalOpen(false);
         form.resetFields();
         loadFunds();
       } else {
-        message.error('操作失败');
+        message.error("操作失败");
       }
     } catch {
-      message.error('操作失败');
+      message.error("操作失败");
     }
   };
 
@@ -694,17 +711,17 @@ export default function DirectionDetailPage({
   const handleDelete = async (id: number) => {
     try {
       const response = await fetch(`/api/funds/${id}`, {
-        method: 'DELETE',
+        method: "DELETE",
       });
 
       if (response.ok) {
-        message.success('删除成功');
+        message.success("删除成功");
         loadFunds();
       } else {
-        message.error('删除失败');
+        message.error("删除失败");
       }
     } catch {
-      message.error('删除失败');
+      message.error("删除失败");
     }
   };
 
@@ -723,9 +740,9 @@ export default function DirectionDetailPage({
   // 保存分类目标
   const handleSaveTarget = async (values: { targetPercent: number }) => {
     try {
-      const response = await fetch('/api/category-targets', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const response = await fetch("/api/category-targets", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           directionId,
           categoryName: editingCategory,
@@ -734,22 +751,22 @@ export default function DirectionDetailPage({
       });
 
       if (response.ok) {
-        message.success('目标仓位设置成功');
+        message.success("目标仓位设置成功");
         setTargetModalOpen(false);
         targetForm.resetFields();
         loadCategoryTargets();
       } else {
         const errorData = await response.json();
-        message.error(errorData.error || '设置失败');
+        message.error(errorData.error || "设置失败");
       }
     } catch {
-      message.error('设置失败');
+      message.error("设置失败");
     }
   };
 
   // 按分类分组
   const groupedFunds = funds.reduce((groups, fund) => {
-    const category = fund.category || '未分类';
+    const category = fund.category || "未分类";
     if (!groups[category]) {
       groups[category] = [];
     }
@@ -759,39 +776,59 @@ export default function DirectionDetailPage({
 
   const columns = [
     {
-      title: '基金代码',
-      dataIndex: 'code',
-      key: 'code',
+      title: "基金代码",
+      dataIndex: "code",
+      key: "code",
       width: 90,
     },
     {
-      title: '基金名称',
-      dataIndex: 'name',
-      key: 'name',
+      title: "基金名称",
+      dataIndex: "name",
+      key: "name",
       width: 180,
       ellipsis: true,
-      render: (text: string, record: Fund) => (
-        <Space style={{ width: '100%' }} size="small">
-          <Text
-            strong
-            style={{
-              maxWidth: record.remark ? '140px' : '160px',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-              display: 'inline-block',
-            }}
-            title={text}
-          >
-            {text}
-          </Text>
-          {record.remark && (
-            <Tag color="blue" style={{ fontSize: 12, flexShrink: 0 }}>
-              有备注
-            </Tag>
-          )}
-        </Space>
-      ),
+      render: (text: string, record: Fund) => {
+        const stats = fundsStats.get(record.id);
+        const isLiquidated = isFundLiquidated(stats);
+        return (
+          <Flex align="center" gap="small" style={{ width: "100%" }}>
+            <Text
+              strong
+              style={{
+                maxWidth: record.remark || isLiquidated ? "120px" : "160px",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+                display: "inline-block",
+              }}
+              title={text}
+            >
+              {text}
+            </Text>
+            {isLiquidated && (
+              <Tag
+                color="red"
+                style={{
+                  fontSize: 12,
+                  flexShrink: 0,
+                  fontWeight: 500,
+                  margin: 0,
+                }}
+              >
+                已清仓
+              </Tag>
+            )}
+            {record.remark && (
+              <Tag
+                color="blue"
+                style={{ fontSize: 12, flexShrink: 0, margin: 0 }}
+              >
+                有备注
+              </Tag>
+            )}
+          </Flex>
+        );
+      },
     },
     {
       title: (
@@ -799,24 +836,24 @@ export default function DirectionDetailPage({
           持仓收益率
           <Tooltip title="(当前市值 - 持仓成本) ÷ 持仓成本 × 100%，反映当前持仓的收益率">
             <QuestionCircleOutlined
-              style={{ color: '#1890ff', cursor: 'help', fontSize: 12 }}
+              style={{ color: "#1890ff", cursor: "help", fontSize: 12 }}
             />
           </Tooltip>
         </Space>
       ),
-      key: 'holdingProfitRate',
-      align: 'right' as const,
+      key: "holdingProfitRate",
+      align: "right" as const,
       width: 110,
       render: (_: unknown, record: Fund) => {
         const stats = fundsStats.get(record.id);
         if (!stats?.holdingProfitRate && stats?.holdingProfitRate !== 0) {
-          return '-';
+          return "-";
         }
         const rate = stats.holdingProfitRate;
-        const color = rate >= 0 ? '#cf1322' : '#3f8600'; // 正红负绿
+        const color = rate >= 0 ? "#cf1322" : "#3f8600"; // 正红负绿
         return (
           <span style={{ color }}>
-            {rate >= 0 ? '+' : ''}
+            {rate >= 0 ? "+" : ""}
             {rate.toFixed(2)}%
           </span>
         );
@@ -828,24 +865,24 @@ export default function DirectionDetailPage({
           累计收益率
           <Tooltip title="累计总收益 ÷ 总投入 × 100%，包括持仓收益、卖出收益和分红">
             <QuestionCircleOutlined
-              style={{ color: '#1890ff', cursor: 'help', fontSize: 12 }}
+              style={{ color: "#1890ff", cursor: "help", fontSize: 12 }}
             />
           </Tooltip>
         </Space>
       ),
-      key: 'totalProfitRate',
-      align: 'right' as const,
+      key: "totalProfitRate",
+      align: "right" as const,
       width: 110,
       render: (_: unknown, record: Fund) => {
         const stats = fundsStats.get(record.id);
         if (!stats?.totalProfitRate && stats?.totalProfitRate !== 0) {
-          return '-';
+          return "-";
         }
         const rate = stats.totalProfitRate;
-        const color = rate >= 0 ? '#cf1322' : '#3f8600'; // 正红负绿
+        const color = rate >= 0 ? "#cf1322" : "#3f8600"; // 正红负绿
         return (
           <span style={{ color }}>
-            {rate >= 0 ? '+' : ''}
+            {rate >= 0 ? "+" : ""}
             {rate.toFixed(2)}%
           </span>
         );
@@ -857,39 +894,39 @@ export default function DirectionDetailPage({
           累计收益金额
           <Tooltip title="持仓收益 + 卖出收益 + 分红的总和，反映该基金的整体盈亏">
             <QuestionCircleOutlined
-              style={{ color: '#1890ff', cursor: 'help', fontSize: 12 }}
+              style={{ color: "#1890ff", cursor: "help", fontSize: 12 }}
             />
           </Tooltip>
         </Space>
       ),
-      key: 'totalProfit',
-      align: 'right' as const,
+      key: "totalProfit",
+      align: "right" as const,
       width: 120,
       render: (_: unknown, record: Fund) => {
         const stats = fundsStats.get(record.id);
         if (!stats?.totalProfit && stats?.totalProfit !== 0) {
-          return '-';
+          return "-";
         }
         const profit = stats.totalProfit;
-        const color = profit >= 0 ? '#cf1322' : '#3f8600'; // 正红负绿
+        const color = profit >= 0 ? "#cf1322" : "#3f8600"; // 正红负绿
         return (
           <span style={{ color }}>
-            {profit >= 0 ? '+' : ''}¥{profit.toLocaleString()}
+            {profit >= 0 ? "+" : ""}¥{profit.toLocaleString()}
           </span>
         );
       },
     },
     {
-      title: '交易记录',
-      key: 'transactions',
-      align: 'center' as const,
+      title: "交易记录",
+      key: "transactions",
+      align: "center" as const,
       width: 85,
       render: (_: unknown, record: Fund) => record._count?.transactions || 0,
     },
     {
-      title: '待买入',
-      key: 'planned',
-      align: 'center' as const,
+      title: "待买入",
+      key: "planned",
+      align: "center" as const,
       width: 80,
       render: (_: unknown, record: Fund) => {
         const count = record._count?.plannedPurchases || 0;
@@ -897,11 +934,11 @@ export default function DirectionDetailPage({
       },
     },
     {
-      title: '操作',
-      key: 'action',
-      align: 'center' as const,
+      title: "操作",
+      key: "action",
+      align: "center" as const,
       width: 110,
-      fixed: 'right' as const,
+      fixed: "right" as const,
       render: (_: unknown, record: Fund) => (
         <Space>
           <Button
@@ -967,9 +1004,23 @@ export default function DirectionDetailPage({
         <div style={{ marginBottom: 8 }}>
           <Flex justify="space-between" align="flex-start">
             <div style={{ flex: 1 }}>
-              <Text strong style={{ fontSize: 14 }}>
-                {fund.name}
-              </Text>
+              <Flex align="center" gap="small" wrap="wrap">
+                <Text strong style={{ fontSize: 14 }}>
+                  {fund.name}
+                </Text>
+                {isFundLiquidated(stats) && (
+                  <Tag
+                    color="red"
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 500,
+                      margin: 0,
+                    }}
+                  >
+                    已清仓
+                  </Tag>
+                )}
+              </Flex>
               <br />
               <Text type="secondary" style={{ fontSize: 12 }}>
                 {fund.code}
@@ -1008,30 +1059,30 @@ export default function DirectionDetailPage({
         </div>
         <Row gutter={[8, 8]}>
           <Col span={12}>
-            <div style={{ fontSize: 12, color: '#999' }}>持仓成本</div>
-            <div style={{ fontSize: 14, fontWeight: 500, color: '#1890ff' }}>
-              ¥{stats?.holdingCost?.toLocaleString() || '-'}
+            <div style={{ fontSize: 12, color: "#999" }}>持仓成本</div>
+            <div style={{ fontSize: 14, fontWeight: 500, color: "#1890ff" }}>
+              ¥{stats?.holdingCost?.toLocaleString() || "-"}
             </div>
           </Col>
           <Col span={12}>
-            <div style={{ fontSize: 12, color: '#999' }}>持仓份额</div>
+            <div style={{ fontSize: 12, color: "#999" }}>持仓份额</div>
             <div style={{ fontSize: 14, fontWeight: 500 }}>
-              {stats?.holdingShares?.toLocaleString() || '-'}
+              {stats?.holdingShares?.toLocaleString() || "-"}
             </div>
           </Col>
           <Col span={12}>
-            <div style={{ fontSize: 12, color: '#999' }}>交易记录</div>
+            <div style={{ fontSize: 12, color: "#999" }}>交易记录</div>
             <div style={{ fontSize: 14 }}>
               {fund._count?.transactions || 0} 笔
             </div>
           </Col>
           <Col span={12}>
-            <div style={{ fontSize: 12, color: '#999' }}>待买入</div>
+            <div style={{ fontSize: 12, color: "#999" }}>待买入</div>
             <div style={{ fontSize: 14 }}>
               {fund._count?.plannedPurchases ? (
                 <Tag color="orange">{fund._count.plannedPurchases}</Tag>
               ) : (
-                '0'
+                "0"
               )}
             </div>
           </Col>
@@ -1043,12 +1094,12 @@ export default function DirectionDetailPage({
   return (
     <div
       style={{
-        minHeight: '100vh',
-        padding: isMobile ? '8px' : '32px',
-        background: '#f5f5f5',
+        minHeight: "100vh",
+        padding: isMobile ? "8px" : "32px",
+        background: "#f5f5f5",
       }}
     >
-      <div style={{ maxWidth: 1400, margin: '0 auto' }}>
+      <div style={{ maxWidth: 1400, margin: "0 auto" }}>
         {/* 面包屑 - 移动端简化 */}
         {!isMobile && (
           <Breadcrumb
@@ -1057,7 +1108,7 @@ export default function DirectionDetailPage({
                 title: <Link href="/investment-directions">投资方向</Link>,
               },
               {
-                title: direction?.name || '加载中...',
+                title: direction?.name || "加载中...",
               },
             ]}
             style={{ marginBottom: 16 }}
@@ -1068,16 +1119,16 @@ export default function DirectionDetailPage({
         <Card style={{ marginBottom: isMobile ? 12 : 24 }}>
           <Flex
             justify="space-between"
-            align={isMobile ? 'flex-start' : 'center'}
+            align={isMobile ? "flex-start" : "center"}
             vertical={isMobile}
             gap={isMobile ? 12 : 0}
           >
-            <div style={{ width: isMobile ? '100%' : 'auto' }}>
+            <div style={{ width: isMobile ? "100%" : "auto" }}>
               <Flex align="center" gap="middle" wrap="wrap">
                 <Button
                   icon={<ArrowLeftOutlined />}
-                  onClick={() => router.push('/investment-directions')}
-                  size={isMobile ? 'small' : 'middle'}
+                  onClick={() => router.push("/investment-directions")}
+                  size={isMobile ? "small" : "middle"}
                 >
                   返回
                 </Button>
@@ -1098,7 +1149,7 @@ export default function DirectionDetailPage({
             <Button
               type="primary"
               icon={<PlusOutlined />}
-              size={isMobile ? 'small' : 'middle'}
+              size={isMobile ? "small" : "middle"}
               onClick={() => handleOpenModal()}
               block={isMobile}
             >
@@ -1129,8 +1180,8 @@ export default function DirectionDetailPage({
                     <Tooltip title="您为该投资方向设定的目标投入金额，用于跟踪投资进度">
                       <QuestionCircleOutlined
                         style={{
-                          color: '#1890ff',
-                          cursor: 'help',
+                          color: "#1890ff",
+                          cursor: "help",
                           fontSize: 12,
                         }}
                       />
@@ -1141,7 +1192,7 @@ export default function DirectionDetailPage({
                 precision={isMobile ? 0 : 2}
                 prefix="¥"
                 styles={{
-                  content: { color: '#1890ff', fontSize: isMobile ? 18 : 24 },
+                  content: { color: "#1890ff", fontSize: isMobile ? 18 : 24 },
                 }}
               />
             </Card>
@@ -1155,8 +1206,8 @@ export default function DirectionDetailPage({
                     <Tooltip title="当前持仓的成本总和（买入金额 - 卖出金额 + 分红再投资）。反映当前实际还留在投资中的资金，不包括已清仓的基金。用于计算投入进度（实际投入 ÷ 预期投入）。">
                       <QuestionCircleOutlined
                         style={{
-                          color: '#1890ff',
-                          cursor: 'help',
+                          color: "#1890ff",
+                          cursor: "help",
                           fontSize: 12,
                         }}
                       />
@@ -1167,7 +1218,7 @@ export default function DirectionDetailPage({
                 precision={isMobile ? 0 : 2}
                 prefix="¥"
                 styles={{
-                  content: { color: '#52c41a', fontSize: isMobile ? 18 : 24 },
+                  content: { color: "#52c41a", fontSize: isMobile ? 18 : 24 },
                 }}
               />
             </Card>
@@ -1181,8 +1232,8 @@ export default function DirectionDetailPage({
                     <Tooltip title="实际投入 ÷ 预期投入 × 100%，反映投资计划的完成度">
                       <QuestionCircleOutlined
                         style={{
-                          color: '#1890ff',
-                          cursor: 'help',
+                          color: "#1890ff",
+                          cursor: "help",
                           fontSize: 12,
                         }}
                       />
@@ -1201,8 +1252,8 @@ export default function DirectionDetailPage({
                   content: {
                     color:
                       totalHoldingCost >= Number(direction?.expectedAmount || 0)
-                        ? '#52c41a'
-                        : '#faad14',
+                        ? "#52c41a"
+                        : "#faad14",
                     fontSize: isMobile ? 18 : 24,
                   },
                 }}
@@ -1241,16 +1292,16 @@ export default function DirectionDetailPage({
                     dataKey="date"
                     tick={{ fontSize: isMobile ? 10 : 12 }}
                     angle={isMobile ? -45 : 0}
-                    textAnchor={isMobile ? 'end' : 'middle'}
+                    textAnchor={isMobile ? "end" : "middle"}
                     height={isMobile ? 60 : 40}
                   />
                   <YAxis
                     yAxisId="left"
                     tick={{ fontSize: isMobile ? 10 : 12 }}
                     label={{
-                      value: '金额 (¥)',
+                      value: "金额 (¥)",
                       angle: -90,
-                      position: 'insideLeft',
+                      position: "insideLeft",
                       style: { fontSize: isMobile ? 10 : 12 },
                     }}
                   />
@@ -1259,9 +1310,9 @@ export default function DirectionDetailPage({
                     orientation="right"
                     tick={{ fontSize: isMobile ? 10 : 12 }}
                     label={{
-                      value: '收益率 (%)',
+                      value: "收益率 (%)",
                       angle: 90,
-                      position: 'insideRight',
+                      position: "insideRight",
                       style: { fontSize: isMobile ? 10 : 12 },
                     }}
                   />
@@ -1273,14 +1324,14 @@ export default function DirectionDetailPage({
                     ) => {
                       // name参数是dataKey的值
                       const dataKey = props.dataKey || name;
-                      if (dataKey === 'cumulativeProfitRate') {
-                        return [`${value.toFixed(2)}%`, '累计收益率'];
+                      if (dataKey === "cumulativeProfitRate") {
+                        return [`${value.toFixed(2)}%`, "累计收益率"];
                       }
-                      if (dataKey === 'dailyProfit') {
-                        return [`¥${value.toLocaleString()}`, '每日盈亏'];
+                      if (dataKey === "dailyProfit") {
+                        return [`¥${value.toLocaleString()}`, "每日盈亏"];
                       }
-                      if (dataKey === 'cumulativeProfit') {
-                        return [`¥${value.toLocaleString()}`, '累计盈亏'];
+                      if (dataKey === "cumulativeProfit") {
+                        return [`¥${value.toLocaleString()}`, "累计盈亏"];
                       }
                       return [`¥${value.toLocaleString()}`, name];
                     }}
@@ -1317,7 +1368,7 @@ export default function DirectionDetailPage({
                 </LineChart>
               </ResponsiveContainer>
             ) : (
-              <div style={{ textAlign: 'center', padding: 40, color: '#999' }}>
+              <div style={{ textAlign: "center", padding: 40, color: "#999" }}>
                 暂无数据
               </div>
             )}
@@ -1339,7 +1390,7 @@ export default function DirectionDetailPage({
                 size="small"
                 onClick={() => {
                   loadSummary();
-                  message.success('已刷新汇总数据');
+                  message.success("已刷新汇总数据");
                 }}
               >
                 刷新
@@ -1355,8 +1406,8 @@ export default function DirectionDetailPage({
                       <Tooltip title="历史上所有买入交易的金额总和，包括已清仓的基金。用于计算累计收益率（累计总收益 ÷ 历史总投入）。即使基金已全部卖出，其买入金额仍会计入历史总投入。">
                         <QuestionCircleOutlined
                           style={{
-                            color: '#1890ff',
-                            cursor: 'help',
+                            color: "#1890ff",
+                            cursor: "help",
                             fontSize: 12,
                           }}
                         />
@@ -1377,8 +1428,8 @@ export default function DirectionDetailPage({
                       <Tooltip title="当前持仓份额 × 最新净值，反映持仓的当前价值">
                         <QuestionCircleOutlined
                           style={{
-                            color: '#1890ff',
-                            cursor: 'help',
+                            color: "#1890ff",
+                            cursor: "help",
                             fontSize: 12,
                           }}
                         />
@@ -1399,8 +1450,8 @@ export default function DirectionDetailPage({
                       <Tooltip title="当前持仓份额的成本价总和，不包括已清仓的基金。如果基金已全部卖出，其成本不会计入持仓成本。">
                         <QuestionCircleOutlined
                           style={{
-                            color: '#1890ff',
-                            cursor: 'help',
+                            color: "#1890ff",
+                            cursor: "help",
                             fontSize: 12,
                           }}
                         />
@@ -1421,8 +1472,8 @@ export default function DirectionDetailPage({
                       <Tooltip title="当前市值 - 持仓成本，反映当前持仓的盈亏情况">
                         <QuestionCircleOutlined
                           style={{
-                            color: '#1890ff',
-                            cursor: 'help',
+                            color: "#1890ff",
+                            cursor: "help",
                             fontSize: 12,
                           }}
                         />
@@ -1437,8 +1488,8 @@ export default function DirectionDetailPage({
                       fontSize: 18,
                       color:
                         parseFloat(summary.holdingProfit) >= 0
-                          ? '#cf1322'
-                          : '#3f8600',
+                          ? "#cf1322"
+                          : "#3f8600",
                     },
                   }}
                 />
@@ -1451,8 +1502,8 @@ export default function DirectionDetailPage({
                       <Tooltip title="持仓收益 + 卖出收益 + 现金分红 + 分红再投资，反映整体投资盈亏">
                         <QuestionCircleOutlined
                           style={{
-                            color: '#1890ff',
-                            cursor: 'help',
+                            color: "#1890ff",
+                            cursor: "help",
                             fontSize: 12,
                           }}
                         />
@@ -1465,11 +1516,11 @@ export default function DirectionDetailPage({
                   styles={{
                     content: {
                       fontSize: 20,
-                      fontWeight: 'bold',
+                      fontWeight: "bold",
                       color:
                         parseFloat(summary.totalProfit) >= 0
-                          ? '#cf1322'
-                          : '#3f8600',
+                          ? "#cf1322"
+                          : "#3f8600",
                     },
                   }}
                 />
@@ -1482,8 +1533,8 @@ export default function DirectionDetailPage({
                       <Tooltip title="累计总收益 ÷ 历史总投入 × 100%，反映投资回报率。历史总投入包括已清仓的基金，用于衡量整体投资表现。">
                         <QuestionCircleOutlined
                           style={{
-                            color: '#1890ff',
-                            cursor: 'help',
+                            color: "#1890ff",
+                            cursor: "help",
                             fontSize: 12,
                           }}
                         />
@@ -1496,11 +1547,11 @@ export default function DirectionDetailPage({
                   styles={{
                     content: {
                       fontSize: 20,
-                      fontWeight: 'bold',
+                      fontWeight: "bold",
                       color:
                         parseFloat(summary.totalProfitRate) >= 0
-                          ? '#cf1322'
-                          : '#3f8600',
+                          ? "#cf1322"
+                          : "#3f8600",
                     },
                   }}
                 />
@@ -1513,8 +1564,8 @@ export default function DirectionDetailPage({
                       <Tooltip title="已卖出基金的收益总和，卖出收益 = 卖出金额 - 成本 - 手续费">
                         <QuestionCircleOutlined
                           style={{
-                            color: '#1890ff',
-                            cursor: 'help',
+                            color: "#1890ff",
+                            cursor: "help",
                             fontSize: 12,
                           }}
                         />
@@ -1534,8 +1585,8 @@ export default function DirectionDetailPage({
                       <Tooltip title="基金派发的现金分红总额，已到账的现金收益">
                         <QuestionCircleOutlined
                           style={{
-                            color: '#1890ff',
-                            cursor: 'help',
+                            color: "#1890ff",
+                            cursor: "help",
                             fontSize: 12,
                           }}
                         />
@@ -1548,7 +1599,7 @@ export default function DirectionDetailPage({
                 />
               </Col>
             </Row>
-            <Divider style={{ margin: '16px 0' }} />
+            <Divider style={{ margin: "16px 0" }} />
             <Text type="secondary">
               包含{summary.fundCount}只基金的完整收益统计，累计收益 = 持仓收益 +
               卖出收益 + 现金分红 + 分红再投资
@@ -1562,6 +1613,8 @@ export default function DirectionDetailPage({
           const totalDirectionValue = funds.reduce((sum, fund) => {
             const stats = fundsStats.get(fund.id);
             if (stats) {
+              // 当前市值 = 持仓成本 + 持仓收益
+              // 持仓收益 = 持仓成本 * 持仓收益率 / 100
               const holdingProfit =
                 (stats.holdingCost * stats.holdingProfitRate) / 100;
               return sum + stats.holdingCost + holdingProfit;
@@ -1571,7 +1624,7 @@ export default function DirectionDetailPage({
 
           return Object.entries(groupedFunds).map(
             ([category, categoryFunds]) => {
-              // 计算该分类下所有基金的持仓成本总和
+              // 计算该分类下所有基金的持仓成本总和（已投入）
               const categoryHoldingCost = categoryFunds.reduce((sum, fund) => {
                 const stats = fundsStats.get(fund.id);
                 return sum + (stats?.holdingCost || 0);
@@ -1581,6 +1634,8 @@ export default function DirectionDetailPage({
               const categoryCurrentValue = categoryFunds.reduce((sum, fund) => {
                 const stats = fundsStats.get(fund.id);
                 if (stats) {
+                  // 当前市值 = 持仓成本 + 持仓收益
+                  // 持仓收益 = 持仓成本 * 持仓收益率 / 100
                   const holdingProfit =
                     (stats.holdingCost * stats.holdingProfitRate) / 100;
                   return sum + stats.holdingCost + holdingProfit;
@@ -1598,6 +1653,8 @@ export default function DirectionDetailPage({
                 targetPercent > 0 && direction?.expectedAmount
                   ? (Number(direction.expectedAmount) * targetPercent) / 100
                   : 0;
+              // 进度 = 已投入（持仓成本）/ 目标金额 * 100%
+              // 目标金额是基于预期投入金额的，所以用已投入来计算进度更合理
               const progress =
                 targetAmount > 0
                   ? (categoryHoldingCost / Number(targetAmount)) * 100
@@ -1615,7 +1672,7 @@ export default function DirectionDetailPage({
                   title={
                     <Flex
                       justify="space-between"
-                      align={isMobile ? 'flex-start' : 'center'}
+                      align={isMobile ? "flex-start" : "center"}
                       vertical={isMobile}
                       gap={isMobile ? 8 : 0}
                     >
@@ -1639,26 +1696,26 @@ export default function DirectionDetailPage({
                                     key={`${alert.fundId}-${alert.reason}`}
                                     style={{ marginBottom: 4 }}
                                   >
-                                    {alert.reason === 'days' &&
+                                    {alert.reason === "days" &&
                                     alert.fundId === 0 ? (
                                       <div>
-                                        <strong>{alert.fundName}</strong>{' '}
+                                        <strong>{alert.fundName}</strong>{" "}
                                         分类距离上次买入已超过
                                         {alert.daysSinceLastBuy}天
                                       </div>
                                     ) : (
                                       <>
                                         <strong>{alert.fundName}</strong>:
-                                        {alert.reason === 'days' && (
+                                        {alert.reason === "days" && (
                                           <span>
-                                            {' '}
+                                            {" "}
                                             距离上次买入已超过
                                             {alert.daysSinceLastBuy}天
                                           </span>
                                         )}
-                                        {alert.reason === 'price' && (
+                                        {alert.reason === "price" && (
                                           <span>
-                                            {' '}
+                                            {" "}
                                             净值相比上次买入下跌
                                             {alert.priceDropPercent?.toFixed(2)}
                                             %
@@ -1674,7 +1731,7 @@ export default function DirectionDetailPage({
                             <Tag
                               color="orange"
                               icon={<ExclamationCircleOutlined />}
-                              style={{ cursor: 'help' }}
+                              style={{ cursor: "help" }}
                             >
                               {(() => {
                                 const fundAlerts = categoryAlerts
@@ -1683,7 +1740,7 @@ export default function DirectionDetailPage({
                                 const categoryAlert = categoryAlerts
                                   .get(category)!
                                   .find(
-                                    (a) => a.fundId === 0 && a.reason === 'days'
+                                    (a) => a.fundId === 0 && a.reason === "days"
                                   );
 
                                 if (fundAlerts.length > 0 && categoryAlert) {
@@ -1691,9 +1748,9 @@ export default function DirectionDetailPage({
                                 } else if (fundAlerts.length > 0) {
                                   return `有${fundAlerts.length}只基金需要关注`;
                                 } else if (categoryAlert) {
-                                  return '分类超过25天未买入';
+                                  return "分类超过25天未买入";
                                 }
-                                return '需要关注';
+                                return "需要关注";
                               })()}
                             </Tag>
                           </Tooltip>
@@ -1718,7 +1775,7 @@ export default function DirectionDetailPage({
                                     .targetAmount.toLocaleString()}
                                 </div>
                                 <div>
-                                  超标:{' '}
+                                  超标:{" "}
                                   {categoryPositionAlerts
                                     .get(category)!
                                     .excessPercent.toFixed(2)}
@@ -1728,7 +1785,7 @@ export default function DirectionDetailPage({
                                   style={{
                                     marginTop: 8,
                                     fontSize: 12,
-                                    color: '#999',
+                                    color: "#999",
                                   }}
                                 >
                                   建议进行仓位平衡，避免仓位过大
@@ -1739,7 +1796,7 @@ export default function DirectionDetailPage({
                             <Tag
                               color="red"
                               icon={<ExclamationCircleOutlined />}
-                              style={{ cursor: 'help' }}
+                              style={{ cursor: "help" }}
                             >
                               仓位超标
                             </Tag>
@@ -1753,7 +1810,7 @@ export default function DirectionDetailPage({
                               type="secondary"
                               style={{ fontSize: isMobile ? 12 : 14 }}
                             >
-                              {isMobile ? '当前' : '当前仓位'}: ¥
+                              {isMobile ? "已投入" : "已投入"}: ¥
                               {categoryHoldingCost.toLocaleString()}
                               {!isMobile &&
                                 ` / 目标: ¥${Number(
@@ -1761,11 +1818,11 @@ export default function DirectionDetailPage({
                                 ).toLocaleString()}${
                                   targetPercent > 0
                                     ? ` (${Number(targetPercent).toFixed(1)}%)`
-                                    : ''
+                                    : ""
                                 }`}
                             </Text>
                             <Tag
-                              color={progress >= 100 ? 'success' : 'processing'}
+                              color={progress >= 100 ? "success" : "processing"}
                             >
                               {progress.toFixed(1)}%
                             </Tag>
@@ -1773,30 +1830,27 @@ export default function DirectionDetailPage({
                               type="secondary"
                               style={{ fontSize: isMobile ? 12 : 14 }}
                             >
-                              {isMobile ? '实际' : '实际仓位'}: ¥
+                              {isMobile ? "当前市值" : "当前市值"}: ¥
                               {categoryCurrentValue.toLocaleString()}
                               {!isMobile &&
                                 ` (${actualPositionPercent.toFixed(1)}%)`}
                             </Text>
                             {isMobile && (
-                              <Tag
-                                color={
-                                  actualPositionPercent >= 100
-                                    ? 'success'
-                                    : 'default'
-                                }
-                              >
-                                {actualPositionPercent.toFixed(1)}%
-                              </Tag>
+                              <Text type="secondary" style={{ fontSize: 12 }}>
+                                占比: {actualPositionPercent.toFixed(1)}%
+                              </Text>
                             )}
                           </>
                         ) : (
                           <>
                             <Text type="secondary">
-                              当前: ¥{categoryHoldingCost.toLocaleString()}
+                              已投入: ¥{categoryHoldingCost.toLocaleString()}
                             </Text>
                             <Text type="secondary">
-                              实际: ¥{categoryCurrentValue.toLocaleString()}
+                              当前市值: ¥{categoryCurrentValue.toLocaleString()}
+                            </Text>
+                            <Text type="secondary">
+                              占比: {actualPositionPercent.toFixed(1)}%
                             </Text>
                           </>
                         )}
@@ -1843,9 +1897,9 @@ export default function DirectionDetailPage({
               vertical
               align="center"
               justify="center"
-              style={{ padding: '40px 0' }}
+              style={{ padding: "40px 0" }}
             >
-              <FundOutlined style={{ fontSize: 64, color: '#d9d9d9' }} />
+              <FundOutlined style={{ fontSize: 64, color: "#d9d9d9" }} />
               <Text type="secondary" style={{ marginTop: 16 }}>
                 还没有添加基金，点击&ldquo;新建基金&rdquo;开始
               </Text>
@@ -1855,7 +1909,7 @@ export default function DirectionDetailPage({
 
         {/* 新建/编辑弹窗 */}
         <Modal
-          title={editingFund ? '编辑基金' : '新建基金'}
+          title={editingFund ? "编辑基金" : "新建基金"}
           open={modalOpen}
           onCancel={() => {
             setModalOpen(false);
@@ -1875,7 +1929,7 @@ export default function DirectionDetailPage({
                 <Form.Item
                   label="基金代码"
                   name="code"
-                  rules={[{ required: true, message: '请输入基金代码' }]}
+                  rules={[{ required: true, message: "请输入基金代码" }]}
                 >
                   <Input placeholder="如：000001" size="large" />
                 </Form.Item>
@@ -1899,7 +1953,7 @@ export default function DirectionDetailPage({
                       // 当失去焦点时，如果输入的值不在选项中，自动添加
                       if (
                         categorySearchValue &&
-                        categorySearchValue.trim() !== ''
+                        categorySearchValue.trim() !== ""
                       ) {
                         const trimmedValue = categorySearchValue.trim();
                         const exists = categoryOptions.some(
@@ -1918,16 +1972,16 @@ export default function DirectionDetailPage({
                             );
                           });
                           // 自动选中新创建的分类
-                          form.setFieldValue('category', trimmedValue);
+                          form.setFieldValue("category", trimmedValue);
                         }
-                        setCategorySearchValue('');
+                        setCategorySearchValue("");
                       }
                     }}
                     onKeyDown={(e) => {
                       // 当用户按回车时，如果输入的值不在选项中，自动添加并选中
-                      if (e.key === 'Enter' && categorySearchValue) {
+                      if (e.key === "Enter" && categorySearchValue) {
                         const trimmedValue = categorySearchValue.trim();
-                        if (trimmedValue !== '') {
+                        if (trimmedValue !== "") {
                           const exists = categoryOptions.some(
                             (opt) => opt.value === trimmedValue
                           );
@@ -1942,9 +1996,9 @@ export default function DirectionDetailPage({
                                 a.value.localeCompare(b.value)
                               );
                             });
-                            form.setFieldValue('category', trimmedValue);
+                            form.setFieldValue("category", trimmedValue);
                           }
-                          setCategorySearchValue('');
+                          setCategorySearchValue("");
                           e.preventDefault();
                         }
                       }
@@ -1957,18 +2011,18 @@ export default function DirectionDetailPage({
                     }}
                     notFoundContent={
                       categorySearchValue ? (
-                        <div style={{ padding: '8px 0', textAlign: 'center' }}>
-                          <span style={{ color: '#999', fontSize: 12 }}>
+                        <div style={{ padding: "8px 0", textAlign: "center" }}>
+                          <span style={{ color: "#999", fontSize: 12 }}>
                             按回车创建新分类 &quot;{categorySearchValue}&quot;
                           </span>
                         </div>
                       ) : null
                     }
                     onSelect={() => {
-                      setCategorySearchValue('');
+                      setCategorySearchValue("");
                     }}
                     onClear={() => {
-                      setCategorySearchValue('');
+                      setCategorySearchValue("");
                     }}
                   />
                 </Form.Item>
@@ -1978,7 +2032,7 @@ export default function DirectionDetailPage({
             <Form.Item
               label="基金名称"
               name="name"
-              rules={[{ required: true, message: '请输入基金名称' }]}
+              rules={[{ required: true, message: "请输入基金名称" }]}
             >
               <Input placeholder="如：华夏上证50ETF" size="large" />
             </Form.Item>
@@ -1998,7 +2052,7 @@ export default function DirectionDetailPage({
               <Flex justify="flex-end" gap="small">
                 <Button onClick={() => setModalOpen(false)}>取消</Button>
                 <Button type="primary" htmlType="submit">
-                  {editingFund ? '更新' : '创建'}
+                  {editingFund ? "更新" : "创建"}
                 </Button>
               </Flex>
             </Form.Item>
@@ -2026,12 +2080,12 @@ export default function DirectionDetailPage({
               label="目标仓位百分比 (%)"
               name="targetPercent"
               rules={[
-                { required: true, message: '请输入目标仓位百分比' },
+                { required: true, message: "请输入目标仓位百分比" },
                 {
-                  type: 'number',
+                  type: "number",
                   min: 0,
                   max: 100,
-                  message: '百分比必须在 0-100 之间',
+                  message: "百分比必须在 0-100 之间",
                 },
               ]}
               tooltip={`该分类的目标仓位百分比。当前投资方向的预期投入为 ¥${
@@ -2041,13 +2095,13 @@ export default function DirectionDetailPage({
               <InputNumber<number>
                 placeholder="请输入百分比（0-100）"
                 size="large"
-                style={{ width: '100%' }}
+                style={{ width: "100%" }}
                 min={0}
                 max={100}
                 precision={2}
-                formatter={(value) => (value ? `${value}%` : '')}
+                formatter={(value) => (value ? `${value}%` : "")}
                 parser={(value) => {
-                  const num = parseFloat(value!.replace('%', ''));
+                  const num = parseFloat(value!.replace("%", ""));
                   if (isNaN(num)) return 0;
                   return Math.max(0, Math.min(100, num));
                 }}
@@ -2055,13 +2109,13 @@ export default function DirectionDetailPage({
               />
             </Form.Item>
             {direction?.expectedAmount &&
-              targetForm.getFieldValue('targetPercent') > 0 && (
+              targetForm.getFieldValue("targetPercent") > 0 && (
                 <Form.Item label="计算后的目标金额">
                   <Text type="secondary">
                     ¥
                     {(
                       (Number(direction.expectedAmount) *
-                        targetForm.getFieldValue('targetPercent')) /
+                        targetForm.getFieldValue("targetPercent")) /
                       100
                     ).toLocaleString()}
                   </Text>

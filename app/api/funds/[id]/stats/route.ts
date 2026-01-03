@@ -1,6 +1,6 @@
-import { NextResponse } from 'next/server';
-import prisma from '@/lib/prisma';
-import { Decimal } from '@prisma/client/runtime/library';
+import { NextResponse } from "next/server";
+import prisma from "@/lib/prisma";
+import { Decimal } from "@prisma/client/runtime/library";
 
 // GET - 获取基金统计信息
 export async function GET(
@@ -10,19 +10,19 @@ export async function GET(
   try {
     const { id } = await params;
     const { searchParams } = new URL(request.url);
-    const currentPrice = searchParams.get('currentPrice'); // 当前净值（可选）
+    const currentPrice = searchParams.get("currentPrice"); // 当前净值（可选）
 
     const fund = await prisma.fund.findUnique({
       where: { id: parseInt(id) },
       include: {
         transactions: {
-          orderBy: { date: 'asc' },
+          orderBy: { date: "asc" },
         },
       },
     });
 
     if (!fund) {
-      return NextResponse.json({ error: '基金不存在' }, { status: 404 });
+      return NextResponse.json({ error: "基金不存在" }, { status: 404 });
     }
 
     // 计算持仓统计
@@ -36,11 +36,11 @@ export async function GET(
       const amount = new Decimal(tx.amount);
       const shares = new Decimal(tx.shares);
 
-      if (tx.type === 'BUY') {
+      if (tx.type === "BUY") {
         // 买入：增加份额和成本
         totalShares = totalShares.plus(shares);
         totalCost = totalCost.plus(amount);
-      } else if (tx.type === 'SELL') {
+      } else if (tx.type === "SELL") {
         // 卖出：减少份额，计算卖出收益
         const sellAmount = amount; // 卖出金额（扣除手续费后）
         const sellShares = shares.abs(); // 卖出份额（取绝对值）
@@ -53,7 +53,7 @@ export async function GET(
         totalSellProfit = totalSellProfit.plus(profit);
         totalShares = totalShares.minus(sellShares); // 减少份额
         totalCost = totalCost.minus(costOfSold); // 减少成本
-      } else if (tx.type === 'DIVIDEND') {
+      } else if (tx.type === "DIVIDEND") {
         // 分红
         if (tx.dividendReinvest) {
           // 分红再投资：增加份额，不增加成本（因为是收益）
@@ -66,8 +66,35 @@ export async function GET(
       }
     });
 
-    const holdingShares = parseFloat(totalShares.toString());
-    const holdingCost = parseFloat(totalCost.toString());
+    // 在 Decimal 层面处理精度问题：如果份额接近0，直接设为0（同时成本也设为0）
+    // 使用更大的阈值（0.01），因为实际计算中可能产生 -0.0039 这样的值
+    const PRECISION_THRESHOLD = new Decimal("0.01");
+    if (totalShares.abs().lessThan(PRECISION_THRESHOLD)) {
+      totalShares = new Decimal(0);
+      totalCost = new Decimal(0);
+    }
+
+    // 计算历史总投入（所有买入交易的金额总和 + 分红再投资）
+    let totalInvested = new Decimal(0);
+    fund.transactions.forEach((tx) => {
+      const amount = new Decimal(tx.amount);
+      if (tx.type === "BUY") {
+        // 买入：累加投入
+        totalInvested = totalInvested.plus(amount);
+      } else if (tx.type === "DIVIDEND" && tx.dividendReinvest) {
+        // 分红再投资：也算投入（收益再投入）
+        totalInvested = totalInvested.plus(amount);
+      }
+    });
+
+    // 转换为 float，并处理负数零问题
+    // 使用更大的阈值（0.01），确保接近0的值都被归一化
+    const normalizeZero = (value: number): number => {
+      return Math.abs(value) < 0.01 ? 0 : value;
+    };
+
+    const holdingShares = normalizeZero(parseFloat(totalShares.toString()));
+    const holdingCost = normalizeZero(parseFloat(totalCost.toString()));
     const avgCostPrice = holdingShares > 0 ? holdingCost / holdingShares : 0;
 
     // 计算收益率（如果提供了当前净值）
@@ -79,10 +106,10 @@ export async function GET(
 
     if (currentPrice) {
       const currentPriceDecimal = new Decimal(currentPrice);
-      holdingValue = parseFloat(
-        totalShares.times(currentPriceDecimal).toString()
+      holdingValue = normalizeZero(
+        parseFloat(totalShares.times(currentPriceDecimal).toString())
       ); // 持仓市值
-      holdingProfit = holdingValue - holdingCost; // 持仓收益 = 市值 - 成本
+      holdingProfit = normalizeZero(holdingValue - holdingCost); // 持仓收益 = 市值 - 成本
       holdingProfitRate =
         holdingCost > 0 ? (holdingProfit / holdingCost) * 100 : 0; // 持仓收益率
 
@@ -93,33 +120,35 @@ export async function GET(
         parseFloat(totalDividendCash.toString()) +
         parseFloat(totalDividendReinvest.toString());
 
-      // 累计收益率 = 累计收益 / 总投入成本
-      // 总投入 = 当前持仓成本 + 已卖出的成本
-      const totalInvested =
-        holdingCost +
-        parseFloat(totalSellProfit.toString()) +
-        parseFloat(totalDividendReinvest.toString());
+      // 累计收益率 = 累计收益 / 历史总投入
+      // 历史总投入 = 所有买入交易的金额总和 + 分红再投资金额
+      const totalInvestedFloat = parseFloat(totalInvested.toString());
       totalProfitRate =
-        totalInvested > 0 ? (totalProfit / totalInvested) * 100 : 0;
+        totalInvestedFloat > 0 ? (totalProfit / totalInvestedFloat) * 100 : 0;
     }
 
+    // 确保所有返回值都经过 normalizeZero 处理，避免负数零
     return NextResponse.json({
       fundId: fund.id,
-      holdingShares, // 持仓份额
-      holdingCost, // 持仓成本
-      avgCostPrice, // 持仓成本价
-      holdingValue, // 持仓市值（需要当前净值）
-      holdingProfit, // 持仓收益
-      holdingProfitRate, // 持仓收益率 (%)
-      totalDividendCash: parseFloat(totalDividendCash.toString()), // 现金分红
-      totalDividendReinvest: parseFloat(totalDividendReinvest.toString()), // 再投资分红
-      totalSellProfit: parseFloat(totalSellProfit.toString()), // 卖出收益
-      totalProfit, // 累计收益
-      totalProfitRate, // 累计收益率 (%)
+      holdingShares: normalizeZero(holdingShares), // 持仓份额
+      holdingCost: normalizeZero(holdingCost), // 持仓成本
+      avgCostPrice: normalizeZero(avgCostPrice), // 持仓成本价
+      holdingValue: normalizeZero(holdingValue || 0), // 持仓市值（需要当前净值）
+      holdingProfit: normalizeZero(holdingProfit || 0), // 持仓收益
+      holdingProfitRate: normalizeZero(holdingProfitRate || 0), // 持仓收益率 (%)
+      totalDividendCash: normalizeZero(
+        parseFloat(totalDividendCash.toString())
+      ), // 现金分红
+      totalDividendReinvest: normalizeZero(
+        parseFloat(totalDividendReinvest.toString())
+      ), // 再投资分红
+      totalSellProfit: normalizeZero(parseFloat(totalSellProfit.toString())), // 卖出收益
+      totalProfit: normalizeZero(totalProfit || 0), // 累计收益
+      totalProfitRate: normalizeZero(totalProfitRate || 0), // 累计收益率 (%)
       transactionCount: fund.transactions.length,
     });
   } catch (error) {
-    console.error('获取基金统计失败:', error);
-    return NextResponse.json({ error: '获取基金统计失败' }, { status: 500 });
+    console.error("获取基金统计失败:", error);
+    return NextResponse.json({ error: "获取基金统计失败" }, { status: 500 });
   }
 }

@@ -1,6 +1,6 @@
-'use client';
+"use client";
 
-import { useState, useEffect, use, useCallback } from 'react';
+import { useState, useEffect, use, useCallback } from "react";
 import {
   Card,
   Button,
@@ -21,8 +21,8 @@ import {
   Breadcrumb,
   Radio,
   DatePicker,
-} from 'antd';
-import type { ColumnsType } from 'antd/es/table';
+} from "antd";
+import type { ColumnsType } from "antd/es/table";
 import {
   ArrowLeftOutlined,
   PlusOutlined,
@@ -30,10 +30,10 @@ import {
   DollarOutlined,
   RiseOutlined,
   FallOutlined,
-} from '@ant-design/icons';
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import dayjs, { Dayjs } from 'dayjs';
+} from "@ant-design/icons";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import dayjs, { Dayjs } from "dayjs";
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
@@ -111,7 +111,7 @@ export default function FundDetailPage({
   const [executingPlan, setExecutingPlan] = useState<PlannedPurchase | null>(
     null
   );
-  const [transactionType, setTransactionType] = useState<string>('BUY');
+  const [transactionType, setTransactionType] = useState<string>("BUY");
   const [currentPrice, setCurrentPrice] = useState<number>(0); // 当前净值
   const [fetchingPrice, setFetchingPrice] = useState(false); // 正在获取净值
   const [fetchingHistoryPrice, setFetchingHistoryPrice] = useState(false); // 正在获取历史净值
@@ -120,10 +120,16 @@ export default function FundDetailPage({
   const [planForm] = Form.useForm();
   const [executeForm] = Form.useForm();
 
+  // 处理负数零的工具函数
+  const normalizeZero = (value: number | undefined | null): number => {
+    if (value === undefined || value === null) return 0;
+    return Math.abs(value) < 1e-10 ? 0 : value;
+  };
+
   // 监听分红类型，用于动态显示/隐藏净值字段
-  const dividendReinvest = Form.useWatch('dividendReinvest', form);
-  const dividendShares = Form.useWatch('dividendShares', form); // 监听再投资份数
-  const dividendDate = Form.useWatch('date', form); // 监听交易日期
+  const dividendReinvest = Form.useWatch("dividendReinvest", form);
+  const dividendShares = Form.useWatch("dividendShares", form); // 监听再投资份数
+  const dividendDate = Form.useWatch("date", form); // 监听交易日期
 
   // 检测屏幕尺寸
   useEffect(() => {
@@ -132,9 +138,9 @@ export default function FundDetailPage({
     };
 
     checkMobile();
-    window.addEventListener('resize', checkMobile);
+    window.addEventListener("resize", checkMobile);
 
-    return () => window.removeEventListener('resize', checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
   }, []);
 
   // 判断是否需要更新净值（今天未更新过则需要更新）
@@ -149,7 +155,7 @@ export default function FundDetailPage({
     const now = dayjs();
 
     // 如果上次更新不是今天，需要重新获取
-    return !lastUpdate.isSame(now, 'day');
+    return !lastUpdate.isSame(now, "day");
   };
 
   // 获取基金最新净值
@@ -166,8 +172,8 @@ export default function FundDetailPage({
 
           // 保存净值到数据库
           await fetch(`/api/funds/${fundId}/net-worth`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               netWorth: data.netWorth,
               netWorthDate: data.netWorthDate,
@@ -187,14 +193,14 @@ export default function FundDetailPage({
           );
 
           message.success(
-            `已获取最新净值：¥${price}（${data.netWorthDate || ''}）`
+            `已获取最新净值：¥${price}（${data.netWorthDate || ""}）`
           );
         } else {
-          message.warning('无法获取最新净值，请手动输入');
+          message.warning("无法获取最新净值，请手动输入");
         }
       } catch (error) {
-        console.error('获取净值失败:', error);
-        message.warning('获取净值失败，请手动输入');
+        console.error("获取净值失败:", error);
+        message.warning("获取净值失败，请手动输入");
       } finally {
         setFetchingPrice(false);
       }
@@ -214,7 +220,7 @@ export default function FundDetailPage({
 
         if (response.ok && data.netWorth) {
           // 如果使用的是最近交易日的净值，显示提示信息
-          if (data.matchType === 'nearest' && data.message) {
+          if (data.matchType === "nearest" && data.message) {
             message.info(data.message);
           }
           return {
@@ -223,10 +229,12 @@ export default function FundDetailPage({
             matchType: data.matchType,
           };
         } else {
-          const errorMsg = data.error || '无法获取该日期的净值数据';
+          const errorMsg = data.error || "无法获取该日期的净值数据";
           if (data.availableDates && data.availableDates.length > 0) {
             message.warning(
-              `${errorMsg}。最近的可用日期：${data.availableDates.slice(0, 3).join(', ')}`
+              `${errorMsg}。最近的可用日期：${data.availableDates
+                .slice(0, 3)
+                .join(", ")}`
             );
           } else {
             message.warning(errorMsg);
@@ -234,8 +242,8 @@ export default function FundDetailPage({
           return null;
         }
       } catch (error) {
-        console.error('获取历史净值失败:', error);
-        message.warning('获取历史净值失败');
+        console.error("获取历史净值失败:", error);
+        message.warning("获取历史净值失败");
         return null;
       } finally {
         setFetchingHistoryPrice(false);
@@ -262,11 +270,11 @@ export default function FundDetailPage({
         if (needUpdate) {
           fetchCurrentPrice(data.code);
         } else {
-          console.log('净值已是最新，无需重复获取');
+          console.log("净值已是最新，无需重复获取");
         }
       }
     } catch {
-      message.error('加载基金详情失败');
+      message.error("加载基金详情失败");
     }
   }, [fundId, fetchCurrentPrice]);
 
@@ -280,12 +288,12 @@ export default function FundDetailPage({
 
       // 加载统计信息（传入当前净值）
       const priceParam =
-        currentPrice > 0 ? `?currentPrice=${currentPrice}` : '';
+        currentPrice > 0 ? `?currentPrice=${currentPrice}` : "";
       const statsRes = await fetch(`/api/funds/${fundId}/stats${priceParam}`);
       const statsData = await statsRes.json();
       setStats(statsData);
     } catch {
-      message.error('加载交易记录失败');
+      message.error("加载交易记录失败");
     } finally {
       setLoading(false);
     }
@@ -300,7 +308,7 @@ export default function FundDetailPage({
       const data = await response.json();
       setPlannedPurchases(data);
     } catch {
-      message.error('加载计划买入失败');
+      message.error("加载计划买入失败");
     }
   }, [fundId]);
 
@@ -320,14 +328,14 @@ export default function FundDetailPage({
     const autoCalculateDividendAmount = async () => {
       // 只在分红再投资模式下触发
       if (
-        transactionType === 'DIVIDEND' &&
+        transactionType === "DIVIDEND" &&
         dividendReinvest &&
         dividendDate &&
         dividendShares &&
         dividendShares > 0 &&
         fund?.code
       ) {
-        const dateStr = dayjs(dividendDate).format('YYYY-MM-DD');
+        const dateStr = dayjs(dividendDate).format("YYYY-MM-DD");
         const result = await fetchHistoricalPrice(fund.code, dateStr);
 
         if (result) {
@@ -337,16 +345,16 @@ export default function FundDetailPage({
             price: result.netWorth,
             amount: amount,
           });
-          
+
           // 只在精确匹配时显示成功消息（最近日期的消息已在fetchHistoricalPrice中显示）
-          if (result.matchType === 'exact') {
+          if (result.matchType === "exact") {
             message.success(
-              `已获取 ${dateStr} 净值：¥${result.netWorth.toFixed(4)}，计算分红金额：¥${amount.toFixed(2)}`
+              `已获取 ${dateStr} 净值：¥${result.netWorth.toFixed(
+                4
+              )}，计算分红金额：¥${amount.toFixed(2)}`
             );
           } else {
-            message.success(
-              `计算分红金额：¥${amount.toFixed(2)}`
-            );
+            message.success(`计算分红金额：¥${amount.toFixed(2)}`);
           }
         }
       }
@@ -374,6 +382,32 @@ export default function FundDetailPage({
     setModalOpen(true);
   };
 
+  // 一键清仓：自动填充卖出所有份额
+  const handleLiquidateAll = () => {
+    if (!stats || !stats.holdingShares || stats.holdingShares <= 0) {
+      message.warning("当前没有持仓份额，无法清仓");
+      return;
+    }
+
+    if (!currentPrice || currentPrice <= 0) {
+      message.warning("请先获取或输入当前净值");
+      return;
+    }
+
+    setTransactionType("SELL");
+    form.resetFields();
+    form.setFieldsValue({
+      type: "SELL",
+      date: dayjs(),
+      shares: Number(stats.holdingShares.toFixed(2)), // 保留2位小数
+      price: currentPrice,
+      fee: 0,
+      remark: "清仓",
+    });
+    setModalOpen(true);
+    message.info("已自动填充清仓信息，请确认后提交");
+  };
+
   // 提交交易
   const handleSubmit = async (values: {
     type: string;
@@ -391,16 +425,16 @@ export default function FundDetailPage({
       let calculatedAmount = 0;
 
       // 根据不同类型计算份额和金额
-      if (values.type === 'BUY') {
+      if (values.type === "BUY") {
         // 买入：金额 / 净值 = 份额（扣除手续费后）
         const netAmount = values.amount - (values.fee || 0);
         calculatedShares = netAmount / values.price;
         calculatedAmount = values.amount;
-      } else if (values.type === 'SELL') {
+      } else if (values.type === "SELL") {
         // 卖出：份额 * 净值 = 金额（扣除手续费后）
         calculatedAmount = values.shares * values.price - (values.fee || 0);
         calculatedShares = -Math.abs(values.shares); // 负数表示减少
-      } else if (values.type === 'DIVIDEND') {
+      } else if (values.type === "DIVIDEND") {
         // 分红
         calculatedAmount = values.amount;
         if (values.dividendReinvest) {
@@ -416,9 +450,9 @@ export default function FundDetailPage({
         }
       }
 
-      const response = await fetch('/api/transactions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const response = await fetch("/api/transactions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           fundId,
           type: values.type,
@@ -426,7 +460,7 @@ export default function FundDetailPage({
           shares: calculatedShares,
           // 现金分红时，price设为0（数据库要求必填，但现金分红不需要净值）
           price:
-            values.type === 'DIVIDEND' && !values.dividendReinvest
+            values.type === "DIVIDEND" && !values.dividendReinvest
               ? 0
               : values.price,
           fee: values.fee || 0,
@@ -437,15 +471,15 @@ export default function FundDetailPage({
       });
 
       if (response.ok) {
-        message.success('交易记录添加成功');
+        message.success("交易记录添加成功");
         setModalOpen(false);
         form.resetFields();
         loadTransactions();
       } else {
-        message.error('添加失败');
+        message.error("添加失败");
       }
     } catch {
-      message.error('添加失败');
+      message.error("添加失败");
     }
   };
 
@@ -453,26 +487,26 @@ export default function FundDetailPage({
   const handleDelete = async (id: number) => {
     try {
       const response = await fetch(`/api/transactions/${id}`, {
-        method: 'DELETE',
+        method: "DELETE",
       });
 
       if (response.ok) {
-        message.success('删除成功');
+        message.success("删除成功");
         loadTransactions();
       } else {
-        message.error('删除失败');
+        message.error("删除失败");
       }
     } catch {
-      message.error('删除失败');
+      message.error("删除失败");
     }
   };
 
   // 新建计划买入
   const handleCreatePlan = async (values: { plannedAmount: number }) => {
     try {
-      const response = await fetch('/api/planned-purchases', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const response = await fetch("/api/planned-purchases", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           fundId,
           plannedAmount: values.plannedAmount,
@@ -480,15 +514,15 @@ export default function FundDetailPage({
       });
 
       if (response.ok) {
-        message.success('计划买入创建成功');
+        message.success("计划买入创建成功");
         setPlanModalOpen(false);
         planForm.resetFields();
         loadPlannedPurchases();
       } else {
-        message.error('创建失败');
+        message.error("创建失败");
       }
     } catch {
-      message.error('创建失败');
+      message.error("创建失败");
     }
   };
 
@@ -496,17 +530,17 @@ export default function FundDetailPage({
   const handleDeletePlan = async (id: number) => {
     try {
       const response = await fetch(`/api/planned-purchases/${id}`, {
-        method: 'DELETE',
+        method: "DELETE",
       });
 
       if (response.ok) {
-        message.success('删除成功');
+        message.success("删除成功");
         loadPlannedPurchases();
       } else {
-        message.error('删除失败');
+        message.error("删除失败");
       }
     } catch {
-      message.error('删除失败');
+      message.error("删除失败");
     }
   };
 
@@ -532,8 +566,8 @@ export default function FundDetailPage({
       const response = await fetch(
         `/api/planned-purchases/${executingPlan.id}`,
         {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             price: values.price,
             fee: values.fee || 0,
@@ -543,32 +577,32 @@ export default function FundDetailPage({
       );
 
       if (response.ok) {
-        message.success('执行成功，已创建买入交易记录');
+        message.success("执行成功，已创建买入交易记录");
         setExecutePlanModalOpen(false);
         executeForm.resetFields();
         loadTransactions();
         loadPlannedPurchases();
       } else {
-        message.error('执行失败');
+        message.error("执行失败");
       }
     } catch {
-      message.error('执行失败');
+      message.error("执行失败");
     }
   };
 
   // 移动端交易记录卡片渲染
   const renderMobileTransactionCard = (transaction: Transaction) => {
     const typeMap: Record<string, { text: string; color: string }> = {
-      BUY: { text: '买入', color: 'green' },
-      SELL: { text: '卖出', color: 'red' },
+      BUY: { text: "买入", color: "green" },
+      SELL: { text: "卖出", color: "red" },
       DIVIDEND: {
-        text: transaction.dividendReinvest ? '红利再投资' : '红利现金',
-        color: 'blue',
+        text: transaction.dividendReinvest ? "红利再投资" : "红利现金",
+        color: "blue",
       },
     };
     const typeInfo = typeMap[transaction.type] || {
       text: transaction.type,
-      color: 'default',
+      color: "default",
     };
 
     return (
@@ -581,7 +615,7 @@ export default function FundDetailPage({
           <Space>
             <Tag color={typeInfo.color}>{typeInfo.text}</Tag>
             <Text type="secondary" style={{ fontSize: 12 }}>
-              {dayjs(transaction.date).format('YYYY/M/D')}
+              {dayjs(transaction.date).format("YYYY/M/D")}
             </Text>
           </Space>
           <Popconfirm
@@ -594,34 +628,34 @@ export default function FundDetailPage({
           </Popconfirm>
         </Flex>
         <Row gutter={[8, 8]}>
-          {transaction.type === 'BUY' && (
+          {transaction.type === "BUY" && (
             <>
               <Col span={12}>
-                <div style={{ fontSize: 11, color: '#999' }}>买入金额</div>
+                <div style={{ fontSize: 11, color: "#999" }}>买入金额</div>
                 <div style={{ fontSize: 14, fontWeight: 500 }}>
                   ¥{Number(transaction.amount).toLocaleString()}
                 </div>
               </Col>
               <Col span={12}>
-                <div style={{ fontSize: 11, color: '#999' }}>净值</div>
+                <div style={{ fontSize: 11, color: "#999" }}>净值</div>
                 <div style={{ fontSize: 14 }}>
                   ¥{Number(transaction.price).toFixed(4)}
                 </div>
               </Col>
               <Col span={12}>
-                <div style={{ fontSize: 11, color: '#999' }}>份额</div>
+                <div style={{ fontSize: 11, color: "#999" }}>份额</div>
                 <div style={{ fontSize: 14 }}>
-                  {Number(transaction.shares).toLocaleString()}
+                  {Math.abs(Number(transaction.shares)).toFixed(2)}
                 </div>
               </Col>
               <Col span={12}>
-                <div style={{ fontSize: 11, color: '#999' }}>差值</div>
+                <div style={{ fontSize: 11, color: "#999" }}>差值</div>
                 <div style={{ fontSize: 14 }}>
                   {(() => {
                     const currentPriceNum = Number(transaction.price);
                     // 找到所有买入交易，按日期正序排列（最早的在前）
                     const buyTransactions = transactions
-                      .filter((t) => t.type === 'BUY')
+                      .filter((t) => t.type === "BUY")
                       .sort(
                         (a, b) =>
                           new Date(a.date).getTime() -
@@ -631,10 +665,10 @@ export default function FundDetailPage({
                       (t) => t.id === transaction.id
                     );
 
-                    if (currentIndex === -1) return '-';
+                    if (currentIndex === -1) return "-";
 
                     // 第一笔交易没有差值
-                    if (currentIndex === 0) return '-';
+                    if (currentIndex === 0) return "-";
 
                     // 与上一笔买入交易的净值比较
                     const prevTransaction = buyTransactions[currentIndex - 1];
@@ -643,12 +677,12 @@ export default function FundDetailPage({
 
                     const diffPercent =
                       comparePrice > 0 ? (diff / comparePrice) * 100 : 0;
-                    const color = diff >= 0 ? '#cf1322' : '#3f8600';
+                    const color = diff >= 0 ? "#cf1322" : "#3f8600";
 
                     return (
                       <span style={{ color }}>
-                        {diff >= 0 ? '+' : ''}
-                        {diff.toFixed(4)} ({diff >= 0 ? '+' : ''}
+                        {diff >= 0 ? "+" : ""}
+                        {diff.toFixed(4)} ({diff >= 0 ? "+" : ""}
                         {diffPercent.toFixed(2)}%)
                       </span>
                     );
@@ -657,7 +691,7 @@ export default function FundDetailPage({
               </Col>
               {transaction.fee > 0 && (
                 <Col span={12}>
-                  <div style={{ fontSize: 11, color: '#999' }}>手续费</div>
+                  <div style={{ fontSize: 11, color: "#999" }}>手续费</div>
                   <div style={{ fontSize: 14 }}>
                     ¥{Number(transaction.fee).toFixed(2)}
                   </div>
@@ -665,29 +699,29 @@ export default function FundDetailPage({
               )}
             </>
           )}
-          {transaction.type === 'SELL' && (
+          {transaction.type === "SELL" && (
             <>
               <Col span={12}>
-                <div style={{ fontSize: 11, color: '#999' }}>卖出份额</div>
+                <div style={{ fontSize: 11, color: "#999" }}>卖出份额</div>
                 <div style={{ fontSize: 14, fontWeight: 500 }}>
-                  {Math.abs(Number(transaction.shares)).toLocaleString()}
+                  {Math.abs(Number(transaction.shares)).toFixed(2)}
                 </div>
               </Col>
               <Col span={12}>
-                <div style={{ fontSize: 11, color: '#999' }}>净值</div>
+                <div style={{ fontSize: 11, color: "#999" }}>净值</div>
                 <div style={{ fontSize: 14 }}>
                   ¥{Number(transaction.price).toFixed(4)}
                 </div>
               </Col>
               <Col span={12}>
-                <div style={{ fontSize: 11, color: '#999' }}>卖出金额</div>
+                <div style={{ fontSize: 11, color: "#999" }}>卖出金额</div>
                 <div style={{ fontSize: 14 }}>
                   ¥{Math.abs(Number(transaction.amount)).toLocaleString()}
                 </div>
               </Col>
               {transaction.fee > 0 && (
                 <Col span={12}>
-                  <div style={{ fontSize: 11, color: '#999' }}>手续费</div>
+                  <div style={{ fontSize: 11, color: "#999" }}>手续费</div>
                   <div style={{ fontSize: 14 }}>
                     ¥{Number(transaction.fee).toFixed(2)}
                   </div>
@@ -695,10 +729,10 @@ export default function FundDetailPage({
               )}
             </>
           )}
-          {transaction.type === 'DIVIDEND' && (
+          {transaction.type === "DIVIDEND" && (
             <>
               <Col span={12}>
-                <div style={{ fontSize: 11, color: '#999' }}>分红金额</div>
+                <div style={{ fontSize: 11, color: "#999" }}>分红金额</div>
                 <div style={{ fontSize: 14, fontWeight: 500 }}>
                   ¥{Number(transaction.amount).toLocaleString()}
                 </div>
@@ -706,17 +740,17 @@ export default function FundDetailPage({
               {transaction.dividendReinvest && (
                 <>
                   <Col span={12}>
-                    <div style={{ fontSize: 11, color: '#999' }}>净值</div>
+                    <div style={{ fontSize: 11, color: "#999" }}>净值</div>
                     <div style={{ fontSize: 14 }}>
                       ¥{Number(transaction.price).toFixed(4)}
                     </div>
                   </Col>
                   <Col span={12}>
-                    <div style={{ fontSize: 11, color: '#999' }}>
+                    <div style={{ fontSize: 11, color: "#999" }}>
                       再投资份额
                     </div>
                     <div style={{ fontSize: 14 }}>
-                      {Number(transaction.shares).toLocaleString()}
+                      {Number(transaction.shares).toFixed(2)}
                     </div>
                   </Col>
                 </>
@@ -729,7 +763,7 @@ export default function FundDetailPage({
             style={{
               marginTop: 8,
               padding: 8,
-              background: '#f5f5f5',
+              background: "#f5f5f5",
               borderRadius: 4,
             }}
           >
@@ -744,78 +778,78 @@ export default function FundDetailPage({
 
   const columns: ColumnsType<Transaction> = [
     {
-      title: '日期',
-      dataIndex: 'date',
-      key: 'date',
+      title: "日期",
+      dataIndex: "date",
+      key: "date",
       width: 110,
-      align: 'center',
+      align: "center",
       render: (date: string) => (
-        <span style={{ whiteSpace: 'nowrap' }}>
-          {dayjs(date).format('YYYY/M/D')}
+        <span style={{ whiteSpace: "nowrap" }}>
+          {dayjs(date).format("YYYY/M/D")}
         </span>
       ),
     },
     {
-      title: '类型',
-      dataIndex: 'type',
-      key: 'type',
+      title: "类型",
+      dataIndex: "type",
+      key: "type",
       width: 90,
-      align: 'center',
+      align: "center",
       render: (type: string, record: Transaction) => {
         const typeMap: Record<string, { text: string; color: string }> = {
-          BUY: { text: '买入', color: 'green' },
-          SELL: { text: '卖出', color: 'red' },
+          BUY: { text: "买入", color: "green" },
+          SELL: { text: "卖出", color: "red" },
           DIVIDEND: {
-            text: record.dividendReinvest ? '红利再投资' : '红利现金',
-            color: 'blue',
+            text: record.dividendReinvest ? "红利再投资" : "红利现金",
+            color: "blue",
           },
         };
-        const info = typeMap[type] || { text: type, color: 'default' };
+        const info = typeMap[type] || { text: type, color: "default" };
         return <Tag color={info.color}>{info.text}</Tag>;
       },
     },
     {
-      title: '买入金额',
-      dataIndex: 'amount',
-      key: 'buyAmount',
-      align: 'center',
+      title: "买入金额",
+      dataIndex: "amount",
+      key: "buyAmount",
+      align: "center",
       width: 110,
       render: (amount: number, record: Transaction) =>
-        record.type === 'BUY' ? `¥${Number(amount).toLocaleString()}` : '-',
+        record.type === "BUY" ? `¥${Number(amount).toLocaleString()}` : "-",
     },
     {
-      title: '手续费',
-      dataIndex: 'fee',
-      key: 'fee',
-      align: 'center',
+      title: "手续费",
+      dataIndex: "fee",
+      key: "fee",
+      align: "center",
       width: 85,
       render: (fee: number) =>
-        Number(fee) > 0 ? `¥${Number(fee).toFixed(2)}` : '-',
+        Number(fee) > 0 ? `¥${Number(fee).toFixed(2)}` : "-",
     },
     {
-      title: '净值',
-      dataIndex: 'price',
-      key: 'price',
-      align: 'center',
+      title: "净值",
+      dataIndex: "price",
+      key: "price",
+      align: "center",
       width: 90,
       render: (price: number) => Number(price).toFixed(4),
     },
     {
-      title: '差值',
-      key: 'priceDiff',
-      align: 'center',
+      title: "差值",
+      key: "priceDiff",
+      align: "center",
       width: 100,
-      render: (_: unknown, record: Transaction, index: number) => {
+      render: (_: unknown, record: Transaction) => {
         // 只对买入交易显示差值
-        if (record.type !== 'BUY') {
-          return '-';
+        if (record.type !== "BUY") {
+          return "-";
         }
 
         const currentPriceNum = Number(record.price);
 
         // 找到所有买入交易，按日期正序排列（最早的在前）
         const buyTransactions = transactions
-          .filter((t) => t.type === 'BUY')
+          .filter((t) => t.type === "BUY")
           .sort(
             (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
           );
@@ -826,12 +860,12 @@ export default function FundDetailPage({
         );
 
         if (currentIndex === -1) {
-          return '-';
+          return "-";
         }
 
         // 第一笔交易没有差值
         if (currentIndex === 0) {
-          return '-';
+          return "-";
         }
 
         // 与上一笔买入交易的净值比较
@@ -840,16 +874,16 @@ export default function FundDetailPage({
         const diff = currentPriceNum - comparePrice;
 
         const diffPercent = comparePrice > 0 ? (diff / comparePrice) * 100 : 0;
-        const color = diff >= 0 ? '#cf1322' : '#3f8600'; // 正红负绿
+        const color = diff >= 0 ? "#cf1322" : "#3f8600"; // 正红负绿
 
         return (
           <div>
             <div style={{ color, fontSize: 13 }}>
-              {diff >= 0 ? '+' : ''}
+              {diff >= 0 ? "+" : ""}
               {diff.toFixed(4)}
             </div>
             <div style={{ color, fontSize: 11, opacity: 0.7 }}>
-              ({diff >= 0 ? '+' : ''}
+              ({diff >= 0 ? "+" : ""}
               {diffPercent.toFixed(2)}%)
             </div>
           </div>
@@ -857,33 +891,33 @@ export default function FundDetailPage({
       },
     },
     {
-      title: '份额',
-      dataIndex: 'shares',
-      key: 'shares',
-      align: 'center',
+      title: "份额",
+      dataIndex: "shares",
+      key: "shares",
+      align: "center",
       width: 110,
       render: (shares: number) => {
         const sharesNum = Number(shares);
         const isNegative = sharesNum < 0;
         return (
-          <Text type={isNegative ? 'danger' : undefined}>
-            {sharesNum.toLocaleString()}
+          <Text type={isNegative ? "danger" : undefined}>
+            {sharesNum.toFixed(2)}
           </Text>
         );
       },
     },
     {
-      title: '备注',
-      dataIndex: 'remark',
-      key: 'remark',
-      align: 'center',
+      title: "备注",
+      dataIndex: "remark",
+      key: "remark",
+      align: "center",
       ellipsis: true,
-      render: (remark: string) => remark || '-',
+      render: (remark: string) => remark || "-",
     },
     {
-      title: '操作',
-      key: 'action',
-      align: 'center',
+      title: "操作",
+      key: "action",
+      align: "center",
       width: 80,
       render: (_: unknown, record: Transaction) => (
         <Popconfirm
@@ -903,12 +937,12 @@ export default function FundDetailPage({
   return (
     <div
       style={{
-        minHeight: '100vh',
-        padding: isMobile ? '8px' : '32px',
-        background: '#f5f5f5',
+        minHeight: "100vh",
+        padding: isMobile ? "8px" : "32px",
+        background: "#f5f5f5",
       }}
     >
-      <div style={{ maxWidth: 1400, margin: '0 auto' }}>
+      <div style={{ maxWidth: 1400, margin: "0 auto" }}>
         {/* 面包屑 - 移动端隐藏 */}
         {!isMobile && (
           <Breadcrumb
@@ -924,7 +958,7 @@ export default function FundDetailPage({
                 ),
               },
               {
-                title: fund?.name || '加载中...',
+                title: fund?.name || "加载中...",
               },
             ]}
             style={{ marginBottom: 16 }}
@@ -935,7 +969,7 @@ export default function FundDetailPage({
         <Card style={{ marginBottom: isMobile ? 12 : 24 }}>
           <Flex
             justify="space-between"
-            align={isMobile ? 'flex-start' : 'center'}
+            align={isMobile ? "flex-start" : "center"}
             vertical={isMobile}
             gap={isMobile ? 12 : 0}
           >
@@ -943,18 +977,18 @@ export default function FundDetailPage({
               align="center"
               gap="middle"
               wrap="wrap"
-              style={{ width: isMobile ? '100%' : 'auto' }}
+              style={{ width: isMobile ? "100%" : "auto" }}
             >
               <Button
                 icon={<ArrowLeftOutlined />}
                 onClick={() =>
                   router.push(`/investment-directions/${fund?.direction.id}`)
                 }
-                size={isMobile ? 'small' : 'middle'}
+                size={isMobile ? "small" : "middle"}
               >
                 返回
               </Button>
-              <div style={{ flex: isMobile ? 1 : 'none' }}>
+              <div style={{ flex: isMobile ? 1 : "none" }}>
                 <Title level={isMobile ? 4 : 2} style={{ marginBottom: 4 }}>
                   {fund?.name}
                 </Title>
@@ -969,27 +1003,37 @@ export default function FundDetailPage({
                 </Space>
               </div>
             </Flex>
-            <Space wrap style={{ width: isMobile ? '100%' : 'auto' }}>
+            <Space wrap style={{ width: isMobile ? "100%" : "auto" }}>
               <Button
                 type="primary"
                 icon={<PlusOutlined />}
-                onClick={() => handleOpenModal('BUY')}
-                size={isMobile ? 'small' : 'middle'}
-                style={{ flex: isMobile ? 1 : 'none' }}
+                onClick={() => handleOpenModal("BUY")}
+                size={isMobile ? "small" : "middle"}
+                style={{ flex: isMobile ? 1 : "none" }}
               >
                 买入
               </Button>
               <Button
-                onClick={() => handleOpenModal('SELL')}
-                size={isMobile ? 'small' : 'middle'}
-                style={{ flex: isMobile ? 1 : 'none' }}
+                onClick={() => handleOpenModal("SELL")}
+                size={isMobile ? "small" : "middle"}
+                style={{ flex: isMobile ? 1 : "none" }}
               >
                 卖出
               </Button>
+              {stats && stats.holdingShares > 0 && (
+                <Button
+                  danger
+                  onClick={handleLiquidateAll}
+                  size={isMobile ? "small" : "middle"}
+                  style={{ flex: isMobile ? 1 : "none" }}
+                >
+                  一键清仓
+                </Button>
+              )}
               <Button
-                onClick={() => handleOpenModal('DIVIDEND')}
-                size={isMobile ? 'small' : 'middle'}
-                style={{ flex: isMobile ? 1 : 'none' }}
+                onClick={() => handleOpenModal("DIVIDEND")}
+                size={isMobile ? "small" : "middle"}
+                style={{ flex: isMobile ? 1 : "none" }}
               >
                 分红
               </Button>
@@ -1046,7 +1090,7 @@ export default function FundDetailPage({
                     净值日期：{fund.netWorthDate}
                     {fund.netWorthUpdateAt &&
                       ` (更新于 ${dayjs(fund.netWorthUpdateAt).format(
-                        'MM-DD HH:mm'
+                        "MM-DD HH:mm"
                       )})`}
                   </Text>
                 )}
@@ -1059,15 +1103,15 @@ export default function FundDetailPage({
             <div
               style={{
                 marginBottom: 16,
-                padding: '12px',
-                background: '#f5f5f5',
+                padding: "12px",
+                background: "#f5f5f5",
                 borderRadius: 8,
               }}
             >
               <Space
                 direction="vertical"
                 size="small"
-                style={{ width: '100%' }}
+                style={{ width: "100%" }}
               >
                 <Flex justify="space-between" align="center">
                   <Text style={{ fontSize: 12 }}>当前净值：</Text>
@@ -1117,8 +1161,8 @@ export default function FundDetailPage({
                 title={
                   <span style={{ fontSize: isMobile ? 12 : 14 }}>持仓份额</span>
                 }
-                value={stats?.holdingShares || 0}
-                precision={isMobile ? 2 : 4}
+                value={normalizeZero(stats?.holdingShares)}
+                precision={2}
                 prefix={<DollarOutlined />}
                 styles={{ content: { fontSize: isMobile ? 16 : 20 } }}
               />
@@ -1130,11 +1174,11 @@ export default function FundDetailPage({
                     持仓成本价
                   </span>
                 }
-                value={stats?.avgCostPrice || 0}
+                value={normalizeZero(stats?.avgCostPrice)}
                 precision={isMobile ? 2 : 4}
                 prefix="¥"
                 styles={{
-                  content: { color: '#1890ff', fontSize: isMobile ? 16 : 20 },
+                  content: { color: "#1890ff", fontSize: isMobile ? 16 : 20 },
                 }}
               />
             </Col>
@@ -1143,7 +1187,7 @@ export default function FundDetailPage({
                 title={
                   <span style={{ fontSize: isMobile ? 12 : 14 }}>持仓成本</span>
                 }
-                value={stats?.holdingCost || 0}
+                value={normalizeZero(stats?.holdingCost)}
                 precision={isMobile ? 0 : 2}
                 prefix="¥"
                 styles={{ content: { fontSize: isMobile ? 16 : 20 } }}
@@ -1154,11 +1198,11 @@ export default function FundDetailPage({
                 title={
                   <span style={{ fontSize: isMobile ? 12 : 14 }}>持仓市值</span>
                 }
-                value={stats?.holdingValue || 0}
+                value={normalizeZero(stats?.holdingValue)}
                 precision={isMobile ? 0 : 2}
                 prefix="¥"
                 styles={{
-                  content: { color: '#722ed1', fontSize: isMobile ? 16 : 20 },
+                  content: { color: "#722ed1", fontSize: isMobile ? 16 : 20 },
                 }}
               />
             </Col>
@@ -1167,25 +1211,27 @@ export default function FundDetailPage({
                 title={
                   <span style={{ fontSize: isMobile ? 12 : 14 }}>持仓收益</span>
                 }
-                value={stats?.holdingProfit || 0}
+                value={normalizeZero(stats?.holdingProfit)}
                 precision={isMobile ? 0 : 2}
                 prefix={
                   <span>
-                    {(stats?.holdingProfit || 0) >= 0 ? (
+                    {normalizeZero(stats?.holdingProfit) >= 0 ? (
                       <RiseOutlined
-                        style={{ color: '#cf1322', marginRight: 4 }}
+                        style={{ color: "#cf1322", marginRight: 4 }}
                       />
                     ) : (
                       <FallOutlined
-                        style={{ color: '#3f8600', marginRight: 4 }}
+                        style={{ color: "#3f8600", marginRight: 4 }}
                       />
                     )}
-                    <span style={{ color: 'inherit' }}>¥</span>
+                    <span style={{ color: "inherit" }}>¥</span>
                   </span>
                 }
                 valueStyle={{
                   color:
-                    (stats?.holdingProfit || 0) >= 0 ? '#cf1322' : '#3f8600',
+                    normalizeZero(stats?.holdingProfit) >= 0
+                      ? "#cf1322"
+                      : "#3f8600",
                   fontSize: isMobile ? 16 : 20,
                 }}
               />
@@ -1199,17 +1245,17 @@ export default function FundDetailPage({
                 precision={2}
                 prefix={
                   (stats?.holdingProfitRate || 0) >= 0 ? (
-                    <RiseOutlined style={{ color: '#cf1322' }} />
+                    <RiseOutlined style={{ color: "#cf1322" }} />
                   ) : (
-                    <FallOutlined style={{ color: '#3f8600' }} />
+                    <FallOutlined style={{ color: "#3f8600" }} />
                   )
                 }
                 suffix="%"
                 valueStyle={{
                   color:
                     (stats?.holdingProfitRate || 0) >= 0
-                      ? '#cf1322'
-                      : '#3f8600',
+                      ? "#cf1322"
+                      : "#3f8600",
                   fontSize: isMobile ? 16 : 20,
                 }}
               />
@@ -1217,7 +1263,7 @@ export default function FundDetailPage({
             {(() => {
               // 计算最近一笔买入交易
               const latestBuyTransaction = transactions
-                .filter((t) => t.type === 'BUY')
+                .filter((t) => t.type === "BUY")
                 .sort(
                   (a, b) =>
                     new Date(b.date).getTime() - new Date(a.date).getTime()
@@ -1245,7 +1291,7 @@ export default function FundDetailPage({
                     prefix="¥"
                     styles={{
                       content: {
-                        color: '#722ed1',
+                        color: "#722ed1",
                         fontSize: isMobile ? 16 : 20,
                       },
                     }}
@@ -1255,11 +1301,11 @@ export default function FundDetailPage({
                       >
                         <span
                           style={{
-                            color: priceDiff >= 0 ? '#cf1322' : '#3f8600',
+                            color: priceDiff >= 0 ? "#cf1322" : "#3f8600",
                           }}
                         >
-                          {priceDiff >= 0 ? '+' : ''}
-                          {priceDiff.toFixed(4)} ({priceDiff >= 0 ? '+' : ''}
+                          {priceDiff >= 0 ? "+" : ""}
+                          {priceDiff.toFixed(4)} ({priceDiff >= 0 ? "+" : ""}
                           {priceDiffPercent.toFixed(2)}%)
                         </span>
                       </div>
@@ -1277,14 +1323,14 @@ export default function FundDetailPage({
                     precision={2}
                     prefix={
                       (stats?.totalProfit || 0) >= 0 ? (
-                        <RiseOutlined style={{ color: '#cf1322' }} />
+                        <RiseOutlined style={{ color: "#cf1322" }} />
                       ) : (
-                        <FallOutlined style={{ color: '#3f8600' }} />
+                        <FallOutlined style={{ color: "#3f8600" }} />
                       )
                     }
                     valueStyle={{
                       color:
-                        (stats?.totalProfit || 0) >= 0 ? '#cf1322' : '#3f8600',
+                        (stats?.totalProfit || 0) >= 0 ? "#cf1322" : "#3f8600",
                     }}
                   />
                 </Col>
@@ -1295,17 +1341,17 @@ export default function FundDetailPage({
                     precision={2}
                     prefix={
                       (stats?.totalProfitRate || 0) >= 0 ? (
-                        <RiseOutlined style={{ color: '#cf1322' }} />
+                        <RiseOutlined style={{ color: "#cf1322" }} />
                       ) : (
-                        <FallOutlined style={{ color: '#3f8600' }} />
+                        <FallOutlined style={{ color: "#3f8600" }} />
                       )
                     }
                     suffix="%"
                     valueStyle={{
                       color:
                         (stats?.totalProfitRate || 0) >= 0
-                          ? '#cf1322'
-                          : '#3f8600',
+                          ? "#cf1322"
+                          : "#3f8600",
                     }}
                   />
                 </Col>
@@ -1342,22 +1388,22 @@ export default function FundDetailPage({
                     <span>
                       {(stats?.totalSellProfit || 0) >= 0 ? (
                         <RiseOutlined
-                          style={{ color: '#cf1322', marginRight: 4 }}
+                          style={{ color: "#cf1322", marginRight: 4 }}
                         />
                       ) : (
                         <FallOutlined
-                          style={{ color: '#3f8600', marginRight: 4 }}
+                          style={{ color: "#3f8600", marginRight: 4 }}
                         />
                       )}
-                      <span style={{ color: 'inherit' }}>¥</span>
+                      <span style={{ color: "inherit" }}>¥</span>
                     </span>
                   }
                   styles={{
                     content: {
                       color:
                         (stats?.totalSellProfit || 0) >= 0
-                          ? '#cf1322'
-                          : '#3f8600',
+                          ? "#cf1322"
+                          : "#3f8600",
                       fontSize: isMobile ? 16 : 20,
                     },
                   }}
@@ -1374,7 +1420,7 @@ export default function FundDetailPage({
                   precision={isMobile ? 0 : 2}
                   prefix="¥"
                   styles={{
-                    content: { color: '#52c41a', fontSize: isMobile ? 16 : 20 },
+                    content: { color: "#52c41a", fontSize: isMobile ? 16 : 20 },
                   }}
                 />
               </Col>
@@ -1389,7 +1435,7 @@ export default function FundDetailPage({
                   precision={isMobile ? 0 : 2}
                   prefix="¥"
                   styles={{
-                    content: { color: '#1890ff', fontSize: isMobile ? 16 : 20 },
+                    content: { color: "#1890ff", fontSize: isMobile ? 16 : 20 },
                   }}
                 />
               </Col>
@@ -1434,18 +1480,18 @@ export default function FundDetailPage({
             extra={
               <Button
                 type="primary"
-                size={isMobile ? 'small' : 'small'}
+                size={isMobile ? "small" : "small"}
                 icon={<PlusOutlined />}
                 onClick={() => setPlanModalOpen(true)}
               >
-                {isMobile ? '新建' : '新建计划'}
+                {isMobile ? "新建" : "新建计划"}
               </Button>
             }
           >
             <Space
               direction="vertical"
-              style={{ width: '100%' }}
-              size={isMobile ? 'small' : 'middle'}
+              style={{ width: "100%" }}
+              size={isMobile ? "small" : "middle"}
             >
               {plannedPurchases.map((plan) => (
                 <Card key={plan.id} size="small">
@@ -1461,7 +1507,7 @@ export default function FundDetailPage({
                           <div
                             style={{
                               fontSize: 11,
-                              color: '#999',
+                              color: "#999",
                               marginBottom: 4,
                             }}
                           >
@@ -1471,7 +1517,7 @@ export default function FundDetailPage({
                             style={{
                               fontSize: 18,
                               fontWeight: 500,
-                              color: '#1890ff',
+                              color: "#1890ff",
                             }}
                           >
                             ¥{Number(plan.plannedAmount).toLocaleString()}
@@ -1495,21 +1541,21 @@ export default function FundDetailPage({
                         <div
                           style={{
                             fontSize: 11,
-                            color: '#999',
+                            color: "#999",
                             marginBottom: 4,
                           }}
                         >
                           创建时间
                         </div>
                         <div style={{ fontSize: 12 }}>
-                          {dayjs(plan.createdAt).format('YYYY-MM-DD')}
+                          {dayjs(plan.createdAt).format("YYYY-MM-DD")}
                         </div>
                       </div>
                       <Button
                         type="primary"
                         onClick={() => handleOpenExecuteModal(plan)}
                         block
-                        size={isMobile ? 'small' : 'middle'}
+                        size={isMobile ? "small" : "middle"}
                       >
                         执行买入
                       </Button>
@@ -1529,7 +1575,7 @@ export default function FundDetailPage({
                           <Text type="secondary">创建时间</Text>
                           <br />
                           <Text>
-                            {dayjs(plan.createdAt).format('YYYY-MM-DD')}
+                            {dayjs(plan.createdAt).format("YYYY-MM-DD")}
                           </Text>
                         </div>
                       </Space>
@@ -1586,9 +1632,9 @@ export default function FundDetailPage({
               {transactions.length === 0 ? (
                 <div
                   style={{
-                    textAlign: 'center',
-                    padding: '40px 0',
-                    color: '#999',
+                    textAlign: "center",
+                    padding: "40px 0",
+                    color: "#999",
                   }}
                 >
                   暂无交易记录
@@ -1618,11 +1664,11 @@ export default function FundDetailPage({
         {/* 交易弹窗 */}
         <Modal
           title={
-            transactionType === 'BUY'
-              ? '买入'
-              : transactionType === 'SELL'
-              ? '卖出'
-              : '分红'
+            transactionType === "BUY"
+              ? "买入"
+              : transactionType === "SELL"
+              ? "卖出"
+              : "分红"
           }
           open={modalOpen}
           onCancel={() => {
@@ -1630,7 +1676,7 @@ export default function FundDetailPage({
             form.resetFields();
           }}
           footer={null}
-          width={isMobile ? '90%' : 600}
+          width={isMobile ? "90%" : 600}
         >
           <Form
             form={form}
@@ -1645,26 +1691,26 @@ export default function FundDetailPage({
             <Form.Item
               label="交易日期"
               name="date"
-              rules={[{ required: true, message: '请选择交易日期' }]}
+              rules={[{ required: true, message: "请选择交易日期" }]}
             >
               <DatePicker
-                style={{ width: '100%' }}
+                style={{ width: "100%" }}
                 format="YYYY-MM-DD"
                 placeholder="选择日期"
               />
             </Form.Item>
 
-            {transactionType === 'BUY' && (
+            {transactionType === "BUY" && (
               <>
                 <Row gutter={16}>
                   <Col span={12}>
                     <Form.Item
                       label="买入金额"
                       name="amount"
-                      rules={[{ required: true, message: '请输入买入金额' }]}
+                      rules={[{ required: true, message: "请输入买入金额" }]}
                     >
                       <InputNumber
-                        style={{ width: '100%' }}
+                        style={{ width: "100%" }}
                         min={0}
                         precision={2}
                         placeholder="输入金额"
@@ -1679,7 +1725,7 @@ export default function FundDetailPage({
                       tooltip="手续费将从买入金额中扣除"
                     >
                       <InputNumber
-                        style={{ width: '100%' }}
+                        style={{ width: "100%" }}
                         min={0}
                         precision={2}
                         placeholder="输入手续费"
@@ -1691,10 +1737,10 @@ export default function FundDetailPage({
                 <Form.Item
                   label="买入净值"
                   name="price"
-                  rules={[{ required: true, message: '请输入买入净值' }]}
+                  rules={[{ required: true, message: "请输入买入净值" }]}
                 >
                   <InputNumber
-                    style={{ width: '100%' }}
+                    style={{ width: "100%" }}
                     min={0}
                     precision={4}
                     placeholder="输入净值"
@@ -1703,19 +1749,19 @@ export default function FundDetailPage({
               </>
             )}
 
-            {transactionType === 'SELL' && (
+            {transactionType === "SELL" && (
               <>
                 <Row gutter={16}>
                   <Col span={12}>
                     <Form.Item
                       label="卖出份额"
                       name="shares"
-                      rules={[{ required: true, message: '请输入卖出份额' }]}
+                      rules={[{ required: true, message: "请输入卖出份额" }]}
                     >
                       <InputNumber
-                        style={{ width: '100%' }}
+                        style={{ width: "100%" }}
                         min={0}
-                        precision={4}
+                        precision={2}
                         placeholder="输入份额"
                       />
                     </Form.Item>
@@ -1727,7 +1773,7 @@ export default function FundDetailPage({
                       tooltip="手续费将从卖出金额中扣除"
                     >
                       <InputNumber
-                        style={{ width: '100%' }}
+                        style={{ width: "100%" }}
                         min={0}
                         precision={2}
                         placeholder="输入手续费"
@@ -1739,10 +1785,10 @@ export default function FundDetailPage({
                 <Form.Item
                   label="卖出净值"
                   name="price"
-                  rules={[{ required: true, message: '请输入卖出净值' }]}
+                  rules={[{ required: true, message: "请输入卖出净值" }]}
                 >
                   <InputNumber
-                    style={{ width: '100%' }}
+                    style={{ width: "100%" }}
                     min={0}
                     precision={4}
                     placeholder="输入净值"
@@ -1751,23 +1797,23 @@ export default function FundDetailPage({
               </>
             )}
 
-            {transactionType === 'DIVIDEND' && (
+            {transactionType === "DIVIDEND" && (
               <>
                 <Form.Item
                   label="分红类型"
                   name="dividendReinvest"
-                  rules={[{ required: true, message: '请选择分红类型' }]}
+                  rules={[{ required: true, message: "请选择分红类型" }]}
                 >
                   <Radio.Group
                     onChange={(e) => {
                       // 当切换分红类型时，清空相关字段
                       if (e.target.value === false) {
                         // 现金分红：清除净值和份数字段
-                        form.setFieldValue('price', undefined);
-                        form.setFieldValue('dividendShares', undefined);
+                        form.setFieldValue("price", undefined);
+                        form.setFieldValue("dividendShares", undefined);
                       } else {
                         // 分红再投资：清空分红金额，因为会自动计算
-                        form.setFieldValue('amount', undefined);
+                        form.setFieldValue("amount", undefined);
                       }
                     }}
                   >
@@ -1782,15 +1828,13 @@ export default function FundDetailPage({
                     <Form.Item
                       label="再投资份数"
                       name="dividendShares"
-                      rules={[
-                        { required: true, message: '请输入再投资份数' },
-                      ]}
+                      rules={[{ required: true, message: "请输入再投资份数" }]}
                       tooltip="从支付宝等平台查看分红后增加的份数"
                     >
                       <InputNumber
-                        style={{ width: '100%' }}
+                        style={{ width: "100%" }}
                         min={0}
-                        precision={4}
+                        precision={2}
                         placeholder="输入再投资的份数"
                       />
                     </Form.Item>
@@ -1802,7 +1846,7 @@ export default function FundDetailPage({
                           tooltip="系统会根据日期自动获取，也可手动修改"
                         >
                           <InputNumber
-                            style={{ width: '100%' }}
+                            style={{ width: "100%" }}
                             min={0}
                             precision={4}
                             placeholder="自动获取"
@@ -1817,7 +1861,7 @@ export default function FundDetailPage({
                           tooltip="根据份数和净值自动计算"
                         >
                           <InputNumber
-                            style={{ width: '100%' }}
+                            style={{ width: "100%" }}
                             min={0}
                             precision={2}
                             placeholder="自动计算"
@@ -1833,10 +1877,10 @@ export default function FundDetailPage({
                   <Form.Item
                     label="分红金额"
                     name="amount"
-                    rules={[{ required: true, message: '请输入分红金额' }]}
+                    rules={[{ required: true, message: "请输入分红金额" }]}
                   >
                     <InputNumber
-                      style={{ width: '100%' }}
+                      style={{ width: "100%" }}
                       min={0}
                       precision={2}
                       placeholder="输入金额"
@@ -1871,7 +1915,7 @@ export default function FundDetailPage({
             planForm.resetFields();
           }}
           footer={null}
-          width={isMobile ? '90%' : 500}
+          width={isMobile ? "90%" : 500}
         >
           <Form
             form={planForm}
@@ -1882,11 +1926,11 @@ export default function FundDetailPage({
             <Form.Item
               label="计划买入金额"
               name="plannedAmount"
-              rules={[{ required: true, message: '请输入计划买入金额' }]}
+              rules={[{ required: true, message: "请输入计划买入金额" }]}
               tooltip="设置一个预期买入的金额，等时机合适时再执行"
             >
               <InputNumber
-                style={{ width: '100%' }}
+                style={{ width: "100%" }}
                 min={0}
                 precision={2}
                 placeholder="输入金额"
@@ -1915,7 +1959,7 @@ export default function FundDetailPage({
             executeForm.resetFields();
           }}
           footer={null}
-          width={isMobile ? '90%' : 600}
+          width={isMobile ? "90%" : 600}
         >
           <Form
             form={executeForm}
@@ -1929,7 +1973,7 @@ export default function FundDetailPage({
               tooltip="这是之前设置的计划金额"
             >
               <InputNumber
-                style={{ width: '100%' }}
+                style={{ width: "100%" }}
                 disabled
                 prefix="¥"
                 size="large"
@@ -1939,10 +1983,10 @@ export default function FundDetailPage({
             <Form.Item
               label="买入日期"
               name="date"
-              rules={[{ required: true, message: '请选择买入日期' }]}
+              rules={[{ required: true, message: "请选择买入日期" }]}
             >
               <DatePicker
-                style={{ width: '100%' }}
+                style={{ width: "100%" }}
                 format="YYYY-MM-DD"
                 placeholder="选择日期"
                 size="large"
@@ -1954,10 +1998,10 @@ export default function FundDetailPage({
                 <Form.Item
                   label="买入净值"
                   name="price"
-                  rules={[{ required: true, message: '请输入买入净值' }]}
+                  rules={[{ required: true, message: "请输入买入净值" }]}
                 >
                   <InputNumber
-                    style={{ width: '100%' }}
+                    style={{ width: "100%" }}
                     min={0}
                     precision={4}
                     placeholder="输入净值"
@@ -1968,7 +2012,7 @@ export default function FundDetailPage({
               <Col span={12}>
                 <Form.Item label="手续费" name="fee">
                   <InputNumber
-                    style={{ width: '100%' }}
+                    style={{ width: "100%" }}
                     min={0}
                     precision={2}
                     placeholder="输入手续费"

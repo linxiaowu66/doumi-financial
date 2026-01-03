@@ -86,6 +86,14 @@ export async function GET(
         }
       }
 
+      // 处理精度问题：如果份额接近0，直接设为0（同时成本也设为0）
+      // 使用更大的阈值（0.01），因为实际计算中可能产生 -0.0039 这样的值
+      const PRECISION_THRESHOLD = new Decimal("0.01");
+      if (fundShares.abs().lessThan(PRECISION_THRESHOLD)) {
+        fundShares = new Decimal(0);
+        fundCost = new Decimal(0);
+      }
+
       // 累加到总统计
       totalCost = totalCost.plus(fundCost);
       totalSellProfit = totalSellProfit.plus(fundSellProfit);
@@ -93,11 +101,20 @@ export async function GET(
       totalDividendReinvest = totalDividendReinvest.plus(fundDividendReinvest);
 
       // 计算当前市值（使用最新净值）
-      if (fund.latestNetWorth) {
+      if (fund.latestNetWorth && fundShares.greaterThan(0)) {
         const currentPrice = new Decimal(fund.latestNetWorth.toString());
         const fundValue = fundShares.times(currentPrice);
         totalCurrentValue = totalCurrentValue.plus(fundValue);
       }
+    }
+
+    // 处理精度问题：确保接近0的值都设为0
+    const PRECISION_THRESHOLD = new Decimal("0.01");
+    if (totalCost.abs().lessThan(PRECISION_THRESHOLD)) {
+      totalCost = new Decimal(0);
+    }
+    if (totalCurrentValue.abs().lessThan(PRECISION_THRESHOLD)) {
+      totalCurrentValue = new Decimal(0);
     }
 
     // 计算收益指标
@@ -111,21 +128,29 @@ export async function GET(
       ? new Decimal(0)
       : totalProfit.dividedBy(totalInvested).times(100); // 累计收益率
 
+    // 处理负数零的工具函数
+    // 使用更大的阈值（0.01），确保接近0的值都被归一化
+    const normalizeZero = (value: Decimal): string => {
+      const num = parseFloat(value.toString());
+      const normalized = Math.abs(num) < 0.01 ? 0 : num;
+      return normalized.toFixed(2);
+    };
+
     // 返回统计结果
     return NextResponse.json({
       directionId,
       directionName: direction.name,
       expectedAmount: direction.expectedAmount.toString(),
       actualAmount: direction.actualAmount.toString(),
-      totalInvested: totalInvested.toFixed(2), // 历史总投入（所有买入金额总和，包括已清仓的基金）
-      totalCurrentValue: totalCurrentValue.toFixed(2), // 当前总市值
-      totalCost: totalCost.toFixed(2), // 持仓总成本
-      holdingProfit: holdingProfit.toFixed(2), // 持仓收益
-      totalSellProfit: totalSellProfit.toFixed(2), // 累计卖出收益
-      totalDividendCash: totalDividendCash.toFixed(2), // 累计现金分红
-      totalDividendReinvest: totalDividendReinvest.toFixed(2), // 累计再投资分红
-      totalProfit: totalProfit.toFixed(2), // 累计总收益
-      totalProfitRate: totalProfitRate.toFixed(2), // 累计收益率(%)
+      totalInvested: normalizeZero(totalInvested), // 历史总投入（所有买入金额总和，包括已清仓的基金）
+      totalCurrentValue: normalizeZero(totalCurrentValue), // 当前总市值
+      totalCost: normalizeZero(totalCost), // 持仓总成本
+      holdingProfit: normalizeZero(holdingProfit), // 持仓收益
+      totalSellProfit: normalizeZero(totalSellProfit), // 累计卖出收益
+      totalDividendCash: normalizeZero(totalDividendCash), // 累计现金分红
+      totalDividendReinvest: normalizeZero(totalDividendReinvest), // 累计再投资分红
+      totalProfit: normalizeZero(totalProfit), // 累计总收益
+      totalProfitRate: normalizeZero(totalProfitRate), // 累计收益率(%)
       fundCount: direction.funds.length, // 基金数量
     });
   } catch (error: unknown) {
