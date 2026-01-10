@@ -28,6 +28,7 @@ import {
   QuestionCircleOutlined,
 } from '@ant-design/icons';
 import Link from 'next/link';
+import dayjs from 'dayjs';
 
 const { Title, Text } = Typography;
 
@@ -41,6 +42,11 @@ interface InvestmentDirection {
   _count?: {
     funds: number;
   };
+  latestTransaction?: {
+    date: string;
+    type: string;
+    fundName: string;
+  } | null;
 }
 
 export default function InvestmentDirectionsPage() {
@@ -216,6 +222,37 @@ export default function InvestmentDirectionsPage() {
       align: 'center' as const,
       render: (_: unknown, record: InvestmentDirection) =>
         record._count?.funds || 0,
+    },
+    {
+      title: '最新操作时间',
+      key: 'latestTransaction',
+      align: 'center' as const,
+      width: 180,
+      render: (_: unknown, record: InvestmentDirection) => {
+        if (!record.latestTransaction) {
+          return <Text type="secondary">暂无操作</Text>;
+        }
+
+        const typeMap: Record<string, string> = {
+          BUY: '买入',
+          SELL: '卖出',
+          DIVIDEND: '分红',
+        };
+
+        const transactionType = typeMap[record.latestTransaction.type] || record.latestTransaction.type;
+        const transactionDate = dayjs(record.latestTransaction.date).format('YYYY-MM-DD');
+
+        return (
+          <Tooltip
+            title={`${record.latestTransaction.fundName} - ${transactionType}`}
+            placement="top"
+          >
+            <Text type="secondary" style={{ cursor: 'help' }}>
+              {transactionDate}
+            </Text>
+          </Tooltip>
+        );
+      },
     },
     {
       title: '操作',

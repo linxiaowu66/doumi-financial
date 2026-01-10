@@ -38,6 +38,7 @@ import {
 } from "@ant-design/icons";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import dayjs from "dayjs";
 import {
   LineChart,
   Line,
@@ -57,6 +58,22 @@ interface Transaction {
   type: string;
   date: string;
   price: number;
+  amount?: number;
+  shares?: number;
+  fee?: number;
+  dividendReinvest?: boolean;
+  remark?: string | null;
+  fund?: {
+    id: number;
+    name: string;
+    code: string;
+  };
+}
+
+interface ExtendedTransaction extends Transaction {
+  fundId: number;
+  fundName: string;
+  fundCode: string;
 }
 
 interface Fund {
@@ -78,7 +95,7 @@ interface Fund {
 interface FundAlert {
   fundId: number;
   fundName: string;
-  reason: "days" | "price" | "position"; // days: 超过25天, price: 下跌超过5%, position: 仓位超标
+  reason: "days" | "price" | "position"; // days: 超过30天, price: 下跌超过5%, position: 仓位超标
   daysSinceLastBuy?: number;
   priceDropPercent?: number;
   positionExcessPercent?: number; // 仓位超标百分比
@@ -361,8 +378,8 @@ export default function DirectionDetailPage({
             (1000 * 60 * 60 * 24)
         );
 
-        // 检查条件1：分类距离上次买入超过25天
-        const condition1 = daysDiff > 25;
+        // 检查条件1：分类距离上次买入超过30天
+        const condition1 = daysDiff > 30;
 
         // 检查条件2：检查该分类下每个基金的净值下跌情况（使用每个基金自己的最后买入价格）
         categoryFunds.forEach((fund) => {
@@ -406,7 +423,7 @@ export default function DirectionDetailPage({
           }
         });
 
-        // 如果满足条件1（分类超过25天未买入），添加到提醒列表
+        // 如果满足条件1（分类超过30天未买入），添加到提醒列表
         // 但是，如果仓位已经超过100%，就不需要提示了
         if (condition1) {
           // 检查该分类的仓位是否已经超过100%
@@ -1375,6 +1392,236 @@ export default function DirectionDetailPage({
           </Spin>
         </Card>
 
+        {/* 最近5笔投资记录 */}
+        <Card
+          title={
+            <Space>
+              <DollarOutlined />
+              <span>最近5笔投资记录</span>
+            </Space>
+          }
+          style={{ marginBottom: isMobile ? 12 : 24 }}
+        >
+          {(() => {
+            // 从所有基金中提取所有交易记录
+            const allTransactions: ExtendedTransaction[] = [];
+
+            funds.forEach((fund) => {
+              if (fund.transactions && fund.transactions.length > 0) {
+                fund.transactions.forEach((tx) => {
+                  allTransactions.push({
+                    ...tx,
+                    fundId: fund.id,
+                    fundName: fund.name,
+                    fundCode: fund.code,
+                  });
+                });
+              }
+            });
+
+            // 按日期倒序排序，取最新的5笔
+            const recentTransactions = allTransactions
+              .sort((a, b) => {
+                const dateA = new Date(a.date).getTime();
+                const dateB = new Date(b.date).getTime();
+                return dateB - dateA; // 最新的在前
+              })
+              .slice(0, 5);
+
+            if (recentTransactions.length === 0) {
+              return (
+                <div
+                  style={{ textAlign: "center", padding: 40, color: "#999" }}
+                >
+                  暂无交易记录
+                </div>
+              );
+            }
+
+            const typeMap: Record<string, { label: string; color: string }> = {
+              BUY: { label: "买入", color: "#52c41a" },
+              SELL: { label: "卖出", color: "#ff4d4f" },
+              DIVIDEND: { label: "分红", color: "#1890ff" },
+            };
+
+            return (
+              <div>
+                {isMobile ? (
+                  // 移动端：卡片列表
+                  <div>
+                    {recentTransactions.map((tx) => {
+                      const typeInfo = typeMap[tx.type] || {
+                        label: tx.type,
+                        color: "#999",
+                      };
+                      return (
+                        <Card
+                          key={tx.id}
+                          size="small"
+                          style={{ marginBottom: 12 }}
+                        >
+                          <Flex
+                            justify="space-between"
+                            align="flex-start"
+                            vertical
+                            gap={8}
+                          >
+                            <Flex
+                              justify="space-between"
+                              align="center"
+                              style={{ width: "100%" }}
+                            >
+                              <Text strong style={{ fontSize: 14 }}>
+                                {tx.fundName}
+                              </Text>
+                              <Tag color={typeInfo.color}>{typeInfo.label}</Tag>
+                            </Flex>
+                            <Row gutter={[8, 8]} style={{ width: "100%" }}>
+                              <Col span={12}>
+                                <Text type="secondary" style={{ fontSize: 11 }}>
+                                  日期
+                                </Text>
+                                <div style={{ fontSize: 13 }}>
+                                  {dayjs(tx.date).format("YYYY-MM-DD")}
+                                </div>
+                              </Col>
+                              {tx.amount !== undefined && (
+                                <Col span={12}>
+                                  <Text
+                                    type="secondary"
+                                    style={{ fontSize: 11 }}
+                                  >
+                                    金额
+                                  </Text>
+                                  <div style={{ fontSize: 13 }}>
+                                    ¥{Number(tx.amount).toLocaleString()}
+                                  </div>
+                                </Col>
+                              )}
+                              {tx.shares !== undefined && (
+                                <Col span={12}>
+                                  <Text
+                                    type="secondary"
+                                    style={{ fontSize: 11 }}
+                                  >
+                                    份额
+                                  </Text>
+                                  <div style={{ fontSize: 13 }}>
+                                    {Number(tx.shares).toFixed(2)}
+                                  </div>
+                                </Col>
+                              )}
+                              {tx.price !== undefined && tx.price !== null && (
+                                <Col span={12}>
+                                  <Text
+                                    type="secondary"
+                                    style={{ fontSize: 11 }}
+                                  >
+                                    净值
+                                  </Text>
+                                  <div style={{ fontSize: 13 }}>
+                                    ¥{Number(tx.price).toFixed(4)}
+                                  </div>
+                                </Col>
+                              )}
+                            </Row>
+                          </Flex>
+                        </Card>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  // 桌面端：表格
+                  <Table
+                    dataSource={recentTransactions}
+                    rowKey="id"
+                    pagination={false}
+                    size="small"
+                    columns={[
+                      {
+                        title: "日期",
+                        dataIndex: "date",
+                        key: "date",
+                        width: 110,
+                        render: (date: string) =>
+                          dayjs(date).format("YYYY-MM-DD"),
+                      },
+                      {
+                        title: "基金名称",
+                        dataIndex: "fundName",
+                        key: "fundName",
+                        width: 180,
+                        ellipsis: true,
+                        render: (name: string, record: ExtendedTransaction) => (
+                          <Tooltip title={`${record.fundCode} - ${name}`}>
+                            <Text strong>{name}</Text>
+                          </Tooltip>
+                        ),
+                      },
+                      {
+                        title: "操作类型",
+                        dataIndex: "type",
+                        key: "type",
+                        width: 100,
+                        align: "center" as const,
+                        render: (type: string) => {
+                          const typeInfo = typeMap[type] || {
+                            label: type,
+                            color: "#999",
+                          };
+                          return (
+                            <Tag color={typeInfo.color}>{typeInfo.label}</Tag>
+                          );
+                        },
+                      },
+                      {
+                        title: "金额",
+                        dataIndex: "amount",
+                        key: "amount",
+                        width: 120,
+                        align: "right" as const,
+                        render: (amount: number | undefined) =>
+                          amount !== undefined
+                            ? `¥${Number(amount).toLocaleString()}`
+                            : "-",
+                      },
+                      {
+                        title: "份额",
+                        dataIndex: "shares",
+                        key: "shares",
+                        width: 110,
+                        align: "right" as const,
+                        render: (shares: number | undefined) =>
+                          shares !== undefined
+                            ? Number(shares).toFixed(2)
+                            : "-",
+                      },
+                      {
+                        title: "净值",
+                        dataIndex: "price",
+                        key: "price",
+                        width: 100,
+                        align: "right" as const,
+                        render: (price: number | undefined) =>
+                          price !== undefined && price !== null
+                            ? `¥${Number(price).toFixed(4)}`
+                            : "-",
+                      },
+                      {
+                        title: "备注",
+                        dataIndex: "remark",
+                        key: "remark",
+                        ellipsis: true,
+                        render: (remark: string | null) => remark || "-",
+                      },
+                    ]}
+                  />
+                )}
+              </div>
+            );
+          })()}
+        </Card>
+
         {/* 汇总收益统计卡片 */}
         {summary && (
           <Card
@@ -1744,11 +1991,11 @@ export default function DirectionDetailPage({
                                   );
 
                                 if (fundAlerts.length > 0 && categoryAlert) {
-                                  return `有${fundAlerts.length}只基金需要关注，分类超过25天未买入`;
+                                  return `有${fundAlerts.length}只基金需要关注，分类超过30天未买入`;
                                 } else if (fundAlerts.length > 0) {
                                   return `有${fundAlerts.length}只基金需要关注`;
                                 } else if (categoryAlert) {
-                                  return "分类超过25天未买入";
+                                  return "分类超过30天未买入";
                                 }
                                 return "需要关注";
                               })()}
