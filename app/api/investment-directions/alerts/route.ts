@@ -115,8 +115,9 @@ export async function GET() {
         }
 
         // 检查分类仓位超标（排除已清仓的基金）
-        if (categoryTarget && categoryTarget.targetPercent > 0) {
-          const targetAmount = (direction.expectedAmount * categoryTarget.targetPercent) / 100;
+        const targetPercentNum = categoryTarget ? Number(categoryTarget.targetPercent) : 0;
+        if (categoryTarget && targetPercentNum > 0) {
+          const targetAmount = (Number(direction.expectedAmount) * targetPercentNum) / 100;
           const overweightAmount = categoryHoldingCost - targetAmount;
 
           if (overweightAmount > 0) {
