@@ -238,6 +238,27 @@ export default function DirectionDetailPage({
     }
   }, [directionId, loading, funds.length]);
 
+  // 处理 URL hash 锚点定位（优先级高于滚动位置恢复）
+  useEffect(() => {
+    if (loading || funds.length === 0) return;
+
+    const hash = window.location.hash;
+    if (hash) {
+      // 延迟定位，确保页面内容已渲染
+      const timer = setTimeout(() => {
+        const elementId = hash.substring(1); // 移除 # 号
+        const element = document.getElementById(elementId);
+        if (element) {
+          element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          // 清除 sessionStorage 中的滚动位置，避免冲突
+          const scrollKey = `scroll-position-${directionId}`;
+          sessionStorage.removeItem(scrollKey);
+        }
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [directionId, loading, funds.length]);
+
   // 监听滚动事件，保存滚动位置
   useEffect(() => {
     const scrollKey = `scroll-position-${directionId}`;
@@ -337,12 +358,18 @@ export default function DirectionDetailPage({
 
       // 检查每个分类
       Object.entries(groupedByCategory).forEach(([category, categoryFunds]) => {
-        // 找到该分类下所有基金的最后一次买入交易
+        // 找到该分类下所有基金的最后一次买入交易（仅考虑未清仓的基金）
         let categoryLastBuyDate: Date | null = null;
 
         categoryFunds.forEach((fund) => {
           if (!fund.transactions || fund.transactions.length === 0) {
             return;
+          }
+
+          // 检查该基金是否已清仓
+          const stats = statsMap.get(fund.id);
+          if (isFundLiquidated(stats)) {
+            return; // 跳过已清仓的基金
           }
 
           // 找到该基金的最后一次买入交易
@@ -836,12 +863,14 @@ export default function DirectionDetailPage({
               </Tag>
             )}
             {record.remark && (
-              <Tag
-                color="blue"
-                style={{ fontSize: 12, flexShrink: 0, margin: 0 }}
-              >
-                有备注
-              </Tag>
+              <Tooltip title={record.remark} placement="top">
+                <Tag
+                  color="blue"
+                  style={{ fontSize: 12, flexShrink: 0, margin: 0, cursor: 'help' }}
+                >
+                  有备注
+                </Tag>
+              </Tooltip>
             )}
           </Flex>
         );
@@ -1036,6 +1065,20 @@ export default function DirectionDetailPage({
                   >
                     已清仓
                   </Tag>
+                )}
+                {fund.remark && (
+                  <Tooltip title={fund.remark} placement="top">
+                    <Tag
+                      color="blue"
+                      style={{
+                        fontSize: 11,
+                        margin: 0,
+                        cursor: 'help',
+                      }}
+                    >
+                      有备注
+                    </Tag>
+                  </Tooltip>
                 )}
               </Flex>
               <br />
@@ -1916,6 +1959,7 @@ export default function DirectionDetailPage({
               return (
                 <Card
                   key={category}
+                  id={`category-${encodeURIComponent(category)}`}
                   title={
                     <Flex
                       justify="space-between"
