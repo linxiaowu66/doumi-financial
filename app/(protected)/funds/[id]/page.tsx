@@ -21,6 +21,8 @@ import {
   Breadcrumb,
   Radio,
   DatePicker,
+  Checkbox,
+  Tooltip,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import {
@@ -30,6 +32,8 @@ import {
   DollarOutlined,
   RiseOutlined,
   FallOutlined,
+  SyncOutlined,
+  ClockCircleOutlined,
 } from "@ant-design/icons";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -37,6 +41,17 @@ import dayjs, { Dayjs } from "dayjs";
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
+
+interface PendingTransaction {
+  id: number;
+  fundId: number;
+  type: string;
+  applyDate: string;
+  applyAmount?: number;
+  applyShares?: number;
+  status: string;
+  createdAt: string;
+}
 
 interface Fund {
   id: number;
@@ -47,10 +62,14 @@ interface Fund {
   latestNetWorth?: number | null;
   netWorthDate?: string | null;
   netWorthUpdateAt?: string | null;
+  confirmDays?: number;
+  defaultBuyFee?: number;
+  defaultSellFee?: number;
   direction: {
     id: number;
     name: string;
   };
+  pendingTransactions?: PendingTransaction[];
 }
 
 interface Transaction {
@@ -101,10 +120,12 @@ export default function FundDetailPage({
   const [fund, setFund] = useState<Fund | null>(null);
   const [stats, setStats] = useState<FundStats | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [pendingTransactions, setPendingTransactions] = useState<PendingTransaction[]>([]);
   const [plannedPurchases, setPlannedPurchases] = useState<PlannedPurchase[]>(
     []
   );
   const [loading, setLoading] = useState(false);
+  const [confirmLoading, setConfirmLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [planModalOpen, setPlanModalOpen] = useState(false);
   const [executePlanModalOpen, setExecutePlanModalOpen] = useState(false);
@@ -112,6 +133,7 @@ export default function FundDetailPage({
     null
   );
   const [transactionType, setTransactionType] = useState<string>("BUY");
+  const [isPendingMode, setIsPendingMode] = useState(false); // 是否为待确认模式
   const [currentPrice, setCurrentPrice] = useState<number>(0); // 当前净值
   const [fetchingPrice, setFetchingPrice] = useState(false); // 正在获取净值
   const [fetchingHistoryPrice, setFetchingHistoryPrice] = useState(false); // 正在获取历史净值
@@ -130,6 +152,8 @@ export default function FundDetailPage({
   const dividendReinvest = Form.useWatch("dividendReinvest", form);
   const dividendShares = Form.useWatch("dividendShares", form); // 监听再投资份数
   const dividendDate = Form.useWatch("date", form); // 监听交易日期
+  const isPending = Form.useWatch("isPending", form); // 监听是否为待确认模式
+  const afterThreePM = Form.useWatch("afterThreePM", form); // 监听是否为15:00后
 
   // 检测屏幕尺寸
   useEffect(() => {
@@ -258,6 +282,11 @@ export default function FundDetailPage({
       const response = await fetch(`/api/funds/${fundId}`);
       const data = await response.json();
       setFund(data);
+      if (data.pendingTransactions) {
+        setPendingTransactions(data.pendingTransactions);
+      } else {
+        setPendingTransactions([]);
+      }
 
       // 如果有缓存的净值，使用缓存值
       if (data.latestNetWorth) {
@@ -419,8 +448,43 @@ export default function FundDetailPage({
     dividendReinvest: boolean;
     dividendShares?: number; // 分红再投资的份数
     remark: string;
+    isPending?: boolean; // 新增：是否待确认
+    afterThreePM?: boolean; // 新增：是否为15:00后
   }) => {
     try {
+      if (values.isPending) {
+        // 待确认交易逻辑
+        // 根据是否勾选"15:00后"，设置时间
+        // 如果勾选，设为 16:00 (CN)，即 local time 16:00
+        // 如果未勾选，设为 09:00 (CN)，即 local time 09:00
+        const submitDate = dayjs(values.date)
+          .hour(values.afterThreePM ? 16 : 9)
+          .minute(0)
+          .second(0);
+
+        const response = await fetch("/api/pending-transactions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            fundId,
+            type: values.type,
+            applyDate: submitDate.toISOString(),
+            applyAmount: values.type === 'BUY' ? values.amount : undefined,
+            applyShares: values.type === 'SELL' ? values.shares : undefined,
+          }),
+        });
+
+        if (response.ok) {
+          message.success("待确认交易添加成功");
+          setModalOpen(false);
+          form.resetFields();
+          loadFund(); // 刷新待确认列表
+        } else {
+          message.error("添加待确认交易失败");
+        }
+        return;
+      }
+
       let calculatedShares = 0;
       let calculatedAmount = 0;
 
@@ -498,6 +562,54 @@ export default function FundDetailPage({
       }
     } catch {
       message.error("删除失败");
+    }
+  };
+
+  // 删除待确认交易
+  const handleDeletePending = async (id: number) => {
+    try {
+      const response = await fetch(`/api/pending-transactions/${id}`, {
+        method: "DELETE",
+      });
+
+      if (response.ok) {
+        message.success("删除成功");
+        loadFund(); // 重新加载以刷新待确认列表
+      } else {
+        message.error("删除失败");
+      }
+    } catch {
+      message.error("删除失败");
+    }
+  };
+
+  // 批量确认待处理交易
+  const handleBatchConfirm = async () => {
+    setConfirmLoading(true);
+    try {
+      const response = await fetch("/api/pending-transactions/batch-confirm", {
+        method: "POST",
+      });
+      const data = await response.json();
+
+      if (response.ok) {
+        const confirmedCount =
+          data.logs?.filter((l: string) => l.includes("成功转正") || l.includes("Confirmed")).length || 0;
+
+        if (confirmedCount > 0) {
+          message.success(`成功确认 ${confirmedCount} 笔交易`);
+          loadFund(); // 刷新待确认列表
+          loadTransactions(); // 刷新正式交易列表
+        } else {
+          message.info("暂无符合确认条件的交易（可能未到确认日或无净值）");
+        }
+      } else {
+        message.error("批量确认失败");
+      }
+    } catch {
+      message.error("批量确认失败");
+    } finally {
+      setConfirmLoading(false);
     }
   };
 
@@ -933,6 +1045,39 @@ export default function FundDetailPage({
       ),
     },
   ];
+
+  // 计算预计信息 (前端模拟后端逻辑)
+  const getEstimatedDates = (pt: PendingTransaction, fund: Fund) => {
+    // 简单的前端计算，仅供参考，实际以后端为准
+    const applyDate = dayjs(pt.applyDate);
+    const isAfter3PM = applyDate.hour() >= 15;
+    const isWeekend = applyDate.day() === 0 || applyDate.day() === 6;
+    
+    // 如果是周末或15:00后，视为下一个工作日
+    let effectiveDate = applyDate;
+    if (isWeekend || isAfter3PM) {
+        // 简单处理：往后找工作日（不考虑节假日配置，仅参考）
+        do {
+            effectiveDate = effectiveDate.add(1, 'day');
+        } while (effectiveDate.day() === 0 || effectiveDate.day() === 6);
+    }
+    
+    // 计算确认日 (简单跳过周末)
+    let confirmDate = effectiveDate;
+    let daysToAdd = fund.confirmDays || 1;
+    while (daysToAdd > 0) {
+        confirmDate = confirmDate.add(1, 'day');
+        if (confirmDate.day() !== 0 && confirmDate.day() !== 6) {
+            daysToAdd--;
+        }
+    }
+    
+    return {
+        effectiveDate: effectiveDate.format('YYYY-MM-DD'),
+        confirmDate: confirmDate.format('YYYY-MM-DD'),
+        isDelayed: isWeekend || isAfter3PM
+    };
+  };
 
   return (
     <div
@@ -1605,6 +1750,133 @@ export default function FundDetailPage({
           </Card>
         )}
 
+        {/* 待确认交易列表 */}
+        {pendingTransactions.length > 0 && (
+          <Card
+            title={
+              <Space>
+                <ClockCircleOutlined />
+                <span style={{ fontSize: isMobile ? 14 : 16 }}>待确认交易</span>
+              </Space>
+            }
+            style={{ marginBottom: isMobile ? 12 : 24 }}
+            extra={
+               <Button
+                  type="primary"
+                  size="small"
+                  icon={<SyncOutlined spin={confirmLoading} />}
+                  onClick={handleBatchConfirm}
+                  loading={confirmLoading}
+                >
+                  检查转正
+                </Button>
+            }
+          >
+             <Table
+               columns={[
+                 { 
+                   title: '申请日期', 
+                   dataIndex: 'applyDate', 
+                   key: 'applyDate',
+                   render: (d: string) => dayjs(d).format('YYYY-MM-DD HH:mm') 
+                 },
+                 { 
+                   title: '类型', 
+                   dataIndex: 'type', 
+                   key: 'type',
+                   render: (t: string) => (
+                     <Tag color={t==='BUY'?'green':'red'}>{t==='BUY'?'买入':'卖出'}</Tag>
+                   ) 
+                 },
+                 { 
+                   title: '申请内容', 
+                   key: 'content',
+                   render: (_: unknown, r: PendingTransaction) => (
+                     r.type==='BUY' 
+                       ? `¥${Number(r.applyAmount).toLocaleString()}` 
+                       : `${Number(r.applyShares)}份`
+                   ) 
+                 },
+                 {
+                   title: '预计买入日期',
+                   key: 'estimatedBuyDate',
+                   render: (_: unknown, r: PendingTransaction) => {
+                       // 简单估算：如果是15点后或周末，视为下一个工作日
+                       const applyDate = dayjs(r.applyDate);
+                       // 0=周日, 6=周六
+                       const isWeekend = applyDate.day() === 0 || applyDate.day() === 6;
+                       const isAfter3PM = applyDate.hour() >= 15;
+                       
+                       // 计算有效申请日（买入日）
+                       let effectiveDate = applyDate;
+                       
+                       // 如果是周末，或者是15点后，都要往后找工作日
+                       if (isWeekend || isAfter3PM) {
+                           do {
+                               effectiveDate = effectiveDate.add(1, 'day');
+                           } while (effectiveDate.day() === 0 || effectiveDate.day() === 6);
+                       }
+                       
+                       return (
+                           <Tooltip title={isAfter3PM ? "超过15:00顺延" : (isWeekend ? "非交易日顺延" : "")}>
+                               <span>{effectiveDate.format('YYYY-MM-DD')}</span>
+                               {(isAfter3PM || isWeekend) && <Text type="secondary" style={{fontSize: 12, marginLeft: 4}}>(顺延)</Text>}
+                           </Tooltip>
+                       );
+                   }
+                 },
+                 {
+                   title: '预计确认日期',
+                   key: 'estimatedConfirmDate',
+                   render: (_: unknown, r: PendingTransaction) => {
+                       // 简单估算
+                       const applyDate = dayjs(r.applyDate);
+                       const isWeekend = applyDate.day() === 0 || applyDate.day() === 6;
+                       const isAfter3PM = applyDate.hour() >= 15;
+                       
+                       let effectiveDate = applyDate;
+                       if (isWeekend || isAfter3PM) {
+                           do {
+                               effectiveDate = effectiveDate.add(1, 'day');
+                           } while (effectiveDate.day() === 0 || effectiveDate.day() === 6);
+                       }
+                       
+                       let confirmDate = effectiveDate;
+                       let days = fund?.confirmDays || 1;
+                       while (days > 0) {
+                           confirmDate = confirmDate.add(1, 'day');
+                           if (confirmDate.day() !== 0 && confirmDate.day() !== 6) {
+                               days--;
+                           }
+                       }
+                       
+                       return confirmDate.format('YYYY-MM-DD');
+                   }
+                 },
+                 { 
+                   title: '状态', 
+                   dataIndex: 'status', 
+                   key: 'status',
+                   render: () => <Tag color="orange">等待净值</Tag> 
+                 },
+                 { 
+                   title: '操作', 
+                   key: 'action',
+                   render: (_: unknown, r: PendingTransaction) => (
+                     <Popconfirm title="确定撤销吗？" onConfirm={() => handleDeletePending(r.id)}>
+                        <Button type="link" danger size="small">撤销</Button>
+                     </Popconfirm>
+                   ) 
+                 }
+               ]}
+               dataSource={pendingTransactions}
+               rowKey="id"
+               pagination={false}
+               size="small"
+             />
+          </Card>
+        )}
+
         {/* 交易记录 */}
         <Card
           title={
@@ -1700,10 +1972,33 @@ export default function FundDetailPage({
               />
             </Form.Item>
 
+            {transactionType !== "DIVIDEND" && (
+              <Form.Item style={{ marginBottom: 12 }}>
+                <Space>
+                  <Form.Item name="isPending" valuePropName="checked" noStyle>
+                    <Checkbox>
+                      <Tooltip title="勾选后只需输入金额/份额，系统会在确认日自动匹配净值转为正式交易">
+                        待确认交易 (等待净值) <ClockCircleOutlined />
+                      </Tooltip>
+                    </Checkbox>
+                  </Form.Item>
+                  {isPending && (
+                    <Form.Item name="afterThreePM" valuePropName="checked" noStyle>
+                      <Checkbox>
+                        <Tooltip title="如果是在交易日15:00之后的操作，请勾选此项，系统会自动顺延到下一个交易日处理">
+                          15:00后交易 <ClockCircleOutlined />
+                        </Tooltip>
+                      </Checkbox>
+                    </Form.Item>
+                  )}
+                </Space>
+              </Form.Item>
+            )}
+
             {transactionType === "BUY" && (
               <>
                 <Row gutter={16}>
-                  <Col span={12}>
+                  <Col span={isPending ? 24 : 12}>
                     <Form.Item
                       label="买入金额"
                       name="amount"
@@ -1718,41 +2013,45 @@ export default function FundDetailPage({
                       />
                     </Form.Item>
                   </Col>
-                  <Col span={12}>
-                    <Form.Item
-                      label="手续费"
-                      name="fee"
-                      tooltip="手续费将从买入金额中扣除"
-                    >
-                      <InputNumber
-                        style={{ width: "100%" }}
-                        min={0}
-                        precision={2}
-                        placeholder="输入手续费"
-                        prefix="¥"
-                      />
-                    </Form.Item>
-                  </Col>
+                  {!isPending && (
+                    <Col span={12}>
+                      <Form.Item
+                        label="手续费"
+                        name="fee"
+                        tooltip="手续费将从买入金额中扣除"
+                      >
+                        <InputNumber
+                          style={{ width: "100%" }}
+                          min={0}
+                          precision={2}
+                          placeholder="输入手续费"
+                          prefix="¥"
+                        />
+                      </Form.Item>
+                    </Col>
+                  )}
                 </Row>
-                <Form.Item
-                  label="买入净值"
-                  name="price"
-                  rules={[{ required: true, message: "请输入买入净值" }]}
-                >
-                  <InputNumber
-                    style={{ width: "100%" }}
-                    min={0}
-                    precision={4}
-                    placeholder="输入净值"
-                  />
-                </Form.Item>
+                {!isPending && (
+                  <Form.Item
+                    label="买入净值"
+                    name="price"
+                    rules={[{ required: true, message: "请输入买入净值" }]}
+                  >
+                    <InputNumber
+                      style={{ width: "100%" }}
+                      min={0}
+                      precision={4}
+                      placeholder="输入净值"
+                    />
+                  </Form.Item>
+                )}
               </>
             )}
 
             {transactionType === "SELL" && (
               <>
                 <Row gutter={16}>
-                  <Col span={12}>
+                  <Col span={isPending ? 24 : 12}>
                     <Form.Item
                       label="卖出份额"
                       name="shares"
@@ -1766,34 +2065,38 @@ export default function FundDetailPage({
                       />
                     </Form.Item>
                   </Col>
-                  <Col span={12}>
-                    <Form.Item
-                      label="手续费"
-                      name="fee"
-                      tooltip="手续费将从卖出金额中扣除"
-                    >
-                      <InputNumber
-                        style={{ width: "100%" }}
-                        min={0}
-                        precision={2}
-                        placeholder="输入手续费"
-                        prefix="¥"
-                      />
-                    </Form.Item>
-                  </Col>
+                  {!isPending && (
+                    <Col span={12}>
+                      <Form.Item
+                        label="手续费"
+                        name="fee"
+                        tooltip="手续费将从卖出金额中扣除"
+                      >
+                        <InputNumber
+                          style={{ width: "100%" }}
+                          min={0}
+                          precision={2}
+                          placeholder="输入手续费"
+                          prefix="¥"
+                        />
+                      </Form.Item>
+                    </Col>
+                  )}
                 </Row>
-                <Form.Item
-                  label="卖出净值"
-                  name="price"
-                  rules={[{ required: true, message: "请输入卖出净值" }]}
-                >
-                  <InputNumber
-                    style={{ width: "100%" }}
-                    min={0}
-                    precision={4}
-                    placeholder="输入净值"
-                  />
-                </Form.Item>
+                {!isPending && (
+                  <Form.Item
+                    label="卖出净值"
+                    name="price"
+                    rules={[{ required: true, message: "请输入卖出净值" }]}
+                  >
+                    <InputNumber
+                      style={{ width: "100%" }}
+                      min={0}
+                      precision={4}
+                      placeholder="输入净值"
+                    />
+                  </Form.Item>
+                )}
               </>
             )}
 

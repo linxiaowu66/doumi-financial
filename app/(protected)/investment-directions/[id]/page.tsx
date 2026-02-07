@@ -24,6 +24,7 @@ import {
   Radio,
   Spin,
   Tooltip,
+  Badge,
 } from "antd";
 import {
   PlusOutlined,
@@ -35,6 +36,7 @@ import {
   LineChartOutlined,
   QuestionCircleOutlined,
   ExclamationCircleOutlined,
+  ClockCircleOutlined,
 } from "@ant-design/icons";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -85,10 +87,14 @@ interface Fund {
   latestNetWorth?: number | null;
   netWorthDate?: string | null;
   createdAt: string;
+  confirmDays?: number;
+  defaultBuyFee?: number;
+  defaultSellFee?: number;
   transactions?: Transaction[];
   _count?: {
     transactions: number;
     plannedPurchases: number;
+    pendingTransactions: number;
   };
 }
 
@@ -709,10 +715,18 @@ export default function DirectionDetailPage({
         name: fund.name,
         category: fund.category,
         remark: fund.remark,
+        confirmDays: fund.confirmDays || 1,
+        defaultBuyFee: fund.defaultBuyFee || 0.15,
+        defaultSellFee: fund.defaultSellFee || 0.50,
       });
     } else {
       setEditingFund(null);
       form.resetFields();
+      form.setFieldsValue({
+        confirmDays: 1,
+        defaultBuyFee: 0.15,
+        defaultSellFee: 0.50,
+      });
     }
     setCategorySearchValue("");
     setModalOpen(true);
@@ -980,6 +994,22 @@ export default function DirectionDetailPage({
       },
     },
     {
+      title: "待确认",
+      key: "pending",
+      align: "center" as const,
+      width: 80,
+      render: (_: unknown, record: Fund) => {
+        const count = record._count?.pendingTransactions || 0;
+        return count > 0 ? (
+          <Tooltip title={`${count} 笔交易等待确认净值`}>
+            <Badge count={count} size="small" offset={[5, 0]}>
+              <ClockCircleOutlined style={{ color: '#faad14', fontSize: 16 }} />
+            </Badge>
+          </Tooltip>
+        ) : 0;
+      },
+    },
+    {
       title: "操作",
       key: "action",
       align: "center" as const,
@@ -1131,9 +1161,16 @@ export default function DirectionDetailPage({
             </div>
           </Col>
           <Col span={12}>
-            <div style={{ fontSize: 12, color: "#999" }}>交易记录</div>
+            <div style={{ fontSize: 12, color: "#999" }}>待确认</div>
             <div style={{ fontSize: 14 }}>
-              {fund._count?.transactions || 0} 笔
+              {fund._count?.pendingTransactions ? (
+                <Space>
+                  <ClockCircleOutlined style={{ color: '#faad14' }} />
+                  <Text type="warning">{fund._count.pendingTransactions}</Text>
+                </Space>
+              ) : (
+                "0"
+              )}
             </div>
           </Col>
           <Col span={12}>
@@ -2315,6 +2352,58 @@ export default function DirectionDetailPage({
                     onClear={() => {
                       setCategorySearchValue("");
                     }}
+                  />
+                </Form.Item>
+              </Col>
+            </Row>
+
+            <Row gutter={16}>
+              <Col span={8}>
+                <Form.Item
+                  label="确认天数"
+                  name="confirmDays"
+                  initialValue={1}
+                  tooltip="交易确认所需工作日"
+                >
+                  <Select size="large">
+                    <Select.Option value={1}>T+1 (境内)</Select.Option>
+                    <Select.Option value={2}>T+2 (QDII)</Select.Option>
+                  </Select>
+                </Form.Item>
+              </Col>
+              <Col span={8}>
+                <Form.Item
+                  label="买入费率 (%)"
+                  name="defaultBuyFee"
+                  initialValue={0.15}
+                  tooltip="预估买入费率"
+                >
+                  <InputNumber<number>
+                    min={0}
+                    max={100}
+                    precision={2}
+                    step={0.01}
+                    addonAfter="%"
+                    style={{ width: "100%" }}
+                    size="large"
+                  />
+                </Form.Item>
+              </Col>
+              <Col span={8}>
+                <Form.Item
+                  label="卖出费率 (%)"
+                  name="defaultSellFee"
+                  initialValue={0.50}
+                  tooltip="预估卖出费率"
+                >
+                  <InputNumber<number>
+                    min={0}
+                    max={100}
+                    precision={2}
+                    step={0.01}
+                    addonAfter="%"
+                    style={{ width: "100%" }}
+                    size="large"
                   />
                 </Form.Item>
               </Col>

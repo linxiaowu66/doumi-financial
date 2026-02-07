@@ -19,6 +19,7 @@ import {
   UserOutlined,
   LogoutOutlined,
   MenuOutlined,
+  SettingOutlined,
 } from '@ant-design/icons';
 import type { MenuProps } from 'antd';
 import Link from 'next/link';
@@ -98,6 +99,14 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
         if (isMobile) setDrawerVisible(false);
       },
     },
+    {
+      key: '/settings',
+      icon: <SettingOutlined />,
+      label: <Link href="/settings">系统设置</Link>,
+      onClick: () => {
+        if (isMobile) setDrawerVisible(false);
+      },
+    },
   ];
 
   // 获取当前选中的菜单项
@@ -105,6 +114,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
     if (pathname === '/dashboard' || pathname === '/') return '/dashboard';
     if (pathname.startsWith('/investment-directions'))
       return '/investment-directions';
+    if (pathname.startsWith('/settings')) return '/settings';
     return '/dashboard';
   };
 

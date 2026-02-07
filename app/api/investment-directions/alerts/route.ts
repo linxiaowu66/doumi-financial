@@ -9,7 +9,7 @@ interface FundAlertItem {
   directionId: number;
   directionName: string;
   category: string | null;
-  alertType: 'price_drop' | 'price_rise' | 'category_overdue' | 'category_overweight';
+  alertType: 'price_drop' | 'price_rise' | 'category_overdue' | 'category_overweight' | 'pending_transaction';
   alertReason: string;
   latestBuyPrice?: number;
   currentPrice?: number;
@@ -18,6 +18,7 @@ interface FundAlertItem {
   categoryHoldingCost?: number;
   categoryTargetAmount?: number;
   overweightPercent?: number;
+  pendingCount?: number;
 }
 
 // GET - 获取所有基金的预警信息
@@ -33,6 +34,9 @@ export async function GET() {
             transactions: {
               orderBy: { date: 'asc' },
             },
+            pendingTransactions: {
+              where: { status: 'WAITING' },
+            },
           },
         },
         categoryTargets: true,
@@ -47,7 +51,25 @@ export async function GET() {
 
     // 遍历每个投资方向
     for (const direction of directions) {
-      // 按分类分组基金
+      // 检查每个基金的待确认交易和预警情况
+      for (const fund of direction.funds) {
+        // 1. 检查待确认交易
+        if (fund.pendingTransactions.length > 0) {
+          alerts.push({
+            fundId: fund.id,
+            fundCode: fund.code,
+            fundName: fund.name,
+            directionId: direction.id,
+            directionName: direction.name,
+            category: fund.category,
+            alertType: 'pending_transaction',
+            alertReason: `有 ${fund.pendingTransactions.length} 笔交易等待确认`,
+            pendingCount: fund.pendingTransactions.length,
+          });
+        }
+      }
+
+      // 按分类分组基金（用于检查分类预警）
       const fundsByCategory = direction.funds.reduce((acc, fund) => {
         const category = fund.category || 'uncategorized';
         if (!acc[category]) {
@@ -57,14 +79,12 @@ export async function GET() {
         return acc;
       }, {} as Record<string, typeof direction.funds>);
 
-      // 检查每个分类
+      // 检查每个分类的预警
       for (const [category, categoryFunds] of Object.entries(fundsByCategory)) {
-        // 找到该分类的目标设置
         const categoryTarget = direction.categoryTargets.find(
           (t) => t.categoryName === category
         );
 
-        // 计算分类总持仓成本
         let categoryHoldingCost = 0;
         const categoryFundStats: Array<{
           fund: typeof categoryFunds[0];
@@ -73,7 +93,6 @@ export async function GET() {
         }> = [];
 
         for (const fund of categoryFunds) {
-          // 计算该基金的持仓成本和份额
           let totalShares = new Decimal(0);
           let totalCost = new Decimal(0);
 
@@ -105,16 +124,11 @@ export async function GET() {
           const holdingShares = normalizeZero(parseFloat(totalShares.toString()));
           const holdingCost = normalizeZero(parseFloat(totalCost.toString()));
 
-          categoryFundStats.push({
-            fund,
-            holdingCost,
-            holdingShares,
-          });
-
+          categoryFundStats.push({ fund, holdingCost, holdingShares });
           categoryHoldingCost += holdingCost;
         }
 
-        // 检查分类仓位超标（排除已清仓的基金）
+        // 检查分类仓位超标
         const targetPercentNum = categoryTarget ? Number(categoryTarget.targetPercent) : 0;
         if (categoryTarget && targetPercentNum > 0) {
           const targetAmount = (Number(direction.expectedAmount) * targetPercentNum) / 100;
@@ -122,8 +136,6 @@ export async function GET() {
 
           if (overweightAmount > 0) {
             const overweightPercent = (overweightAmount / targetAmount) * 100;
-            
-            // 为该分类下的所有未清仓基金添加超标预警
             for (const { fund, holdingShares } of categoryFundStats) {
               if (holdingShares > 0) {
                 alerts.push({
@@ -144,11 +156,10 @@ export async function GET() {
           }
         }
 
-        // 检查分类超过45天未买入（排除已清仓的基金）
+        // 检查分类长期未买入
         let categoryLastBuyDate: Date | null = null;
         for (const { fund, holdingShares } of categoryFundStats) {
-          if (holdingShares === 0) continue; // 跳过已清仓的基金
-
+          if (holdingShares === 0) continue;
           const buyTransactions = fund.transactions.filter((tx) => tx.type === 'BUY');
           if (buyTransactions.length > 0) {
             const lastBuyDate = buyTransactions[buyTransactions.length - 1].date;
@@ -163,12 +174,9 @@ export async function GET() {
           today.setHours(0, 0, 0, 0);
           const lastBuyDateNormalized = new Date(categoryLastBuyDate);
           lastBuyDateNormalized.setHours(0, 0, 0, 0);
-          const daysDiff = Math.floor(
-            (today.getTime() - lastBuyDateNormalized.getTime()) / (1000 * 60 * 60 * 24)
-          );
+          const daysDiff = Math.floor((today.getTime() - lastBuyDateNormalized.getTime()) / (1000 * 60 * 60 * 24));
 
           if (daysDiff > 45) {
-            // 为该分类下的所有未清仓基金添加逾期预警
             for (const { fund, holdingShares } of categoryFundStats) {
               if (holdingShares > 0) {
                 alerts.push({
@@ -188,57 +196,24 @@ export async function GET() {
         }
       }
 
-      // 检查单个基金的价格预警
+      // 检查单个基金的价格涨跌预警
       for (const fund of direction.funds) {
-        // 计算持仓份额判断是否已清仓
         let totalShares = new Decimal(0);
-        let totalCost = new Decimal(0);
-
         fund.transactions.forEach((tx) => {
-          const amount = new Decimal(tx.amount);
-          const shares = new Decimal(tx.shares);
-
-          if (tx.type === 'BUY') {
-            totalShares = totalShares.plus(shares);
-            totalCost = totalCost.plus(amount);
-          } else if (tx.type === 'SELL') {
-            const sellShares = shares.abs();
-            const avgCostAtSell = totalShares.greaterThan(0)
-              ? totalCost.dividedBy(totalShares)
-              : new Decimal(0);
-            const costOfSold = avgCostAtSell.times(sellShares);
-            totalShares = totalShares.minus(sellShares);
-            totalCost = totalCost.minus(costOfSold);
-          } else if (tx.type === 'DIVIDEND' && tx.dividendReinvest) {
-            totalShares = totalShares.plus(shares);
-          }
+          if (tx.type === 'BUY') totalShares = totalShares.plus(tx.shares);
+          else if (tx.type === 'SELL') totalShares = totalShares.minus(new Decimal(tx.shares).abs());
+          else if (tx.type === 'DIVIDEND' && tx.dividendReinvest) totalShares = totalShares.plus(tx.shares);
         });
 
-        if (totalShares.abs().lessThan(PRECISION_THRESHOLD)) {
-          totalShares = new Decimal(0);
-          totalCost = new Decimal(0);
-        }
+        if (normalizeZero(parseFloat(totalShares.toString())) === 0) continue;
 
-        const holdingShares = normalizeZero(parseFloat(totalShares.toString()));
-
-        // 跳过已清仓的基金
-        if (holdingShares === 0) {
-          continue;
-        }
-
-        // 找到最新的买入交易
         const buyTransactions = fund.transactions.filter((tx) => tx.type === 'BUY');
-        if (buyTransactions.length === 0 || !fund.latestNetWorth) {
-          continue;
-        }
+        if (buyTransactions.length === 0 || !fund.latestNetWorth) continue;
 
-        const latestBuy = buyTransactions[buyTransactions.length - 1];
-        const latestBuyPrice = parseFloat(latestBuy.price.toString());
+        const latestBuyPrice = parseFloat(buyTransactions[buyTransactions.length - 1].price.toString());
         const currentPrice = parseFloat(fund.latestNetWorth.toString());
-
         const priceChangePercent = ((currentPrice - latestBuyPrice) / latestBuyPrice) * 100;
 
-        // 检查是否下跌5%以上
         if (priceChangePercent <= -5) {
           alerts.push({
             fundId: fund.id,
@@ -253,10 +228,7 @@ export async function GET() {
             currentPrice,
             priceChangePercent,
           });
-        }
-
-        // 检查是否上涨8%以上
-        if (priceChangePercent >= 8) {
+        } else if (priceChangePercent >= 8) {
           alerts.push({
             fundId: fund.id,
             fundCode: fund.code,

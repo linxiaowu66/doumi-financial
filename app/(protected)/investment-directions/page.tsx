@@ -20,6 +20,7 @@ import {
   Tooltip,
   Alert,
   Tag,
+  Badge,
 } from 'antd';
 import {
   PlusOutlined,
@@ -32,6 +33,7 @@ import {
   RiseOutlined,
   FallOutlined,
   ClockCircleOutlined,
+  SyncOutlined,
 } from '@ant-design/icons';
 import Link from 'next/link';
 import dayjs from 'dayjs';
@@ -45,6 +47,7 @@ interface InvestmentDirection {
   actualAmount: number;
   createdAt: string;
   updatedAt: string;
+  pendingCount?: number;
   _count?: {
     funds: number;
   };
@@ -62,7 +65,7 @@ interface FundAlert {
   directionId: number;
   directionName: string;
   category: string | null;
-  alertType: 'price_drop' | 'price_rise' | 'category_overdue' | 'category_overweight';
+  alertType: 'price_drop' | 'price_rise' | 'category_overdue' | 'category_overweight' | 'pending_transaction';
   alertReason: string;
   latestBuyPrice?: number;
   currentPrice?: number;
@@ -196,11 +199,20 @@ export default function InvestmentDirectionsPage() {
       dataIndex: 'name',
       key: 'name',
       render: (text: string, record: InvestmentDirection) => (
-        <Link href={`/investment-directions/${record.id}`}>
-          <Text strong style={{ color: '#1890ff', cursor: 'pointer' }}>
-            {text}
-          </Text>
-        </Link>
+        <Space>
+          <Link href={`/investment-directions/${record.id}`}>
+            <Text strong style={{ color: '#1890ff', cursor: 'pointer' }}>
+              {text}
+            </Text>
+          </Link>
+          {record.pendingCount && record.pendingCount > 0 ? (
+            <Tooltip title={`有 ${record.pendingCount} 笔待确认交易`}>
+              <Badge count={record.pendingCount} size="small" offset={[5, 0]}>
+                <ClockCircleOutlined style={{ color: '#faad14', fontSize: 16 }} />
+              </Badge>
+            </Tooltip>
+          ) : null}
+        </Space>
       ),
     },
     {
@@ -336,6 +348,7 @@ export default function InvestmentDirectionsPage() {
     price_rise: alerts.filter((a) => a.alertType === 'price_rise'),
     category_overdue: alerts.filter((a) => a.alertType === 'category_overdue'),
     category_overweight: alerts.filter((a) => a.alertType === 'category_overweight'),
+    pending_transaction: alerts.filter((a) => a.alertType === 'pending_transaction'),
   };
 
   // 去重分类预警（一个分类只显示一次）
@@ -386,6 +399,30 @@ export default function InvestmentDirectionsPage() {
         {!alertsLoading && alerts.length > 0 && (
           <Card className="mb-6" title={<><WarningOutlined className="mr-2" />基金预警概要</>}>
             <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+              {/* 待确认交易预警 */}
+              {alertsByType.pending_transaction.length > 0 && (
+                <Alert
+                  type="info"
+                  icon={<SyncOutlined spin />}
+                  message={
+                    <Space direction="vertical" size="small" style={{ width: '100%' }}>
+                      <Text strong>待确认交易 ({alertsByType.pending_transaction.length})</Text>
+                      <Space wrap>
+                        {alertsByType.pending_transaction.map((alert) => (
+                          <Link key={alert.fundId} href={`/funds/${alert.fundId}`}>
+                            <Tag color="processing" style={{ cursor: 'pointer' }}>
+                              {alert.fundName} ({alert.directionName})
+                              <br />
+                              {alert.alertReason}
+                            </Tag>
+                          </Link>
+                        ))}
+                      </Space>
+                    </Space>
+                  }
+                />
+              )}
+
               {/* 价格下跌预警 */}
               {alertsByType.price_drop.length > 0 && (
                 <Alert

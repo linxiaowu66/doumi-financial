@@ -11,7 +11,17 @@ export async function GET(
     const direction = await prisma.investmentDirection.findUnique({
       where: { id: parseInt(id) },
       include: {
-        funds: true,
+        funds: {
+          include: {
+            _count: {
+              select: {
+                transactions: true,
+                plannedPurchases: true,
+                pendingTransactions: true,
+              }
+            }
+          }
+        },
       },
     });
 

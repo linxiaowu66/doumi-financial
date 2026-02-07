@@ -18,6 +18,10 @@ export async function GET(
         plannedPurchases: {
           orderBy: { createdAt: 'desc' },
         },
+        pendingTransactions: {
+          where: { status: 'WAITING' },
+          orderBy: { applyDate: 'desc' },
+        },
       },
     });
 
@@ -40,7 +44,15 @@ export async function PUT(
   try {
     const { id } = await params;
     const body = await request.json();
-    const { code, name, category, remark } = body;
+    const { 
+      code, 
+      name, 
+      category, 
+      remark,
+      confirmDays,
+      defaultBuyFee,
+      defaultSellFee
+    } = body;
 
     const fund = await prisma.fund.update({
       where: { id: parseInt(id) },
@@ -49,6 +61,9 @@ export async function PUT(
         name,
         category,
         remark,
+        confirmDays: confirmDays ? parseInt(confirmDays) : undefined,
+        defaultBuyFee,
+        defaultSellFee,
       },
     });
 

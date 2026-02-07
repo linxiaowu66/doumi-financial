@@ -18,13 +18,22 @@ export async function GET() {
               orderBy: { date: 'desc' },
               take: 1, // 只取每个基金最新的一笔交易
             },
+            pendingTransactions: {
+              where: { status: 'WAITING' },
+            },
           },
         },
       },
     });
 
-    // 为每个投资方向计算最新一笔交易信息
+    // 为每个投资方向计算最新一笔交易信息和待确认交易数量
     const directionsWithLatestTransaction = directions.map((direction) => {
+      // 计算待确认交易总数
+      const pendingCount = direction.funds.reduce(
+        (acc, fund) => acc + fund.pendingTransactions.length,
+        0
+      );
+
       // 找到所有基金的最新交易，然后取最新的一笔
       const allLatestTransactions = direction.funds
         .flatMap((fund) =>
@@ -44,6 +53,7 @@ export async function GET() {
 
       return {
         ...directionWithoutFunds,
+        pendingCount,
         latestTransaction: latestTransaction
           ? {
               date: latestTransaction.date,
