@@ -357,7 +357,8 @@ export default function TransactionList({
       title: "操作",
       key: "action",
       align: "center",
-      width: 110,
+      width: 140,
+      fixed: "right",
       render: (_: unknown, record: Transaction) => (
         <Space size={0}>
           <Button
@@ -428,6 +429,7 @@ export default function TransactionList({
           dataSource={transactions}
           loading={loading}
           rowKey="id"
+          scroll={{ x: "max-content" }}
           pagination={{
             pageSize: 20,
             showSizeChanger: true,
