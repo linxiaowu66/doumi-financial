@@ -28,6 +28,7 @@ interface TransactionModalProps {
   dividendReinvest: boolean;
   fetchingHistoryPrice: boolean;
   isMobile: boolean;
+  isEditing?: boolean;
 }
 
 export default function TransactionModal({
@@ -40,16 +41,20 @@ export default function TransactionModal({
   dividendReinvest,
   fetchingHistoryPrice,
   isMobile,
+  isEditing,
 }: TransactionModalProps) {
+  const getTitle = () => {
+    if (isEditing) return "编辑交易";
+    return transactionType === "BUY"
+      ? "买入"
+      : transactionType === "SELL"
+      ? "卖出"
+      : "分红";
+  };
+
   return (
     <Modal
-      title={
-        transactionType === "BUY"
-          ? "买入"
-          : transactionType === "SELL"
-          ? "卖出"
-          : "分红"
-      }
+      title={getTitle()}
       open={open}
       onCancel={onCancel}
       footer={null}
@@ -77,7 +82,7 @@ export default function TransactionModal({
           />
         </Form.Item>
 
-        {transactionType !== "DIVIDEND" && (
+        {transactionType !== "DIVIDEND" && !isEditing && (
           <Form.Item style={{ marginBottom: 12 }}>
             <Flex gap="small">
               <Form.Item name="isPending" valuePropName="checked" noStyle>

@@ -45,6 +45,7 @@ export default function FundDetailPage({
   const [executingPlan, setExecutingPlan] = useState<PlannedPurchase | null>(
     null
   );
+  const [editingTransactionId, setEditingTransactionId] = useState<number | null>(null);
   const [transactionType, setTransactionType] = useState<string>("BUY");
   const [currentPrice, setCurrentPrice] = useState<number>(0); // 当前净值
   const [fetchingPrice, setFetchingPrice] = useState(false); // 正在获取净值
@@ -318,11 +319,46 @@ export default function FundDetailPage({
   // 打开交易弹窗
   const handleOpenModal = (type: string) => {
     setTransactionType(type);
+    setEditingTransactionId(null); // 清除编辑状态
     form.resetFields();
     form.setFieldsValue({
       type,
       date: dayjs(),
     });
+    setModalOpen(true);
+  };
+
+  // 编辑交易
+  const handleEditTransaction = (transaction: Transaction) => {
+    setTransactionType(transaction.type);
+    setEditingTransactionId(transaction.id);
+    form.resetFields();
+    
+    // 填充表单
+    const values: any = {
+      type: transaction.type,
+      date: dayjs(transaction.date),
+      price: Number(transaction.price),
+      fee: Number(transaction.fee),
+      remark: transaction.remark,
+      dividendReinvest: transaction.dividendReinvest,
+    };
+
+    if (transaction.type === 'BUY') {
+      values.amount = Number(transaction.amount); // 这里 amount 已经是总支出
+    } else if (transaction.type === 'SELL') {
+      values.shares = Math.abs(Number(transaction.shares));
+      // 卖出时 amount 是净收入，但在界面上我们通常不显示这个字段让用户改，
+      // 而是通过 shares * price - fee 自动计算，或者用户输入 shares 和 price。
+      // 所以不需要填充 amount
+    } else if (transaction.type === 'DIVIDEND') {
+      values.amount = Number(transaction.amount);
+      if (transaction.dividendReinvest) {
+        values.dividendShares = Number(transaction.shares);
+      }
+    }
+
+    form.setFieldsValue(values);
     setModalOpen(true);
   };
 
@@ -339,6 +375,7 @@ export default function FundDetailPage({
     }
 
     setTransactionType("SELL");
+    setEditingTransactionId(null);
     form.resetFields();
     form.setFieldsValue({
       type: "SELL",
@@ -420,35 +457,49 @@ export default function FundDetailPage({
         }
       }
 
-      const response = await fetch("/api/transactions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          fundId,
-          type: values.type,
-          amount: calculatedAmount,
-          shares: calculatedShares,
-          price:
-            values.type === "DIVIDEND" && !values.dividendReinvest
-              ? 0
-              : values.price,
-          fee: values.fee || 0,
-          date: values.date.toISOString(),
-          dividendReinvest: values.dividendReinvest || false,
-          remark: values.remark,
-        }),
-      });
+      const payload = {
+        fundId,
+        type: values.type,
+        amount: calculatedAmount,
+        shares: calculatedShares,
+        price:
+          values.type === "DIVIDEND" && !values.dividendReinvest
+            ? 0
+            : values.price,
+        fee: values.fee || 0,
+        date: values.date.toISOString(),
+        dividendReinvest: values.dividendReinvest || false,
+        remark: values.remark,
+      };
+
+      let response;
+      if (editingTransactionId) {
+        // 编辑模式 (PUT)
+        response = await fetch(`/api/transactions/${editingTransactionId}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+      } else {
+        // 新增模式 (POST)
+        response = await fetch("/api/transactions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+      }
 
       if (response.ok) {
-        message.success("交易记录添加成功");
+        message.success(editingTransactionId ? "交易记录更新成功" : "交易记录添加成功");
         setModalOpen(false);
+        setEditingTransactionId(null);
         form.resetFields();
         loadTransactions();
       } else {
-        message.error("添加失败");
+        message.error(editingTransactionId ? "更新失败" : "添加失败");
       }
     } catch {
-      message.error("添加失败");
+      message.error("操作失败");
     }
   };
 
@@ -670,12 +721,14 @@ export default function FundDetailPage({
           isMobile={isMobile}
           onPlanModalOpen={() => setPlanModalOpen(true)}
           onDelete={handleDelete}
+          onEdit={handleEditTransaction}
         />
 
         <TransactionModal
           open={modalOpen}
           onCancel={() => {
             setModalOpen(false);
+            setEditingTransactionId(null);
             form.resetFields();
           }}
           onFinish={handleSubmit}
@@ -686,6 +739,7 @@ export default function FundDetailPage({
           dividendReinvest={dividendReinvest}
           fetchingHistoryPrice={fetchingHistoryPrice}
           isMobile={isMobile}
+          isEditing={!!editingTransactionId}
         />
 
         <PlannedPurchaseModal

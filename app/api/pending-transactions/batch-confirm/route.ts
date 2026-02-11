@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { calculateConfirmDate, getNextWorkday, isWorkday } from '@/lib/workday';
 import { format } from 'date-fns';
+import { getFundNetWorth } from '@/lib/fund-price';
 
 export async function POST(request: Request) {
   const logs: string[] = [];
@@ -30,26 +31,65 @@ export async function POST(request: Request) {
       }
 
       // 3. 计算确认日期 (基于有效申请日)
-      // T+N -> 确认日期
+      // T+N -> 确认日期 (预计份额确认/到账日期)
       const confirmDate = await calculateConfirmDate(effectiveApplyDate, pt.fund.confirmDays);
       const confirmDateStr = format(confirmDate, 'yyyy-MM-dd');
 
-      // 4. 检查该基金在确认日期是否有净值
-      // 注意：目前 Fund 模型只存储了 latestNetWorth 和 netWorthDate。
-      // 如果 netWorthDate 不等于 confirmDateStr，说明该基金还没有更新到确认日期的净值。
-      // *未来改进：如果有 FundPriceHistory 表，应该去查历史净值表*
-      
-      if (pt.fund.netWorthDate !== confirmDateStr || !pt.fund.latestNetWorth) {
-        logs.push(`跳过交易 #${pt.id}: 基金 ${pt.fund.name} 尚未更新 ${confirmDateStr} 的净值 (当前: ${pt.fund.netWorthDate})`);
+      // 4. 检查该基金在有效申请日(T日)是否有净值
+      const requiredNetWorthDate = effectiveApplyDate;
+      const requiredNetWorthDateStr = format(requiredNetWorthDate, 'yyyy-MM-dd');
+
+      let netWorth: number | null = null;
+      let netWorthDate: Date = requiredNetWorthDate;
+
+      // 首先检查数据库中当前保存的净值是否匹配
+      if (pt.fund.netWorthDate === requiredNetWorthDateStr && pt.fund.latestNetWorth) {
+        netWorth = Number(pt.fund.latestNetWorth);
+      } else {
+        // 如果不匹配，尝试从接口获取历史净值
+        logs.push(`基金 ${pt.fund.name} 当前净值日期 (${pt.fund.netWorthDate}) 不匹配申请日 (${requiredNetWorthDateStr})，尝试从接口获取...`);
+        
+        try {
+          const result = await getFundNetWorth(pt.fund.code, requiredNetWorthDate);
+          if (result) {
+            netWorth = result.netWorth;
+            // 如果获取到的日期不是精确匹配的日期，需要注意
+            if (result.matchType !== 'exact') {
+               logs.push(`注意: 基金 ${pt.fund.name} 未找到 ${requiredNetWorthDateStr} 的精确净值，使用了 ${result.date} 的净值`);
+               // 如果是最近交易日逻辑，可能意味着这天是非交易日，或者数据还没更新。
+               // 按照之前的逻辑，我们应该尽量使用精确日期的净值。
+               // 如果 matchType 是 nearest，且日期差很大，可能不对。
+               // 这里 getFundNetWorth 已经处理了非交易日向前找的情况。
+               // 对于申请日，如果是工作日但没有净值，可能是还没出。
+               
+               // 如果返回的日期比 effectiveApplyDate 还早，那可能是还没更新到这一天
+               const resultDate = new Date(result.date);
+               if (resultDate.getTime() < requiredNetWorthDate.getTime()) {
+                 logs.push(`跳过交易 #${pt.id}: 接口返回的净值日期 (${result.date}) 早于申请日 (${requiredNetWorthDateStr})，说明尚未更新`);
+                 netWorth = null;
+               } else {
+                 // 如果日期一致（或者逻辑允许的情况），使用该净值
+                 netWorthDate = new Date(result.date);
+               }
+            } else {
+               logs.push(`已获取 ${pt.fund.name} 在 ${result.date} 的净值: ${result.netWorth}`);
+            }
+          }
+        } catch (e) {
+          console.error(`获取基金 ${pt.fund.code} 净值失败`, e);
+        }
+      }
+
+      if (netWorth === null) {
+        logs.push(`跳过交易 #${pt.id}: 无法获取基金 ${pt.fund.name} 在 ${requiredNetWorthDateStr} 的净值`);
         continue;
       }
 
-      const netWorth = Number(pt.fund.latestNetWorth);
       let transactionData: any = {
         fundId: pt.fundId,
-        date: confirmDate,
+        date: netWorthDate, // 使用实际获取到净值的日期
         price: netWorth,
-        remark: `自动转正 (申请日: ${format(pt.applyDate, 'yyyy-MM-dd')}${effectiveApplyDate.getTime() !== pt.applyDate.getTime() ? ' 顺延' : ''})`,
+        remark: `自动转正 (申请日: ${format(pt.applyDate, 'yyyy-MM-dd')}${effectiveApplyDate.getTime() !== pt.applyDate.getTime() ? ' 顺延' : ''}, 确认日: ${confirmDateStr})`,
         dividendReinvest: false,
       };
 

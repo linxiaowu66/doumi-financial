@@ -10,7 +10,7 @@ import {
   Row,
   Col,
 } from "antd";
-import { PlusOutlined, DeleteOutlined } from "@ant-design/icons";
+import { PlusOutlined, DeleteOutlined, EditOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { Transaction } from "@/types/fund";
 import type { ColumnsType } from "antd/es/table";
@@ -23,6 +23,7 @@ interface TransactionListProps {
   isMobile: boolean;
   onPlanModalOpen: () => void;
   onDelete: (id: number) => void;
+  onEdit: (transaction: Transaction) => void;
 }
 
 export default function TransactionList({
@@ -31,6 +32,7 @@ export default function TransactionList({
   isMobile,
   onPlanModalOpen,
   onDelete,
+  onEdit,
 }: TransactionListProps) {
   const renderMobileTransactionCard = (transaction: Transaction) => {
     const typeMap: Record<string, { text: string; color: string }> = {
@@ -59,14 +61,22 @@ export default function TransactionList({
               {dayjs(transaction.date).format("YYYY/M/D")}
             </Text>
           </Space>
-          <Popconfirm
-            title="确定要删除吗？"
-            onConfirm={() => onDelete(transaction.id)}
-            okText="确定"
-            cancelText="取消"
-          >
-            <Button type="text" size="small" danger icon={<DeleteOutlined />} />
-          </Popconfirm>
+          <Space>
+            <Button
+              type="text"
+              size="small"
+              icon={<EditOutlined />}
+              onClick={() => onEdit(transaction)}
+            />
+            <Popconfirm
+              title="确定要删除吗？"
+              onConfirm={() => onDelete(transaction.id)}
+              okText="确定"
+              cancelText="取消"
+            >
+              <Button type="text" size="small" danger icon={<DeleteOutlined />} />
+            </Popconfirm>
+          </Space>
         </Flex>
         <Row gutter={[8, 8]}>
           {transaction.type === "BUY" && (
@@ -347,18 +357,28 @@ export default function TransactionList({
       title: "操作",
       key: "action",
       align: "center",
-      width: 80,
+      width: 110,
       render: (_: unknown, record: Transaction) => (
-        <Popconfirm
-          title="确定要删除吗？"
-          onConfirm={() => onDelete(record.id)}
-          okText="确定"
-          cancelText="取消"
-        >
-          <Button type="link" danger icon={<DeleteOutlined />} size="small">
-            删除
+        <Space size={0}>
+          <Button
+            type="link"
+            size="small"
+            icon={<EditOutlined />}
+            onClick={() => onEdit(record)}
+          >
+            编辑
           </Button>
-        </Popconfirm>
+          <Popconfirm
+            title="确定要删除吗？"
+            onConfirm={() => onDelete(record.id)}
+            okText="确定"
+            cancelText="取消"
+          >
+            <Button type="link" danger icon={<DeleteOutlined />} size="small">
+              删除
+            </Button>
+          </Popconfirm>
+        </Space>
       ),
     },
   ];
