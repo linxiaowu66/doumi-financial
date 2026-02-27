@@ -260,13 +260,12 @@ export default function TransactionList({
       },
     },
     {
-      title: "买入金额",
+      title: "交易金额",
       dataIndex: "amount",
-      key: "buyAmount",
+      key: "amount",
       align: "center",
       width: 110,
-      render: (amount: number, record: Transaction) =>
-        record.type === "BUY" ? `¥${Number(amount).toLocaleString()}` : "-",
+      render: (amount: number) => `¥${Math.abs(Number(amount)).toLocaleString()}`,
     },
     {
       title: "手续费",

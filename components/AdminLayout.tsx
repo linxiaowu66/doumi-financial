@@ -1,6 +1,6 @@
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect } from "react";
 import {
   Layout,
   Menu,
@@ -10,7 +10,7 @@ import {
   Avatar,
   Space,
   Drawer,
-} from 'antd';
+} from "antd";
 import {
   DashboardOutlined,
   FundOutlined,
@@ -20,11 +20,11 @@ import {
   LogoutOutlined,
   MenuOutlined,
   SettingOutlined,
-} from '@ant-design/icons';
-import type { MenuProps } from 'antd';
-import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { signOut, useSession } from 'next-auth/react';
+} from "@ant-design/icons";
+import type { MenuProps } from "antd";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { signOut, useSession } from "next-auth/react";
 
 const { Header, Sider, Content } = Layout;
 
@@ -49,21 +49,21 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
     };
 
     checkMobile();
-    window.addEventListener('resize', checkMobile);
+    window.addEventListener("resize", checkMobile);
 
-    return () => window.removeEventListener('resize', checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
   }, []);
 
   // 用户菜单
-  const userMenuItems: MenuProps['items'] = [
+  const userMenuItems: MenuProps["items"] = [
     {
-      key: 'user-info',
+      key: "user-info",
       label: (
-        <div style={{ padding: '8px 0' }}>
-          <div style={{ fontWeight: 'bold' }}>
+        <div style={{ padding: "8px 0" }}>
+          <div style={{ fontWeight: "bold" }}>
             {session?.user?.name || session?.user?.email}
           </div>
-          <div style={{ fontSize: 12, color: '#999' }}>
+          <div style={{ fontSize: 12, color: "#999" }}>
             {session?.user?.email}
           </div>
         </div>
@@ -71,20 +71,20 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
       disabled: true,
     },
     {
-      type: 'divider',
+      type: "divider",
     },
     {
-      key: 'logout',
+      key: "logout",
       icon: <LogoutOutlined />,
-      label: '退出登录',
-      onClick: () => signOut({ callbackUrl: '/auth/signin' }),
+      label: "退出登录",
+      onClick: () => signOut({ callbackUrl: "/" }),
     },
   ];
 
   // 菜单项配置
-  const menuItems: MenuProps['items'] = [
+  const menuItems: MenuProps["items"] = [
     {
-      key: '/dashboard',
+      key: "/dashboard",
       icon: <DashboardOutlined />,
       label: <Link href="/dashboard">首页</Link>,
       onClick: () => {
@@ -92,7 +92,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
       },
     },
     {
-      key: '/investment-directions',
+      key: "/investment-directions",
       icon: <FundOutlined />,
       label: <Link href="/investment-directions">投资方向</Link>,
       onClick: () => {
@@ -100,7 +100,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
       },
     },
     {
-      key: '/settings',
+      key: "/settings",
       icon: <SettingOutlined />,
       label: <Link href="/settings">系统设置</Link>,
       onClick: () => {
@@ -111,11 +111,11 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
 
   // 获取当前选中的菜单项
   const getSelectedKey = () => {
-    if (pathname === '/dashboard' || pathname === '/') return '/dashboard';
-    if (pathname.startsWith('/investment-directions'))
-      return '/investment-directions';
-    if (pathname.startsWith('/settings')) return '/settings';
-    return '/dashboard';
+    if (pathname === "/dashboard" || pathname === "/") return "/dashboard";
+    if (pathname.startsWith("/investment-directions"))
+      return "/investment-directions";
+    if (pathname.startsWith("/settings")) return "/settings";
+    return "/dashboard";
   };
 
   // 侧边栏内容
@@ -124,21 +124,21 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
       <div
         style={{
           height: 64,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          color: isMobile ? '#000' : 'white',
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          color: isMobile ? "#000" : "white",
           fontSize: isMobile ? 20 : collapsed ? 18 : 20,
-          fontWeight: 'bold',
+          fontWeight: "bold",
           borderBottom: isMobile
-            ? '1px solid #f0f0f0'
-            : '1px solid rgba(255, 255, 255, 0.1)',
+            ? "1px solid #f0f0f0"
+            : "1px solid rgba(255, 255, 255, 0.1)",
         }}
       >
-        {collapsed && !isMobile ? '💰' : '💰 豆米理财'}
+        {collapsed && !isMobile ? "💰" : "💰 豆米理财"}
       </div>
       <Menu
-        theme={isMobile ? 'light' : 'dark'}
+        theme={isMobile ? "light" : "dark"}
         mode="inline"
         selectedKeys={[getSelectedKey()]}
         items={menuItems}
@@ -148,7 +148,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
   );
 
   return (
-    <Layout style={{ minHeight: '100vh' }}>
+    <Layout style={{ minHeight: "100vh" }}>
       {/* 移动端：抽屉式导航 */}
       {isMobile && (
         <Drawer
@@ -169,9 +169,9 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
           collapsible
           collapsed={collapsed}
           style={{
-            overflow: 'auto',
-            height: '100vh',
-            position: 'fixed',
+            overflow: "auto",
+            height: "100vh",
+            position: "fixed",
             left: 0,
             top: 0,
             bottom: 0,
@@ -184,17 +184,17 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
       <Layout
         style={{
           marginLeft: isMobile ? 0 : collapsed ? 80 : 200,
-          transition: 'all 0.2s',
+          transition: "all 0.2s",
         }}
       >
         <Header
           style={{
             padding: 0,
             background: colorBgContainer,
-            display: 'flex',
-            alignItems: 'center',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-            position: 'sticky',
+            display: "flex",
+            alignItems: "center",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+            position: "sticky",
             top: 0,
             zIndex: 1,
           }}
@@ -218,7 +218,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
               }
             }}
             style={{
-              fontSize: '16px',
+              fontSize: "16px",
               width: 64,
               height: 64,
             }}
@@ -227,22 +227,22 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
             style={{
               flex: 1,
               paddingRight: isMobile ? 8 : 24,
-              textAlign: 'right',
+              textAlign: "right",
             }}
           >
             <Space>
               {!isMobile && (
-                <span style={{ color: '#666' }}>个人投资管理系统</span>
+                <span style={{ color: "#666" }}>个人投资管理系统</span>
               )}
               <Dropdown menu={{ items: userMenuItems }} placement="bottomRight">
-                <Button type="text" style={{ height: 40, padding: '0 12px' }}>
+                <Button type="text" style={{ height: 40, padding: "0 12px" }}>
                   <Space>
                     <Avatar
                       size="small"
                       icon={<UserOutlined />}
-                      style={{ backgroundColor: '#1890ff' }}
+                      style={{ backgroundColor: "#1890ff" }}
                     />
-                    {!isMobile && <span>{session?.user?.name || '用户'}</span>}
+                    {!isMobile && <span>{session?.user?.name || "用户"}</span>}
                   </Space>
                 </Button>
               </Dropdown>
@@ -251,7 +251,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
         </Header>
         <Content
           style={{
-            margin: isMobile ? '16px 8px' : '24px 16px',
+            margin: isMobile ? "16px 8px" : "24px 16px",
             padding: isMobile ? 16 : 24,
             minHeight: 280,
             background: colorBgContainer,
