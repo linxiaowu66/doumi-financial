@@ -435,8 +435,20 @@ export default function FundList({
 
   return (
     <>
-      {Object.entries(groupedFunds).map(
-        ([category, categoryFunds]) => {
+      {Object.entries(groupedFunds)
+        .sort(([catA], [catB]) => {
+          const targetA = categoryTargets.find((t) => t.categoryName === catA)?.targetPercent || 0;
+          const targetB = categoryTargets.find((t) => t.categoryName === catB)?.targetPercent || 0;
+          return targetB - targetA;
+        })
+        .map(([category, fundsInCategory]) => {
+          // 按照基金的投入成本从高到低排序
+          const categoryFunds = [...fundsInCategory].sort((a, b) => {
+            const costA = fundsStats.get(a.id)?.holdingCost || 0;
+            const costB = fundsStats.get(b.id)?.holdingCost || 0;
+            return costB - costA;
+          });
+
           // 计算该分类下所有基金的持仓成本总和（已投入）
           const categoryHoldingCost = categoryFunds.reduce((sum, fund) => {
             const stats = fundsStats.get(fund.id);
