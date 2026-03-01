@@ -1,6 +1,6 @@
-import { NextResponse } from 'next/server';
-import prisma from '@/lib/prisma';
-import { Decimal } from '@prisma/client/runtime/library';
+import { NextResponse } from "next/server";
+import prisma from "@/lib/prisma";
+import { Decimal } from "@prisma/client/runtime/library";
 
 interface FundAlertItem {
   fundId: number;
@@ -9,7 +9,12 @@ interface FundAlertItem {
   directionId: number;
   directionName: string;
   category: string | null;
-  alertType: 'price_drop' | 'price_rise' | 'category_overdue' | 'category_overweight' | 'pending_transaction';
+  alertType:
+    | "price_drop"
+    | "price_rise"
+    | "category_overdue"
+    | "category_overweight"
+    | "pending_transaction";
   alertReason: string;
   latestBuyPrice?: number;
   currentPrice?: number;
@@ -32,10 +37,10 @@ export async function GET() {
         funds: {
           include: {
             transactions: {
-              orderBy: { date: 'asc' },
+              orderBy: { date: "asc" },
             },
             pendingTransactions: {
-              where: { status: 'WAITING' },
+              where: { status: "WAITING" },
             },
           },
         },
@@ -47,7 +52,7 @@ export async function GET() {
       return Math.abs(value) < 0.01 ? 0 : value;
     };
 
-    const PRECISION_THRESHOLD = new Decimal('0.01');
+    const PRECISION_THRESHOLD = new Decimal("0.01");
 
     // 遍历每个投资方向
     for (const direction of directions) {
@@ -62,7 +67,7 @@ export async function GET() {
             directionId: direction.id,
             directionName: direction.name,
             category: fund.category,
-            alertType: 'pending_transaction',
+            alertType: "pending_transaction",
             alertReason: `有 ${fund.pendingTransactions.length} 笔交易等待确认`,
             pendingCount: fund.pendingTransactions.length,
           });
@@ -70,24 +75,27 @@ export async function GET() {
       }
 
       // 按分类分组基金（用于检查分类预警）
-      const fundsByCategory = direction.funds.reduce((acc, fund) => {
-        const category = fund.category || 'uncategorized';
-        if (!acc[category]) {
-          acc[category] = [];
-        }
-        acc[category].push(fund);
-        return acc;
-      }, {} as Record<string, typeof direction.funds>);
+      const fundsByCategory = direction.funds.reduce(
+        (acc, fund) => {
+          const category = fund.category || "uncategorized";
+          if (!acc[category]) {
+            acc[category] = [];
+          }
+          acc[category].push(fund);
+          return acc;
+        },
+        {} as Record<string, typeof direction.funds>,
+      );
 
       // 检查每个分类的预警
       for (const [category, categoryFunds] of Object.entries(fundsByCategory)) {
         const categoryTarget = direction.categoryTargets.find(
-          (t) => t.categoryName === category
+          (t) => t.categoryName === category,
         );
 
         let categoryHoldingCost = 0;
         const categoryFundStats: Array<{
-          fund: typeof categoryFunds[0];
+          fund: (typeof categoryFunds)[0];
           holdingCost: number;
           holdingShares: number;
         }> = [];
@@ -100,10 +108,10 @@ export async function GET() {
             const amount = new Decimal(tx.amount);
             const shares = new Decimal(tx.shares);
 
-            if (tx.type === 'BUY') {
+            if (tx.type === "BUY") {
               totalShares = totalShares.plus(shares);
               totalCost = totalCost.plus(amount);
-            } else if (tx.type === 'SELL') {
+            } else if (tx.type === "SELL") {
               const sellShares = shares.abs();
               const avgCostAtSell = totalShares.greaterThan(0)
                 ? totalCost.dividedBy(totalShares)
@@ -111,7 +119,7 @@ export async function GET() {
               const costOfSold = avgCostAtSell.times(sellShares);
               totalShares = totalShares.minus(sellShares);
               totalCost = totalCost.minus(costOfSold);
-            } else if (tx.type === 'DIVIDEND' && tx.dividendReinvest) {
+            } else if (tx.type === "DIVIDEND" && tx.dividendReinvest) {
               totalShares = totalShares.plus(shares);
             }
           });
@@ -121,7 +129,9 @@ export async function GET() {
             totalCost = new Decimal(0);
           }
 
-          const holdingShares = normalizeZero(parseFloat(totalShares.toString()));
+          const holdingShares = normalizeZero(
+            parseFloat(totalShares.toString()),
+          );
           const holdingCost = normalizeZero(parseFloat(totalCost.toString()));
 
           categoryFundStats.push({ fund, holdingCost, holdingShares });
@@ -129,9 +139,16 @@ export async function GET() {
         }
 
         // 检查分类仓位超标
-        const targetPercentNum = categoryTarget ? Number(categoryTarget.targetPercent) : 0;
+        const targetPercentNum = categoryTarget
+          ? Number(categoryTarget.targetPercent)
+          : 0;
+        let isCategoryTargetReached = false;
         if (categoryTarget && targetPercentNum > 0) {
-          const targetAmount = (Number(direction.expectedAmount) * targetPercentNum) / 100;
+          const targetAmount =
+            (Number(direction.expectedAmount) * targetPercentNum) / 100;
+          if (categoryHoldingCost >= targetAmount * 0.995) {
+            isCategoryTargetReached = true;
+          }
           const overweightAmount = categoryHoldingCost - targetAmount;
 
           if (overweightAmount > 0) {
@@ -145,7 +162,7 @@ export async function GET() {
                   directionId: direction.id,
                   directionName: direction.name,
                   category: fund.category,
-                  alertType: 'category_overweight',
+                  alertType: "category_overweight",
                   alertReason: `${category} 分类仓位超标 ${overweightPercent.toFixed(1)}%`,
                   categoryHoldingCost,
                   categoryTargetAmount: targetAmount,
@@ -157,39 +174,47 @@ export async function GET() {
         }
 
         // 检查分类长期未买入
-        let categoryLastBuyDate: Date | null = null;
-        for (const { fund, holdingShares } of categoryFundStats) {
-          if (holdingShares === 0) continue;
-          const buyTransactions = fund.transactions.filter((tx) => tx.type === 'BUY');
-          if (buyTransactions.length > 0) {
-            const lastBuyDate = buyTransactions[buyTransactions.length - 1].date;
-            if (!categoryLastBuyDate || lastBuyDate > categoryLastBuyDate) {
-              categoryLastBuyDate = lastBuyDate;
+        if (!isCategoryTargetReached) {
+          let categoryLastBuyDate: Date | null = null;
+          for (const { fund, holdingShares } of categoryFundStats) {
+            if (holdingShares === 0) continue;
+            const buyTransactions = fund.transactions.filter(
+              (tx) => tx.type === "BUY",
+            );
+            if (buyTransactions.length > 0) {
+              const lastBuyDate =
+                buyTransactions[buyTransactions.length - 1].date;
+              if (!categoryLastBuyDate || lastBuyDate > categoryLastBuyDate) {
+                categoryLastBuyDate = lastBuyDate;
+              }
             }
           }
-        }
 
-        if (categoryLastBuyDate) {
-          const today = new Date();
-          today.setHours(0, 0, 0, 0);
-          const lastBuyDateNormalized = new Date(categoryLastBuyDate);
-          lastBuyDateNormalized.setHours(0, 0, 0, 0);
-          const daysDiff = Math.floor((today.getTime() - lastBuyDateNormalized.getTime()) / (1000 * 60 * 60 * 24));
+          if (categoryLastBuyDate) {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const lastBuyDateNormalized = new Date(categoryLastBuyDate);
+            lastBuyDateNormalized.setHours(0, 0, 0, 0);
+            const daysDiff = Math.floor(
+              (today.getTime() - lastBuyDateNormalized.getTime()) /
+                (1000 * 60 * 60 * 24),
+            );
 
-          if (daysDiff > 45) {
-            for (const { fund, holdingShares } of categoryFundStats) {
-              if (holdingShares > 0) {
-                alerts.push({
-                  fundId: fund.id,
-                  fundCode: fund.code,
-                  fundName: fund.name,
-                  directionId: direction.id,
-                  directionName: direction.name,
-                  category: fund.category,
-                  alertType: 'category_overdue',
-                  alertReason: `${category} 分类已 ${daysDiff} 天未买入`,
-                  daysSinceLastBuy: daysDiff,
-                });
+            if (daysDiff > 30) {
+              for (const { fund, holdingShares } of categoryFundStats) {
+                if (holdingShares > 0) {
+                  alerts.push({
+                    fundId: fund.id,
+                    fundCode: fund.code,
+                    fundName: fund.name,
+                    directionId: direction.id,
+                    directionName: direction.name,
+                    category: fund.category,
+                    alertType: "category_overdue",
+                    alertReason: `${category} 分类已 ${daysDiff} 天未买入`,
+                    daysSinceLastBuy: daysDiff,
+                  });
+                }
               }
             }
           }
@@ -200,19 +225,26 @@ export async function GET() {
       for (const fund of direction.funds) {
         let totalShares = new Decimal(0);
         fund.transactions.forEach((tx) => {
-          if (tx.type === 'BUY') totalShares = totalShares.plus(tx.shares);
-          else if (tx.type === 'SELL') totalShares = totalShares.minus(new Decimal(tx.shares).abs());
-          else if (tx.type === 'DIVIDEND' && tx.dividendReinvest) totalShares = totalShares.plus(tx.shares);
+          if (tx.type === "BUY") totalShares = totalShares.plus(tx.shares);
+          else if (tx.type === "SELL")
+            totalShares = totalShares.minus(new Decimal(tx.shares).abs());
+          else if (tx.type === "DIVIDEND" && tx.dividendReinvest)
+            totalShares = totalShares.plus(tx.shares);
         });
 
         if (normalizeZero(parseFloat(totalShares.toString())) === 0) continue;
 
-        const buyTransactions = fund.transactions.filter((tx) => tx.type === 'BUY');
+        const buyTransactions = fund.transactions.filter(
+          (tx) => tx.type === "BUY",
+        );
         if (buyTransactions.length === 0 || !fund.latestNetWorth) continue;
 
-        const latestBuyPrice = parseFloat(buyTransactions[buyTransactions.length - 1].price.toString());
+        const latestBuyPrice = parseFloat(
+          buyTransactions[buyTransactions.length - 1].price.toString(),
+        );
         const currentPrice = parseFloat(fund.latestNetWorth.toString());
-        const priceChangePercent = ((currentPrice - latestBuyPrice) / latestBuyPrice) * 100;
+        const priceChangePercent =
+          ((currentPrice - latestBuyPrice) / latestBuyPrice) * 100;
 
         if (priceChangePercent <= -5) {
           alerts.push({
@@ -222,7 +254,7 @@ export async function GET() {
             directionId: direction.id,
             directionName: direction.name,
             category: fund.category,
-            alertType: 'price_drop',
+            alertType: "price_drop",
             alertReason: `相比最新买入价格下跌 ${Math.abs(priceChangePercent).toFixed(1)}%`,
             latestBuyPrice,
             currentPrice,
@@ -236,7 +268,7 @@ export async function GET() {
             directionId: direction.id,
             directionName: direction.name,
             category: fund.category,
-            alertType: 'price_rise',
+            alertType: "price_rise",
             alertReason: `相比最新买入价格上涨 ${priceChangePercent.toFixed(1)}%`,
             latestBuyPrice,
             currentPrice,
@@ -248,7 +280,7 @@ export async function GET() {
 
     return NextResponse.json(alerts);
   } catch (error) {
-    console.error('获取预警信息失败:', error);
-    return NextResponse.json({ error: '获取预警信息失败' }, { status: 500 });
+    console.error("获取预警信息失败:", error);
+    return NextResponse.json({ error: "获取预警信息失败" }, { status: 500 });
   }
 }

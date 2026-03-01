@@ -33,7 +33,7 @@ export default function DirectionDetailPage({
   const [direction, setDirection] = useState<InvestmentDirection | null>(null);
   const [funds, setFunds] = useState<Fund[]>([]);
   const [fundsStats, setFundsStats] = useState<Map<number, FundStats>>(
-    new Map()
+    new Map(),
   );
   const [categoryTargets, setCategoryTargets] = useState<CategoryTarget[]>([]);
   const [summary, setSummary] = useState<DirectionSummary | null>(null);
@@ -172,7 +172,7 @@ export default function DirectionDetailPage({
   const loadCategoryTargets = useCallback(async () => {
     try {
       const response = await fetch(
-        `/api/category-targets?directionId=${directionId}`
+        `/api/category-targets?directionId=${directionId}`,
       );
       if (!response.ok) {
         setCategoryTargets([]);
@@ -193,7 +193,7 @@ export default function DirectionDetailPage({
   const loadSummary = useCallback(async () => {
     try {
       const response = await fetch(
-        `/api/investment-directions/${directionId}/summary`
+        `/api/investment-directions/${directionId}/summary`,
       );
       const data = await response.json();
       setSummary(data);
@@ -210,14 +210,17 @@ export default function DirectionDetailPage({
       today.setHours(0, 0, 0, 0);
 
       // 按分类分组
-      const groupedByCategory = fundsData.reduce((acc, fund) => {
-        if (!fund.category) return acc;
-        if (!acc[fund.category]) {
-          acc[fund.category] = [];
-        }
-        acc[fund.category].push(fund);
-        return acc;
-      }, {} as Record<string, Fund[]>);
+      const groupedByCategory = fundsData.reduce(
+        (acc, fund) => {
+          if (!fund.category) return acc;
+          if (!acc[fund.category]) {
+            acc[fund.category] = [];
+          }
+          acc[fund.category].push(fund);
+          return acc;
+        },
+        {} as Record<string, Fund[]>,
+      );
 
       // 检查每个分类
       Object.entries(groupedByCategory).forEach(([category, categoryFunds]) => {
@@ -237,7 +240,7 @@ export default function DirectionDetailPage({
 
           // 找到该基金的最后一次买入交易
           const buyTransactions = fund.transactions.filter(
-            (tx) => tx.type === "BUY"
+            (tx) => tx.type === "BUY",
           );
           if (buyTransactions.length === 0) {
             return;
@@ -245,7 +248,7 @@ export default function DirectionDetailPage({
 
           // 按日期排序，获取最后一次买入
           const lastBuy = buyTransactions.sort(
-            (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+            (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
           )[0];
 
           const lastBuyDate = new Date(lastBuy.date);
@@ -265,7 +268,7 @@ export default function DirectionDetailPage({
         // 计算分类距离上次买入的天数
         const daysDiff = Math.floor(
           (today.getTime() - categoryLastBuyDate.getTime()) /
-            (1000 * 60 * 60 * 24)
+            (1000 * 60 * 60 * 24),
         );
 
         // 检查条件1：分类距离上次买入超过30天
@@ -279,14 +282,14 @@ export default function DirectionDetailPage({
 
           // 找到该基金的最后一次买入交易
           const buyTransactions = fund.transactions.filter(
-            (tx) => tx.type === "BUY"
+            (tx) => tx.type === "BUY",
           );
           if (buyTransactions.length === 0) {
             return;
           }
 
           const lastBuy = buyTransactions.sort(
-            (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+            (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
           )[0];
 
           let condition2 = false;
@@ -318,7 +321,7 @@ export default function DirectionDetailPage({
         if (condition1) {
           // 检查该分类的仓位是否已经超过100%
           const categoryTarget = categoryTargets.find(
-            (t) => t.categoryName === category
+            (t) => t.categoryName === category,
           );
           const targetPercent = categoryTarget?.targetPercent || 0;
 
@@ -337,12 +340,12 @@ export default function DirectionDetailPage({
               }
             });
 
-            // 如果当前市值已经超过目标金额的100%，就不显示未买入提示
+            // 如果当前市值已经超过目标金额的99.5%，就不显示未买入提示
             const positionPercent =
               targetAmount > 0 ? (currentValue / targetAmount) * 100 : 0;
 
-            if (positionPercent >= 100) {
-              // 仓位已经超过100%，不需要提示未买入
+            if (positionPercent >= 99.5) {
+              // 仓位已经超过99.5%，不需要提示未买入
               return;
             }
           }
@@ -362,7 +365,7 @@ export default function DirectionDetailPage({
 
       setCategoryAlerts(alertsMap);
     },
-    [direction, categoryTargets]
+    [direction, categoryTargets],
   );
 
   // 使用 ref 存储函数引用，避免循环依赖
@@ -379,19 +382,22 @@ export default function DirectionDetailPage({
       }
 
       // 按分类分组
-      const groupedByCategory = fundsData.reduce((acc, fund) => {
-        if (!fund.category) return acc;
-        if (!acc[fund.category]) {
-          acc[fund.category] = [];
-        }
-        acc[fund.category].push(fund);
-        return acc;
-      }, {} as Record<string, Fund[]>);
+      const groupedByCategory = fundsData.reduce(
+        (acc, fund) => {
+          if (!fund.category) return acc;
+          if (!acc[fund.category]) {
+            acc[fund.category] = [];
+          }
+          acc[fund.category].push(fund);
+          return acc;
+        },
+        {} as Record<string, Fund[]>,
+      );
 
       // 检查每个分类
       Object.entries(groupedByCategory).forEach(([category, categoryFunds]) => {
         const categoryTarget = categoryTargets.find(
-          (t) => t.categoryName === category
+          (t) => t.categoryName === category,
         );
         const targetPercent = categoryTarget?.targetPercent || 0;
 
@@ -431,7 +437,7 @@ export default function DirectionDetailPage({
 
       setCategoryPositionAlerts(positionAlertsMap);
     },
-    [direction, categoryTargets]
+    [direction, categoryTargets],
   );
 
   // 使用 ref 存储函数引用，避免循环依赖
@@ -454,11 +460,11 @@ export default function DirectionDetailPage({
         new Set(
           data
             .map((fund: Fund) => fund.category)
-            .filter((cat: string | null) => cat && cat.trim() !== "")
-        )
+            .filter((cat: string | null) => cat && cat.trim() !== ""),
+        ),
       ) as string[];
       setCategoryOptions(
-        categories.sort().map((cat) => ({ label: cat, value: cat }))
+        categories.sort().map((cat) => ({ label: cat, value: cat })),
       );
 
       // 加载每个基金的统计信息
@@ -470,17 +476,17 @@ export default function DirectionDetailPage({
               `/api/funds/${fund.id}/stats${
                 fund.latestNetWorth
                   ? `?currentPrice=${encodeURIComponent(
-                      fund.latestNetWorth.toString()
+                      fund.latestNetWorth.toString(),
                     )}`
                   : ""
-              }`
+              }`,
             );
             const stats = await statsRes.json();
             statsMap.set(fund.id, stats);
           } catch (err) {
             console.error(`加载基金${fund.id}统计失败:`, err);
           }
-        })
+        }),
       );
       setFundsStats(statsMap);
 
@@ -513,7 +519,7 @@ export default function DirectionDetailPage({
     setChartLoading(true);
     try {
       const response = await fetch(
-        `/api/investment-directions/${directionId}/daily-profit?days=${chartDays}`
+        `/api/investment-directions/${directionId}/daily-profit?days=${chartDays}`,
       );
       const data = await response.json();
       if (response.ok && data.data) {
@@ -572,7 +578,7 @@ export default function DirectionDetailPage({
         remark: fund.remark,
         confirmDays: fund.confirmDays || 1,
         defaultBuyFee: fund.defaultBuyFee || 0.15,
-        defaultSellFee: fund.defaultSellFee || 0.50,
+        defaultSellFee: fund.defaultSellFee || 0.5,
       });
     } else {
       setEditingFund(null);
@@ -580,7 +586,7 @@ export default function DirectionDetailPage({
       form.setFieldsValue({
         confirmDays: 1,
         defaultBuyFee: 0.15,
-        defaultSellFee: 0.50,
+        defaultSellFee: 0.5,
       });
     }
     setCategorySearchValue("");
@@ -641,7 +647,7 @@ export default function DirectionDetailPage({
   // 打开设置分类目标弹窗
   const handleOpenTargetModal = (
     categoryName: string,
-    currentTargetPercent?: number
+    currentTargetPercent?: number,
   ) => {
     setEditingCategory(categoryName);
     targetForm.setFieldsValue({
@@ -680,7 +686,7 @@ export default function DirectionDetailPage({
   // 计算总计
   const totalHoldingCost = Array.from(fundsStats.values()).reduce(
     (sum, stats) => sum + stats.holdingCost,
-    0
+    0,
   );
 
   return (
@@ -751,7 +757,7 @@ export default function DirectionDetailPage({
               const trimmedValue = categorySearchValue.trim();
               if (trimmedValue !== "") {
                 const exists = categoryOptions.some(
-                  (opt) => opt.value === trimmedValue
+                  (opt) => opt.value === trimmedValue,
                 );
                 if (!exists) {
                   const newOption = {
@@ -761,7 +767,7 @@ export default function DirectionDetailPage({
                   setCategoryOptions((prev) => {
                     const newOptions = [...prev, newOption];
                     return newOptions.sort((a, b) =>
-                      a.value.localeCompare(b.value)
+                      a.value.localeCompare(b.value),
                     );
                   });
                   form.setFieldValue("category", trimmedValue);
@@ -775,7 +781,7 @@ export default function DirectionDetailPage({
             if (categorySearchValue && categorySearchValue.trim() !== "") {
               const trimmedValue = categorySearchValue.trim();
               const exists = categoryOptions.some(
-                (opt) => opt.value === trimmedValue
+                (opt) => opt.value === trimmedValue,
               );
               if (!exists) {
                 const newOption = {
@@ -785,7 +791,7 @@ export default function DirectionDetailPage({
                 setCategoryOptions((prev) => {
                   const newOptions = [...prev, newOption];
                   return newOptions.sort((a, b) =>
-                    a.value.localeCompare(b.value)
+                    a.value.localeCompare(b.value),
                   );
                 });
                 form.setFieldValue("category", trimmedValue);
