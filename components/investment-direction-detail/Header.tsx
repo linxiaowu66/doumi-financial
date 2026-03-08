@@ -1,5 +1,5 @@
 import { Card, Flex, Button, Typography, Space, Breadcrumb } from "antd";
-import { ArrowLeftOutlined, PlusOutlined, FundOutlined } from "@ant-design/icons";
+import { ArrowLeftOutlined, PlusOutlined, FundOutlined, RobotOutlined } from "@ant-design/icons";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { InvestmentDirection } from "@/types/investment-direction-detail";
@@ -10,12 +10,16 @@ interface HeaderProps {
   direction: InvestmentDirection | null;
   isMobile: boolean;
   onOpenModal: () => void;
+  onAnalyze: () => void;
+  analyzing: boolean;
 }
 
 export default function Header({
   direction,
   isMobile,
   onOpenModal,
+  onAnalyze,
+  analyzing,
 }: HeaderProps) {
   const router = useRouter();
 
@@ -67,15 +71,27 @@ export default function Header({
               </div>
             </Flex>
           </div>
-          <Button
-            type="primary"
-            icon={<PlusOutlined />}
-            size={isMobile ? "small" : "middle"}
-            onClick={onOpenModal}
-            block={isMobile}
-          >
-            新建基金
-          </Button>
+          <Space direction={isMobile ? "vertical" : "horizontal"} style={{ width: isMobile ? '100%' : 'auto' }}>
+            <Button
+              icon={<RobotOutlined />}
+              size={isMobile ? "small" : "middle"}
+              onClick={onAnalyze}
+              loading={analyzing}
+              block={isMobile}
+              style={{ backgroundColor: '#722ed1', borderColor: '#722ed1', color: '#fff' }}
+            >
+              AI 账户分析
+            </Button>
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              size={isMobile ? "small" : "middle"}
+              onClick={onOpenModal}
+              block={isMobile}
+            >
+              新建基金
+            </Button>
+          </Space>
         </Flex>
       </Card>
     </>

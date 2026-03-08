@@ -32,6 +32,7 @@ model InvestmentDirection {
   funds           Fund[] // 该方向下的基金
   categoryTargets CategoryTarget[] // 该方向下的分类目标
   dailyProfits    DirectionDailyProfit[] // 每日盈亏记录
+  analyses        InvestmentDirectionAnalysis[] // AI分析历史记录
 
   @@index([userId])
 }
@@ -151,3 +152,26 @@ model DirectionDailyProfit {
   @@index([directionId])
   @@index([date])
 }
+
+// AI分析历史记录
+model InvestmentDirectionAnalysis {
+  id          Int                 @id @default(autoincrement())
+  directionId Int
+  direction   InvestmentDirection @relation(fields: [directionId], references: [id], onDelete: Cascade)
+  content     String              @db.LongText
+  createdAt   DateTime            @default(now())
+
+  @@index([directionId])
+  @@index([createdAt])
+}
+
+// 年度盈利目标
+model AnnualProfitTarget {
+  id           Int      @id @default(autoincrement())
+  year         Int      @unique
+  targetAmount Decimal  @db.Decimal(15, 2)
+  actualAmount Decimal? @db.Decimal(15, 2)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+

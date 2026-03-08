@@ -26,7 +26,9 @@ export async function GET(request: Request) {
         _count: {
           select: {
             transactions: true,
-            plannedPurchases: true,
+            plannedPurchases: {
+              where: { status: 'PENDING' },
+            },
           },
         },
       },

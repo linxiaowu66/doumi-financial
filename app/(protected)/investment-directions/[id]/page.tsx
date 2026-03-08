@@ -1,7 +1,10 @@
 "use client";
 
 import { useState, useEffect, use, useCallback, useRef } from "react";
-import { Form, message } from "antd";
+import { Form, message, Modal, List, Button, Spin } from "antd";
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import dayjs from 'dayjs';
 import { useRouter } from "next/navigation";
 import {
   InvestmentDirection,
@@ -40,6 +43,12 @@ export default function DirectionDetailPage({
   const [loading, setLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [targetModalOpen, setTargetModalOpen] = useState(false);
+  const [analysisModalOpen, setAnalysisModalOpen] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [analysisResult, setAnalysisResult] = useState<string>("");
+  const [historyList, setHistoryList] = useState<Array<{ id: number; createdAt: string; content: string }>>([]);
+  const [fetchingHistory, setFetchingHistory] = useState(false);
+  const [viewingAnalysis, setViewingAnalysis] = useState<string | null>(null);
   const [editingCategory, setEditingCategory] = useState<string>("");
   const [editingFund, setEditingFund] = useState<Fund | null>(null);
   const [form] = Form.useForm();
@@ -69,7 +78,7 @@ export default function DirectionDetailPage({
   // 处理负数零的工具函数
   const normalizeZero = (value: number | undefined | null): number => {
     if (value === undefined || value === null) return 0;
-    return Math.abs(value) < 0.01 ? 0 : value;
+    return Math.abs(value) < 0.03 ? 0 : value;
   };
 
   // 判断基金是否清仓
@@ -567,6 +576,45 @@ export default function DirectionDetailPage({
     checkCategoryPositionAlerts,
   ]);
 
+  // 加载分析历史
+  const loadHistory = async () => {
+    setFetchingHistory(true);
+    try {
+      const res = await fetch(`/api/investment-directions/${directionId}/analyses`);
+      const data = await res.json();
+      setHistoryList(data);
+    } catch (error) {
+      message.error("获取分析历史失败");
+    } finally {
+      setFetchingHistory(false);
+    }
+  };
+
+  // 打开AI分析弹窗
+  const handleOpenAnalysisModal = () => {
+    setAnalysisModalOpen(true);
+    setViewingAnalysis(null);
+    loadHistory();
+  };
+
+  // AI分析账户
+  const handleAnalyze = async () => {
+    try {
+      setAnalyzing(true);
+      setViewingAnalysis(null);
+      const res = await fetch(`/api/investment-directions/${directionId}/analyze`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || '分析失败');
+      setViewingAnalysis(data.analysis || '未返回分析结果');
+      loadHistory();
+    } catch (error) {
+      console.error(error);
+      message.error(error instanceof Error ? error.message : 'AI 分析请求失败');
+    } finally {
+      setAnalyzing(false);
+    }
+  };
+
   // 打开新建/编辑弹窗
   const handleOpenModal = (fund?: Fund) => {
     if (fund) {
@@ -702,6 +750,8 @@ export default function DirectionDetailPage({
           direction={direction}
           isMobile={isMobile}
           onOpenModal={() => handleOpenModal()}
+          onAnalyze={handleOpenAnalysisModal}
+          analyzing={analyzing}
         />
 
         <StatsCards
@@ -812,6 +862,55 @@ export default function DirectionDetailPage({
           onFinish={handleSaveTarget}
           form={targetForm}
         />
+
+        <Modal
+          title="AI 投资账户分析报告"
+          open={analysisModalOpen}
+          onCancel={() => setAnalysisModalOpen(false)}
+          footer={null}
+          width={800}
+        >
+          <div style={{ maxHeight: '70vh', overflowY: 'auto', paddingRight: 10 }}>
+            {viewingAnalysis ? (
+              <>
+                <div style={{ marginBottom: 16 }}>
+                  <Button onClick={() => setViewingAnalysis(null)}>返回历史列表</Button>
+                </div>
+                <div className="markdown-body">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{viewingAnalysis}</ReactMarkdown>
+                </div>
+              </>
+            ) : analyzing ? (
+              <div style={{ textAlign: 'center', padding: '20px 0' }}><Spin tip="AI 分析中，请稍候..." /></div>
+            ) : fetchingHistory ? (
+              <div style={{ textAlign: 'center', padding: '20px 0' }}><Spin tip="加载历史记录中..." /></div>
+            ) : (
+              <>
+                <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span>历史分析记录 (共 {historyList.length} 条)</span>
+                  <Button type="primary" onClick={handleAnalyze} loading={analyzing}>生成新分析</Button>
+                </div>
+                <List
+                  dataSource={historyList}
+                  renderItem={(item) => (
+                    <List.Item
+                      actions={[
+                        <Button type="link" onClick={() => setViewingAnalysis(item.content)} key="view">
+                          查看
+                        </Button>
+                      ]}
+                    >
+                      <List.Item.Meta
+                        title={`分析报告 - ${dayjs(item.createdAt).format('YYYY-MM-DD HH:mm:ss')}`}
+                      />
+                    </List.Item>
+                  )}
+                  locale={{ emptyText: '暂无历史分析记录' }}
+                />
+              </>
+            )}
+          </div>
+        </Modal>
       </div>
     </div>
   );

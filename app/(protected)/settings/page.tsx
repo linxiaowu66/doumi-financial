@@ -9,10 +9,17 @@ import {
   Tag,
   Badge,
   Space,
+  Table,
+  Button,
+  Modal,
+  Form,
+  InputNumber,
+  Row,
+  Col,
 } from "antd";
 import type { Dayjs } from "dayjs";
 import dayjs from "dayjs";
-import { CalendarOutlined, InfoCircleOutlined } from "@ant-design/icons";
+import { CalendarOutlined, InfoCircleOutlined, AimOutlined, PlusOutlined, EditOutlined } from "@ant-design/icons";
 
 const { Title, Text } = Typography;
 
@@ -23,9 +30,22 @@ interface Holiday {
   remark: string | null;
 }
 
+interface AnnualProfitTarget {
+  id: number;
+  year: number;
+  targetAmount: number;
+  actualAmount: number | null;
+}
+
 export default function SettingsPage() {
   const [holidays, setHolidays] = useState<Map<string, Holiday>>(new Map());
   const [currentYear, setCurrentYear] = useState(dayjs().year());
+  
+  // Annual Targets State
+  const [annualTargets, setAnnualTargets] = useState<AnnualProfitTarget[]>([]);
+  const [isModalVisible, setIsModalVisible] = useState(false);
+  const [form] = Form.useForm();
+  const [editingTarget, setEditingTarget] = useState<AnnualProfitTarget | null>(null);
 
   // 加载节假日配置
   const loadHolidays = async (year: number) => {
@@ -47,8 +67,23 @@ export default function SettingsPage() {
     }
   };
 
+  // 加载年度目标
+  const loadAnnualTargets = async () => {
+    try {
+      const response = await fetch("/api/settings/annual-targets");
+      const data = await response.json();
+      if (Array.isArray(data)) {
+        setAnnualTargets(data);
+      }
+    } catch (error) {
+      console.error("加载年度目标失败:", error);
+      message.error("加载年度目标失败");
+    }
+  };
+
   useEffect(() => {
     loadHolidays(currentYear);
+    loadAnnualTargets();
   }, [currentYear]);
 
   // 处理日期点击
@@ -127,38 +162,187 @@ export default function SettingsPage() {
     return null;
   };
 
+  // 年度目标操作
+  const showModal = (target?: AnnualProfitTarget) => {
+    setEditingTarget(target || null);
+    if (target) {
+      form.setFieldsValue({
+        year: target.year,
+        targetAmount: target.targetAmount,
+      });
+    } else {
+      form.setFieldsValue({
+        year: dayjs().year(),
+        targetAmount: 0,
+      });
+    }
+    setIsModalVisible(true);
+  };
+
+  const handleCancel = () => {
+    setIsModalVisible(false);
+    form.resetFields();
+    setEditingTarget(null);
+  };
+
+  const handleSaveTarget = async () => {
+    try {
+      const values = await form.validateFields();
+      const res = await fetch("/api/settings/annual-targets", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(values),
+      });
+
+      if (res.ok) {
+        message.success("保存成功");
+        setIsModalVisible(false);
+        form.resetFields();
+        loadAnnualTargets();
+      } else {
+        message.error("保存失败");
+      }
+    } catch (error) {
+      console.error("保存失败:", error);
+    }
+  };
+
+  const targetColumns = [
+    {
+      title: "年份",
+      dataIndex: "year",
+      key: "year",
+      render: (text: number) => <Tag color="blue">{text}年</Tag>,
+    },
+    {
+      title: "目标盈利金额",
+      dataIndex: "targetAmount",
+      key: "targetAmount",
+      render: (amount: string | number) => (
+        <Text strong>¥ {Number(amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Text>
+      ),
+    },
+    {
+      title: "实际盈利金额",
+      dataIndex: "actualAmount",
+      key: "actualAmount",
+      render: (amount: string | number | null) => (
+        <Text type={amount && Number(amount) < 0 ? "danger" : "success"} strong>
+          {amount !== null ? `¥ ${Number(amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "-"}
+        </Text>
+      ),
+    },
+    {
+      title: "操作",
+      key: "action",
+      render: (_: any, record: AnnualProfitTarget) => (
+        <Button 
+          type="link" 
+          icon={<EditOutlined />} 
+          onClick={() => showModal(record)}
+        >
+          编辑
+        </Button>
+      ),
+    },
+  ];
+
   return (
     <div style={{ padding: "24px", minHeight: "100vh", background: "#f5f5f5" }}>
-      <div style={{ maxWidth: 1000, margin: "0 auto" }}>
+      <div style={{ maxWidth: 1200, margin: "0 auto" }}>
         <Title level={2} style={{ marginBottom: 24 }}>
-          <CalendarOutlined /> 系统设置
+          系统设置
         </Title>
         
-        <Card 
-            title="节假日配置" 
-            extra={
-                <Space>
-                    <InfoCircleOutlined style={{ color: '#1890ff' }} />
-                    <Text type="secondary">点击日期可在“默认”、“节假日”、“调休工作日”之间切换</Text>
+        <Row gutter={[24, 24]}>
+          <Col xs={24} lg={12}>
+            <Card 
+                title={<><CalendarOutlined /> 节假日配置</>}
+                extra={
+                    <Space>
+                        <InfoCircleOutlined style={{ color: '#1890ff' }} />
+                        <Text type="secondary">点击日期切换状态</Text>
+                    </Space>
+                }
+            >
+              <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'center' }}>
+                <Space size="middle">
+                  <Badge color="red" text="节假日" />
+                  <Badge color="blue" text="调休" />
+                  <Badge status="default" text="默认" />
                 </Space>
-            }
-        >
-          <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'center' }}>
-            <Space size="large">
-              <Badge color="red" text="节假日 (HOLIDAY)" />
-              <Badge color="blue" text="调休工作日 (WORKDAY)" />
-              <Badge status="default" text="默认 (周末休，周一至五班)" />
-            </Space>
-          </div>
+              </div>
+              
+              <Calendar 
+                onPanelChange={(value) => setCurrentYear(value.year())}
+                dateCellRender={dateCellRender}
+                onSelect={onSelect}
+                fullscreen={false} 
+              />
+            </Card>
+          </Col>
           
-          <Calendar 
-            onPanelChange={(value) => setCurrentYear(value.year())}
-            dateCellRender={dateCellRender}
-            onSelect={onSelect}
-            fullscreen={false} 
-          />
-        </Card>
+          <Col xs={24} lg={12}>
+            <Card 
+              title={<><AimOutlined /> 年度盈利目标</>}
+              extra={
+                <Button 
+                  type="primary" 
+                  icon={<PlusOutlined />} 
+                  onClick={() => showModal()}
+                >
+                  添加目标
+                </Button>
+              }
+            >
+              <Table 
+                dataSource={annualTargets} 
+                columns={targetColumns} 
+                rowKey="id" 
+                pagination={false}
+              />
+            </Card>
+          </Col>
+        </Row>
       </div>
+
+      <Modal
+        title={editingTarget ? "编辑年度盈利目标" : "添加年度盈利目标"}
+        open={isModalVisible}
+        onOk={handleSaveTarget}
+        onCancel={handleCancel}
+        okText="保存"
+        cancelText="取消"
+        destroyOnClose
+      >
+        <Form form={form} layout="vertical">
+          <Form.Item
+            name="year"
+            label="年份"
+            rules={[{ required: true, message: "请输入年份" }]}
+          >
+            <InputNumber 
+              style={{ width: "100%" }} 
+              placeholder="如：2025" 
+              min={2000} 
+              max={2100}
+              disabled={!!editingTarget} // 编辑时不可修改年份
+            />
+          </Form.Item>
+          <Form.Item
+            name="targetAmount"
+            label="目标盈利金额 (¥)"
+            rules={[{ required: true, message: "请输入目标盈利金额" }]}
+          >
+            <InputNumber 
+              style={{ width: "100%" }} 
+              placeholder="输入目标金额" 
+              precision={2}
+              step={1000}
+            />
+          </Form.Item>
+        </Form>
+      </Modal>
     </div>
   );
 }

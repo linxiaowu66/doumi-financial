@@ -87,8 +87,8 @@ export async function GET(
       }
 
       // 处理精度问题：如果份额接近0，直接设为0（同时成本也设为0）
-      // 使用更大的阈值（0.01），因为实际计算中可能产生 -0.0039 这样的值
-      const PRECISION_THRESHOLD = new Decimal("0.01");
+      // 使用更大的阈值（0.03），因为实际计算中可能产生 -0.0039 这样的值
+      const PRECISION_THRESHOLD = new Decimal("0.03");
       if (fundShares.abs().lessThan(PRECISION_THRESHOLD)) {
         fundShares = new Decimal(0);
         fundCost = new Decimal(0);
@@ -109,7 +109,7 @@ export async function GET(
     }
 
     // 处理精度问题：确保接近0的值都设为0
-    const PRECISION_THRESHOLD = new Decimal("0.01");
+    const PRECISION_THRESHOLD = new Decimal("0.03");
     if (totalCost.abs().lessThan(PRECISION_THRESHOLD)) {
       totalCost = new Decimal(0);
     }
@@ -129,10 +129,10 @@ export async function GET(
       : totalProfit.dividedBy(totalInvested).times(100); // 累计收益率
 
     // 处理负数零的工具函数
-    // 使用更大的阈值（0.01），确保接近0的值都被归一化
+    // 使用更大的阈值（0.03），确保接近0的值都被归一化
     const normalizeZero = (value: Decimal): string => {
       const num = parseFloat(value.toString());
-      const normalized = Math.abs(num) < 0.01 ? 0 : num;
+      const normalized = Math.abs(num) < 0.03 ? 0 : num;
       return normalized.toFixed(2);
     };
 

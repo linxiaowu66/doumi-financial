@@ -49,10 +49,10 @@ export async function GET() {
     });
 
     const normalizeZero = (value: number): number => {
-      return Math.abs(value) < 0.01 ? 0 : value;
+      return Math.abs(value) < 0.03 ? 0 : value;
     };
 
-    const PRECISION_THRESHOLD = new Decimal("0.01");
+    const PRECISION_THRESHOLD = new Decimal("0.03");
 
     // 遍历每个投资方向
     for (const direction of directions) {

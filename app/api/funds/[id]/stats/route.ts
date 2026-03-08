@@ -67,8 +67,8 @@ export async function GET(
     });
 
     // 在 Decimal 层面处理精度问题：如果份额接近0，直接设为0（同时成本也设为0）
-    // 使用更大的阈值（0.01），因为实际计算中可能产生 -0.0039 这样的值
-    const PRECISION_THRESHOLD = new Decimal("0.01");
+    // 使用更大的阈值（0.03），因为实际计算中可能产生 -0.0039 这样的值
+    const PRECISION_THRESHOLD = new Decimal("0.03");
     if (totalShares.abs().lessThan(PRECISION_THRESHOLD)) {
       totalShares = new Decimal(0);
       totalCost = new Decimal(0);
@@ -88,9 +88,9 @@ export async function GET(
     });
 
     // 转换为 float，并处理负数零问题
-    // 使用更大的阈值（0.01），确保接近0的值都被归一化
+    // 使用更大的阈值（0.03），确保接近0的值都被归一化
     const normalizeZero = (value: number): number => {
-      return Math.abs(value) < 0.01 ? 0 : value;
+      return Math.abs(value) < 0.03 ? 0 : value;
     };
 
     const holdingShares = normalizeZero(parseFloat(totalShares.toString()));

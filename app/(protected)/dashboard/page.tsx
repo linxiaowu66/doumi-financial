@@ -15,6 +15,7 @@ import {
   FundOutlined,
   DollarOutlined,
   RiseOutlined,
+  FallOutlined,
   LineChartOutlined,
   PlusOutlined,
   SyncOutlined,
@@ -39,11 +40,21 @@ interface DashboardSummary {
   totalProfitRate: string; // 累计盈亏率(%)
   todayProfit: string; // 最近交易日盈亏
   todayProfitRate: string; // 最近交易日盈亏率(%)
+  monthProfit: string; // 本月盈亏
+  monthProfitRate: string; // 本月盈亏率(%)
+  yearProfit: string; // 今年盈亏
+  yearProfitRate: string; // 今年盈亏率(%)
+  annualTargetAmount?: string; // 本年度盈利目标
   lastTradeDate: string; // 最近交易日日期
   totalCurrentValue: string; // 当前总市值
   totalCost: string; // 持仓总成本
   totalInvested: string; // 历史总投入
   directionCount: number; // 投资方向数量
+  directionStats: Record<number, {
+    holdingProfit: string;
+    totalProfitRate: string;
+    monthProfit: string;
+  }>;
 }
 
 interface UpdateResult {
@@ -272,21 +283,17 @@ export default function HomePage() {
         {/* 盈亏统计卡片 */}
         {summary && (
           <Row gutter={[16, 16]} style={{ marginBottom: isMobile ? 16 : 24 }}>
-            <Col xs={12} sm={12} lg={12}>
+            <Col xs={12} sm={12} lg={6}>
               <Card>
                 <Statistic
-                  title={
-                    summary.lastTradeDate
-                      ? `${summary.lastTradeDate.slice(5)} 盈亏`
-                      : '最近盈亏'
-                  }
-                  value={parseFloat(summary.todayProfit)}
+                  title="今日盈亏"
+                  value={Math.abs(parseFloat(summary.todayProfit))}
                   precision={2}
                   prefix={
                     parseFloat(summary.todayProfit) >= 0 ? (
                       <RiseOutlined />
                     ) : (
-                      '¥'
+                      <FallOutlined />
                     )
                   }
                   valueStyle={{
@@ -297,32 +304,119 @@ export default function HomePage() {
                     fontSize: isMobile ? 20 : 28,
                     fontWeight: 'bold',
                   }}
-                  suffix={
-                    <div
-                      style={{
-                        fontSize: isMobile ? 14 : 16,
-                        fontWeight: 'normal',
-                        marginLeft: 8,
-                      }}
-                    >
-                      ({parseFloat(summary.todayProfitRate) >= 0 ? '+' : ''}
-                      {parseFloat(summary.todayProfitRate).toFixed(2)}%)
-                    </div>
-                  }
                 />
+                <div
+                  style={{
+                    fontSize: isMobile ? 14 : 16,
+                    color:
+                      parseFloat(summary.todayProfit) >= 0
+                        ? '#cf1322'
+                        : '#3f8600',
+                    marginTop: 8,
+                  }}
+                >
+                  ({parseFloat(summary.todayProfitRate) >= 0 ? '+' : ''}
+                  {parseFloat(summary.todayProfitRate).toFixed(2)}%)
+                </div>
               </Card>
             </Col>
-            <Col xs={12} sm={12} lg={12}>
+            <Col xs={12} sm={12} lg={6}>
+              <Card>
+                <Statistic
+                  title="本月盈亏"
+                  value={Math.abs(parseFloat(summary.monthProfit))}
+                  precision={2}
+                  prefix={
+                    parseFloat(summary.monthProfit) >= 0 ? (
+                      <RiseOutlined />
+                    ) : (
+                      <FallOutlined />
+                    )
+                  }
+                  valueStyle={{
+                    color:
+                      parseFloat(summary.monthProfit) >= 0
+                        ? '#cf1322'
+                        : '#3f8600',
+                    fontSize: isMobile ? 20 : 28,
+                    fontWeight: 'bold',
+                  }}
+                />
+                <div
+                  style={{
+                    fontSize: isMobile ? 14 : 16,
+                    color:
+                      parseFloat(summary.monthProfit) >= 0
+                        ? '#cf1322'
+                        : '#3f8600',
+                    marginTop: 8,
+                  }}
+                >
+                  ({parseFloat(summary.monthProfitRate) >= 0 ? '+' : ''}
+                  {parseFloat(summary.monthProfitRate).toFixed(2)}%)
+                </div>
+              </Card>
+            </Col>
+            <Col xs={12} sm={12} lg={6}>
+              <Card>
+                <Statistic
+                  title={
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span>今年盈亏</span>
+                      {summary.annualTargetAmount && parseFloat(summary.annualTargetAmount) > 0 && (
+                        <span style={{ fontSize: 11, color: '#999', fontWeight: 'normal' }}>
+                          目标: ¥{parseFloat(summary.annualTargetAmount).toLocaleString(undefined, { maximumFractionDigits: 0 })} 
+                          <span style={{ marginLeft: 4, color: parseFloat(summary.yearProfit) >= parseFloat(summary.annualTargetAmount) ? '#cf1322' : '#faad14' }}>
+                            ({(parseFloat(summary.yearProfit) / parseFloat(summary.annualTargetAmount) * 100).toFixed(1)}%)
+                          </span>
+                        </span>
+                      )}
+                    </div>
+                  }
+                  value={Math.abs(parseFloat(summary.yearProfit))}
+                  precision={2}
+                  prefix={
+                    parseFloat(summary.yearProfit) >= 0 ? (
+                      <RiseOutlined />
+                    ) : (
+                      <FallOutlined />
+                    )
+                  }
+                  valueStyle={{
+                    color:
+                      parseFloat(summary.yearProfit) >= 0
+                        ? '#cf1322'
+                        : '#3f8600',
+                    fontSize: isMobile ? 20 : 28,
+                    fontWeight: 'bold',
+                  }}
+                />
+                <div
+                  style={{
+                    fontSize: isMobile ? 14 : 16,
+                    color:
+                      parseFloat(summary.yearProfit) >= 0
+                        ? '#cf1322'
+                        : '#3f8600',
+                    marginTop: 8,
+                  }}
+                >
+                  ({parseFloat(summary.yearProfitRate) >= 0 ? '+' : ''}
+                  {parseFloat(summary.yearProfitRate).toFixed(2)}%)
+                </div>
+              </Card>
+            </Col>
+            <Col xs={12} sm={12} lg={6}>
               <Card>
                 <Statistic
                   title="累计盈亏"
-                  value={parseFloat(summary.totalProfit)}
+                  value={Math.abs(parseFloat(summary.totalProfit))}
                   precision={2}
                   prefix={
                     parseFloat(summary.totalProfit) >= 0 ? (
                       <RiseOutlined />
                     ) : (
-                      '¥'
+                      <FallOutlined />
                     )
                   }
                   valueStyle={{
@@ -333,19 +427,20 @@ export default function HomePage() {
                     fontSize: isMobile ? 20 : 28,
                     fontWeight: 'bold',
                   }}
-                  suffix={
-                    <div
-                      style={{
-                        fontSize: isMobile ? 14 : 16,
-                        fontWeight: 'normal',
-                        marginLeft: 8,
-                      }}
-                    >
-                      ({parseFloat(summary.totalProfitRate) >= 0 ? '+' : ''}
-                      {parseFloat(summary.totalProfitRate).toFixed(2)}%)
-                    </div>
-                  }
                 />
+                <div
+                  style={{
+                    fontSize: isMobile ? 14 : 16,
+                    color:
+                      parseFloat(summary.totalProfit) >= 0
+                        ? '#cf1322'
+                        : '#3f8600',
+                    marginTop: 8,
+                  }}
+                >
+                  ({parseFloat(summary.totalProfitRate) >= 0 ? '+' : ''}
+                  {parseFloat(summary.totalProfitRate).toFixed(2)}%)
+                </div>
               </Card>
             </Col>
           </Row>
@@ -383,6 +478,8 @@ export default function HomePage() {
                       100
                     : 0;
 
+                const stats = summary?.directionStats?.[direction.id];
+
                 return (
                   <Col xs={24} sm={12} lg={8} key={direction.id}>
                     <Link href={`/investment-directions/${direction.id}`}>
@@ -402,23 +499,42 @@ export default function HomePage() {
                               {direction.name}
                             </h3>
                           </div>
-                          <Row gutter={16}>
-                            <Col span={12}>
+                          <Row gutter={8}>
+                            <Col span={8}>
                               <Statistic
-                                title="预期投入"
-                                value={parseFloat(direction.expectedAmount)}
-                                precision={0}
-                                prefix="¥"
-                                styles={{ content: { fontSize: 16 } }}
+                                title={<span style={{ fontSize: 12 }}>持仓收益</span>}
+                                value={stats ? parseFloat(stats.holdingProfit) : 0}
+                                precision={2}
+                                valueStyle={{
+                                  color: stats && parseFloat(stats.holdingProfit) >= 0 ? '#cf1322' : '#3f8600',
+                                  fontSize: 15,
+                                  fontWeight: 500
+                                }}
                               />
                             </Col>
-                            <Col span={12}>
+                            <Col span={8}>
                               <Statistic
-                                title="实际投入"
-                                value={parseFloat(direction.actualAmount)}
-                                precision={0}
-                                prefix="¥"
-                                styles={{ content: { fontSize: 16 } }}
+                                title={<span style={{ fontSize: 12 }}>累计收益率</span>}
+                                value={stats ? parseFloat(stats.totalProfitRate) : 0}
+                                precision={2}
+                                suffix="%"
+                                valueStyle={{
+                                  color: stats && parseFloat(stats.totalProfitRate) >= 0 ? '#cf1322' : '#3f8600',
+                                  fontSize: 15,
+                                  fontWeight: 500
+                                }}
+                              />
+                            </Col>
+                            <Col span={8}>
+                              <Statistic
+                                title={<span style={{ fontSize: 12 }}>本月盈亏</span>}
+                                value={stats ? parseFloat(stats.monthProfit) : 0}
+                                precision={2}
+                                valueStyle={{
+                                  color: stats && parseFloat(stats.monthProfit) >= 0 ? '#cf1322' : '#3f8600',
+                                  fontSize: 15,
+                                  fontWeight: 500
+                                }}
                               />
                             </Col>
                           </Row>

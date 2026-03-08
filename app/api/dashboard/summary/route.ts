@@ -25,12 +25,16 @@ export async function GET() {
     let totalCost = new Decimal(0); // 持仓总成本
     let totalInvested = new Decimal(0); // 历史总投入（用于计算累计收益率）
 
+    const directionStatsMap: Record<number, { holdingProfit: string; totalProfitRate: string; monthProfit: string }> = {};
+
     // 遍历每个投资方向，计算其累计收益
     for (const direction of directions) {
       // 初始化该投资方向的统计
       let directionProfit = new Decimal(0);
       let directionCurrentValue = new Decimal(0);
       let directionCost = new Decimal(0);
+      let directionHoldingProfit = new Decimal(0);
+      let directionInvested = new Decimal(0);
 
       // 遍历该投资方向下的每只基金
       for (const fund of direction.funds) {
@@ -52,6 +56,7 @@ export async function GET() {
             fundShares = fundShares.plus(shares);
             fundCost = fundCost.plus(amount);
             totalInvested = totalInvested.plus(amount);
+            directionInvested = directionInvested.plus(amount);
           } else if (tx.type === 'SELL') {
             // 卖出：减少份额和成本
             const sellShares = shares.abs();
@@ -99,7 +104,16 @@ export async function GET() {
         directionProfit = directionProfit.plus(fundTotalProfit);
         directionCurrentValue = directionCurrentValue.plus(fundCurrentValue);
         directionCost = directionCost.plus(fundCost);
+        directionHoldingProfit = directionHoldingProfit.plus(fundHoldingProfit);
       }
+
+      directionStatsMap[direction.id] = {
+        holdingProfit: directionHoldingProfit.toFixed(2),
+        totalProfitRate: directionInvested.isZero()
+          ? '0.00'
+          : directionProfit.dividedBy(directionInvested).times(100).toFixed(2),
+        monthProfit: '0.00',
+      };
 
       totalProfit = totalProfit.plus(directionProfit);
       totalCurrentValue = totalCurrentValue.plus(directionCurrentValue);
@@ -139,6 +153,34 @@ export async function GET() {
       );
     }
 
+    // 计算本月和今年盈亏
+    const firstDayOfYear = dayjs().startOf('year').toDate();
+    const firstDayOfMonth = dayjs().startOf('month').toDate();
+
+    const yearRecords = await prisma.directionDailyProfit.findMany({
+      where: {
+        date: { gte: firstDayOfYear }
+      }
+    });
+
+    let yearProfit = new Decimal(0);
+    let monthProfit = new Decimal(0);
+
+    yearRecords.forEach(record => {
+      const profit = new Decimal(record.dailyProfit.toString());
+      yearProfit = yearProfit.plus(profit);
+      
+      // 注意：由于存储的是计算日期（即通常表示前一天的盈亏），
+      // 但为了简单汇总，只要日历日期在本月内即可（这可能包含上个月最后一天的盈亏，取决于计算时间）
+      // 为保证准确，可以简单地按记录的 date 字段聚合
+      if (dayjs(record.date).isAfter(dayjs(firstDayOfMonth).subtract(1, 'second'))) {
+        monthProfit = monthProfit.plus(profit);
+        if (directionStatsMap[record.directionId]) {
+          directionStatsMap[record.directionId].monthProfit = new Decimal(directionStatsMap[record.directionId].monthProfit).plus(profit).toFixed(2);
+        }
+      }
+    });
+
     // 计算盈亏率
     // 累计盈亏率 = 累计盈亏 / 历史总投入 × 100%
     const totalProfitRate = totalInvested.isZero()
@@ -152,16 +194,40 @@ export async function GET() {
       ? new Decimal(0)
       : todayProfit.dividedBy(yesterdayTotalValue).times(100);
 
+    // 本月盈亏率 = 本月盈亏 / (当前总市值 - 本月盈亏) × 100%
+    const lastMonthTotalValue = totalCurrentValue.minus(monthProfit);
+    const monthProfitRate = lastMonthTotalValue.isZero()
+      ? new Decimal(0)
+      : monthProfit.dividedBy(lastMonthTotalValue).times(100);
+
+    // 今年盈亏率 = 今年盈亏 / (当前总市值 - 今年盈亏) × 100%
+    const lastYearTotalValue = totalCurrentValue.minus(yearProfit);
+    const yearProfitRate = lastYearTotalValue.isZero()
+      ? new Decimal(0)
+      : yearProfit.dividedBy(lastYearTotalValue).times(100);
+
+    const currentYear = dayjs().year();
+    const annualTarget = await prisma.annualProfitTarget.findUnique({
+      where: { year: currentYear }
+    });
+    const annualTargetAmount = annualTarget ? new Decimal(annualTarget.targetAmount.toString()) : new Decimal(0);
+
     return NextResponse.json({
       totalProfit: totalProfit.toFixed(2), // 累计盈亏
       totalProfitRate: totalProfitRate.toFixed(2), // 累计盈亏率(%)
       todayProfit: todayProfit.toFixed(2), // 最近交易日盈亏
       todayProfitRate: todayProfitRate.toFixed(2), // 最近交易日盈亏率(%)
+      monthProfit: monthProfit.toFixed(2), // 本月盈亏
+      monthProfitRate: monthProfitRate.toFixed(2), // 本月盈亏率(%)
+      yearProfit: yearProfit.toFixed(2), // 今年盈亏
+      yearProfitRate: yearProfitRate.toFixed(2), // 今年盈亏率(%)
+      annualTargetAmount: annualTargetAmount.toFixed(2), // 本年度盈利目标
       lastTradeDate: lastTradeDate || '', // 最近交易日日期
       totalCurrentValue: totalCurrentValue.toFixed(2), // 当前总市值
       totalCost: totalCost.toFixed(2), // 持仓总成本
       totalInvested: totalInvested.toFixed(2), // 历史总投入
       directionCount: directions.length, // 投资方向数量
+      directionStats: directionStatsMap, // 各投资方向的额外统计数据
     });
   } catch (error: unknown) {
     console.error('获取Dashboard汇总统计失败:', error);

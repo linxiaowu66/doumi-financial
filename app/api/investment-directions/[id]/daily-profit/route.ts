@@ -70,7 +70,7 @@ export async function GET(
     // 条件：每日盈亏为0 且 累计盈亏率和前一天相同（表示没有变化）
     const filteredData = mappedData.filter((item, index) => {
       // 如果每日盈亏不为0，保留
-      if (Math.abs(item.dailyProfit) > 0.01) {
+      if (Math.abs(item.dailyProfit) > 0.02) {
         return true;
       }
 
