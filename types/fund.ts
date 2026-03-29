@@ -24,6 +24,7 @@ export interface Fund {
   direction: {
     id: number;
     name: string;
+    type?: string;
   };
   pendingTransactions?: PendingTransaction[];
 }

@@ -27,6 +27,7 @@ interface FundModalProps {
   form: FormInstance;
   onKeyDown: (e: React.KeyboardEvent) => void;
   onBlur: () => void;
+  directionType?: "FUND" | "STOCK";
 }
 
 export default function FundModal({
@@ -42,10 +43,21 @@ export default function FundModal({
   form,
   onKeyDown,
   onBlur,
+  directionType = "FUND",
 }: FundModalProps) {
+  const isStock = directionType === "STOCK";
+
   return (
     <Modal
-      title={editingFund ? "编辑基金" : "新建基金"}
+      title={
+        editingFund
+          ? isStock
+            ? "编辑股票"
+            : "编辑基金"
+          : isStock
+            ? "新建股票"
+            : "新建基金"
+      }
       open={open}
       onCancel={onCancel}
       footer={null}
@@ -60,11 +72,23 @@ export default function FundModal({
         <Row gutter={16}>
           <Col span={12}>
             <Form.Item
-              label="基金代码"
+              label={isStock ? "股票代码" : "基金代码"}
               name="code"
-              rules={[{ required: true, message: "请输入基金代码" }]}
+              rules={[
+                {
+                  required: true,
+                  message: `请输入${isStock ? "股票" : "基金"}代码`,
+                },
+              ]}
             >
-              <Input placeholder="如：000001" size="large" />
+              <Input
+                placeholder={
+                  isStock
+                    ? "如：sh600519 或 sz000001"
+                    : "如：000001 或 sh600519"
+                }
+                size="large"
+              />
             </Form.Item>
           </Col>
           <Col span={12}>
@@ -109,10 +133,13 @@ export default function FundModal({
             <Form.Item
               label="确认天数"
               name="confirmDays"
-              initialValue={1}
-              tooltip="交易确认所需工作日"
+              initialValue={isStock ? 0 : 1}
+              tooltip={
+                isStock ? "股票通常成交即确认，设为0" : "交易确认所需工作日"
+              }
             >
               <Select size="large">
+                {isStock && <Select.Option value={0}>T+0 (即时)</Select.Option>}
                 <Select.Option value={1}>T+1 (境内)</Select.Option>
                 <Select.Option value={2}>T+2 (QDII)</Select.Option>
               </Select>
@@ -122,17 +149,18 @@ export default function FundModal({
             <Form.Item
               label="买入费率 (%)"
               name="defaultBuyFee"
-              initialValue={0.15}
-              tooltip="预估买入费率"
+              initialValue={isStock ? 0 : 0.15}
+              tooltip={isStock ? "股票交易将使用系统费率设置" : "预估买入费率"}
             >
               <InputNumber<number>
                 min={0}
                 max={100}
-                precision={2}
+                precision={4}
                 step={0.01}
                 addonAfter="%"
                 style={{ width: "100%" }}
                 size="large"
+                disabled={isStock}
               />
             </Form.Item>
           </Col>
@@ -140,37 +168,56 @@ export default function FundModal({
             <Form.Item
               label="卖出费率 (%)"
               name="defaultSellFee"
-              initialValue={0.50}
-              tooltip="预估卖出费率"
+              initialValue={isStock ? 0 : 0.5}
+              tooltip={isStock ? "股票交易将使用系统费率设置" : "预估卖出费率"}
             >
               <InputNumber<number>
                 min={0}
                 max={100}
-                precision={2}
+                precision={4}
                 step={0.01}
                 addonAfter="%"
                 style={{ width: "100%" }}
                 size="large"
+                disabled={isStock}
               />
             </Form.Item>
           </Col>
         </Row>
 
         <Form.Item
-          label="基金名称"
+          label={isStock ? "股票名称" : "基金名称"}
           name="name"
-          rules={[{ required: true, message: "请输入基金名称" }]}
+          rules={[
+            {
+              required: true,
+              message: `请输入${isStock ? "股票" : "基金"}名称`,
+            },
+          ]}
         >
-          <Input placeholder="如：华夏上证50ETF" size="large" />
+          <Input
+            placeholder={
+              isStock
+                ? "如：贵州茅台 或 腾讯控股"
+                : "如：华夏上证50ETF 或 贵州茅台"
+            }
+            size="large"
+          />
         </Form.Item>
 
         <Form.Item
           label="备注"
           name="remark"
-          tooltip="记录限购、换购等特殊情况"
+          tooltip={
+            isStock ? "记录投资理由、持仓策略等" : "记录限购、换购等特殊情况"
+          }
         >
           <TextArea
-            placeholder="如：该基金QDII限购，改买XXX基金"
+            placeholder={
+              isStock
+                ? "如：该股属于XX板块，长期持有"
+                : "如：该基金QDII限购，改买XXX基金"
+            }
             rows={3}
           />
         </Form.Item>

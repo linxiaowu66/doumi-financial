@@ -1,10 +1,11 @@
-import { NextResponse } from 'next/server';
+import { NextResponse } from "next/server";
 import {
   saveAllDirectionsDailyProfit,
   saveDirectionDailyProfitRange,
-} from '@/lib/direction-daily-profit';
-import { updateActualAmountByFundId } from '@/lib/investment-direction';
-import prisma from '@/lib/prisma';
+} from "@/lib/direction-daily-profit";
+import { updateActualAmountByFundId } from "@/lib/investment-direction";
+import prisma from "@/lib/prisma";
+import { isStockCode } from "@/lib/fund-price";
 
 // 延迟函数，用于避免限流
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -12,14 +13,30 @@ const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 // 获取单个基金净值（复用批量更新的逻辑）
 async function fetchFundNetWorth(code: string) {
   try {
+    const stockCheck = isStockCode(code);
+    if (stockCheck.isStock) {
+      const url = `https://push2his.eastmoney.com/api/qt/stock/kline/get?secid=${stockCheck.secid}.${stockCheck.stockCode}&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61&klt=101&fqt=1&end=20500101&lmt=1`;
+      const res = await fetch(url, { cache: "no-store" });
+      const data = await res.json();
+
+      if (data?.data?.klines && data.data.klines.length > 0) {
+        const parts = data.data.klines[0].split(",");
+        return {
+          netWorth: parseFloat(parts[2]),
+          netWorthDate: parts[0],
+        };
+      }
+      return null;
+    }
+
     // 优先尝试东方财富移动端API
     try {
       const eastmoneyUrl = `https://fundmobapi.eastmoney.com/FundMNewApi/FundMNFInfo?pageIndex=1&pageSize=20&plat=Android&appType=ttjj&product=EFund&Version=1&deviceid=123&Fcodes=${code}`;
       const eastmoneyResponse = await fetch(eastmoneyUrl, {
-        cache: 'no-store',
+        cache: "no-store",
         headers: {
-          'User-Agent':
-            'Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X) AppleWebKit/605.1.15',
+          "User-Agent":
+            "Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X) AppleWebKit/605.1.15",
         },
       });
       const eastmoneyData = await eastmoneyResponse.json();
@@ -35,7 +52,7 @@ async function fetchFundNetWorth(code: string) {
             success: true,
             code: fund.FCODE,
             netWorth: fund.NAV,
-            netWorthDate: fund.PDATE || '',
+            netWorthDate: fund.PDATE || "",
           };
         }
       }
@@ -45,43 +62,43 @@ async function fetchFundNetWorth(code: string) {
 
     // 备用方案：使用天天基金网的JSONP接口
     const url = `http://fundgz.1234567.com.cn/js/${code}.js`;
-    const response = await fetch(url, { cache: 'no-store' });
+    const response = await fetch(url, { cache: "no-store" });
     const text = await response.text();
 
     if (!text || text.trim().length === 0) {
-      return { success: false, code, error: '接口返回空数据' };
+      return { success: false, code, error: "接口返回空数据" };
     }
 
     const jsonMatch = text.match(/jsonpgz\((.*)\)/);
     if (!jsonMatch || !jsonMatch[1] || jsonMatch[1].trim().length === 0) {
-      if (text.trim() === 'jsonpgz();' || text.trim() === 'jsonpgz()') {
-        return { success: false, code, error: '基金不存在或已停售' };
+      if (text.trim() === "jsonpgz();" || text.trim() === "jsonpgz()") {
+        return { success: false, code, error: "基金不存在或已停售" };
       }
-      return { success: false, code, error: '解析净值数据失败' };
+      return { success: false, code, error: "解析净值数据失败" };
     }
 
     let fundData;
     try {
       fundData = JSON.parse(jsonMatch[1]);
     } catch (parseError) {
-      return { success: false, code, error: '解析JSON数据失败' };
+      return { success: false, code, error: "解析JSON数据失败" };
     }
 
     if (!fundData || (!fundData.dwjz && !fundData.gsz)) {
-      return { success: false, code, error: '基金不存在或已停售' };
+      return { success: false, code, error: "基金不存在或已停售" };
     }
 
     return {
       success: true,
       code: fundData.fundcode,
       netWorth: fundData.dwjz || fundData.gsz,
-      netWorthDate: fundData.jzrq || '',
+      netWorthDate: fundData.jzrq || "",
     };
   } catch (error) {
     return {
       success: false,
       code,
-      error: error instanceof Error ? error.message : '获取失败',
+      error: error instanceof Error ? error.message : "获取失败",
     };
   }
 }
@@ -91,11 +108,11 @@ async function fetchFundNetWorth(code: string) {
 export async function POST(request: Request) {
   try {
     // 验证请求来源（可选，增加安全性）
-    const authHeader = request.headers.get('authorization');
+    const authHeader = request.headers.get("authorization");
     const cronSecret = process.env.CRON_SECRET;
 
     if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const startTime = Date.now();
@@ -132,7 +149,7 @@ export async function POST(request: Request) {
         } else {
           results.netWorthUpdate.failed++;
           results.netWorthUpdate.errors.push(
-            `基金 ${fund.code}: ${result.error || '获取失败'}`
+            `基金 ${fund.code}: ${result.error || "获取失败"}`,
           );
         }
 
@@ -141,7 +158,7 @@ export async function POST(request: Request) {
       }
     } catch (error) {
       results.netWorthUpdate.errors.push(
-        `更新净值失败: ${error instanceof Error ? error.message : '未知错误'}`
+        `更新净值失败: ${error instanceof Error ? error.message : "未知错误"}`,
       );
     }
 
@@ -168,7 +185,7 @@ export async function POST(request: Request) {
         }
       }
     } catch (error) {
-      console.error('批量更新实际投入失败:', error);
+      console.error("批量更新实际投入失败:", error);
     }
 
     // 3. 计算并保存所有投资方向的每日盈亏（使用历史净值）
@@ -186,15 +203,15 @@ export async function POST(request: Request) {
         } else {
           results.dailyProfit.failed++;
           results.dailyProfit.errors.push(
-            ...result.errors.map((e) => `投资方向 ${direction.id}: ${e}`)
+            ...result.errors.map((e) => `投资方向 ${direction.id}: ${e}`),
           );
         }
       } catch (error) {
         results.dailyProfit.failed++;
         results.dailyProfit.errors.push(
           `投资方向 ${direction.id}: ${
-            error instanceof Error ? error.message : '未知错误'
-          }`
+            error instanceof Error ? error.message : "未知错误"
+          }`,
         );
       }
     }
@@ -203,19 +220,19 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       success: true,
-      message: '定时任务执行完成',
+      message: "定时任务执行完成",
       duration: `${(duration / 1000).toFixed(2)}秒`,
       results,
     });
   } catch (error: unknown) {
-    console.error('定时任务执行失败:', error);
-    const message = error instanceof Error ? error.message : '未知错误';
+    console.error("定时任务执行失败:", error);
+    const message = error instanceof Error ? error.message : "未知错误";
     return NextResponse.json(
       {
-        error: '定时任务执行失败',
+        error: "定时任务执行失败",
         message,
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -223,8 +240,8 @@ export async function POST(request: Request) {
 // GET - 手动触发（用于测试）
 export async function GET() {
   return NextResponse.json({
-    message: '请使用 POST 方法调用此API',
-    usage: 'POST /api/cron/daily-profit-calculation',
-    note: '建议设置 CRON_SECRET 环境变量以保护此API',
+    message: "请使用 POST 方法调用此API",
+    usage: "POST /api/cron/daily-profit-calculation",
+    note: "建议设置 CRON_SECRET 环境变量以保护此API",
   });
 }

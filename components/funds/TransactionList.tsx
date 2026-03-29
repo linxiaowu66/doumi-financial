@@ -18,6 +18,7 @@ import type { ColumnsType } from "antd/es/table";
 const { Text } = Typography;
 
 interface TransactionListProps {
+  fund: Fund | null;
   transactions: Transaction[];
   loading: boolean;
   isMobile: boolean;
@@ -27,6 +28,7 @@ interface TransactionListProps {
 }
 
 export default function TransactionList({
+  fund,
   transactions,
   loading,
   isMobile,
@@ -34,6 +36,7 @@ export default function TransactionList({
   onDelete,
   onEdit,
 }: TransactionListProps) {
+  const isStock = fund?.direction?.type === 'STOCK';
   const renderMobileTransactionCard = (transaction: Transaction) => {
     const typeMap: Record<string, { text: string; color: string }> = {
       BUY: { text: "买入", color: "green" },
@@ -88,13 +91,13 @@ export default function TransactionList({
                 </div>
               </Col>
               <Col span={12}>
-                <div style={{ fontSize: 11, color: "#999" }}>净值</div>
+                <div style={{ fontSize: 11, color: "#999" }}>{isStock ? "价格" : "净值"}</div>
                 <div style={{ fontSize: 14 }}>
                   ¥{Number(transaction.price).toFixed(4)}
                 </div>
               </Col>
               <Col span={12}>
-                <div style={{ fontSize: 11, color: "#999" }}>份额</div>
+                <div style={{ fontSize: 11, color: "#999" }}>{isStock ? "股数" : "份额"}</div>
                 <div style={{ fontSize: 14 }}>
                   {Math.abs(Number(transaction.shares)).toFixed(2)}
                 </div>
@@ -153,13 +156,13 @@ export default function TransactionList({
           {transaction.type === "SELL" && (
             <>
               <Col span={12}>
-                <div style={{ fontSize: 11, color: "#999" }}>卖出份额</div>
+                <div style={{ fontSize: 11, color: "#999" }}>{isStock ? "卖出股数" : "卖出份额"}</div>
                 <div style={{ fontSize: 14, fontWeight: 500 }}>
                   {Math.abs(Number(transaction.shares)).toFixed(2)}
                 </div>
               </Col>
               <Col span={12}>
-                <div style={{ fontSize: 11, color: "#999" }}>净值</div>
+                <div style={{ fontSize: 11, color: "#999" }}>{isStock ? "价格" : "净值"}</div>
                 <div style={{ fontSize: 14 }}>
                   ¥{Number(transaction.price).toFixed(4)}
                 </div>
@@ -191,14 +194,14 @@ export default function TransactionList({
               {transaction.dividendReinvest && (
                 <>
                   <Col span={12}>
-                    <div style={{ fontSize: 11, color: "#999" }}>净值</div>
+                    <div style={{ fontSize: 11, color: "#999" }}>{isStock ? "价格" : "净值"}</div>
                     <div style={{ fontSize: 14 }}>
                       ¥{Number(transaction.price).toFixed(4)}
                     </div>
                   </Col>
                   <Col span={12}>
                     <div style={{ fontSize: 11, color: "#999" }}>
-                      再投资份额
+                      {isStock ? "再投资股数" : "再投资份额"}
                     </div>
                     <div style={{ fontSize: 14 }}>
                       {Number(transaction.shares).toFixed(2)}
@@ -277,7 +280,7 @@ export default function TransactionList({
         Number(fee) > 0 ? `¥${Number(fee).toFixed(2)}` : "-",
     },
     {
-      title: "净值",
+      title: isStock ? "价格" : "净值",
       dataIndex: "price",
       key: "price",
       align: "center",
@@ -329,7 +332,7 @@ export default function TransactionList({
       },
     },
     {
-      title: "份额",
+      title: isStock ? "股数" : "份额",
       dataIndex: "shares",
       key: "shares",
       align: "center",

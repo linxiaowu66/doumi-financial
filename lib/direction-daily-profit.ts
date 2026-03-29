@@ -1,6 +1,7 @@
-import prisma from '@/lib/prisma';
-import { Decimal } from '@prisma/client/runtime/library';
-import dayjs from 'dayjs';
+import prisma from "@/lib/prisma";
+import { Decimal } from "@prisma/client/runtime/library";
+import dayjs from "dayjs";
+import { isStockCode } from "@/lib/fund-price";
 
 /**
  * 计算投资方向在指定日期的盈亏数据
@@ -13,26 +14,43 @@ export type NetWorthMap = Record<
 // 获取基金历史净值（最近days天），返回日期->净值映射
 export async function fetchFundHistoryNetWorth(
   code: string,
-  days: number
+  days: number,
 ): Promise<Record<string, number>> {
   try {
+    const stockCheck = isStockCode(code);
+    const map: Record<string, number> = {};
+
+    if (stockCheck.isStock) {
+      const url = `https://push2his.eastmoney.com/api/qt/stock/kline/get?secid=${stockCheck.secid}.${stockCheck.stockCode}&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61&klt=101&fqt=1&end=20500101&lmt=${days}`;
+      const res = await fetch(url, { cache: "no-store" });
+      const data = await res.json();
+      if (data?.data?.klines) {
+        data.data.klines.forEach((line: string) => {
+          const parts = line.split(",");
+          const dateStr = parts[0];
+          const close = parseFloat(parts[2]);
+          map[dateStr] = close;
+        });
+      }
+      return map;
+    }
+
     // 东方财富移动端历史净值接口
     const url = `https://fundmobapi.eastmoney.com/FundMNewApi/FundMNHisNetList?FCODE=${code}&pageIndex=1&pageSize=${days}&plat=Android&appType=ttjj&product=EFund&Version=1&deviceid=123`;
     const res = await fetch(url, {
       headers: {
-        'User-Agent':
-          'Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X) AppleWebKit/605.1.15',
+        "User-Agent":
+          "Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X) AppleWebKit/605.1.15",
       },
-      cache: 'no-store',
+      cache: "no-store",
     });
     const data = await res.json();
-    const map: Record<string, number> = {};
     if (data?.Datas && Array.isArray(data.Datas)) {
       data.Datas.forEach((item: any) => {
         const dateRaw = item.FSRQ || item.NAVDATE;
         const navValue = item.NAV || item.DWJZ; // DWJZ 为单位净值
         if (navValue && dateRaw) {
-          const dateStr = dayjs(dateRaw).format('YYYY-MM-DD');
+          const dateStr = dayjs(dateRaw).format("YYYY-MM-DD");
           map[dateStr] = parseFloat(navValue);
         }
       });
@@ -47,7 +65,7 @@ export async function fetchFundHistoryNetWorth(
 export async function calculateDirectionDailyProfit(
   directionId: number,
   targetDate: Date,
-  netWorthMap?: NetWorthMap
+  netWorthMap?: NetWorthMap,
 ): Promise<{
   dailyProfit: Decimal;
   cumulativeProfit: Decimal;
@@ -64,10 +82,10 @@ export async function calculateDirectionDailyProfit(
           transactions: {
             where: {
               date: {
-                lte: dayjs(targetDate).endOf('day').toDate(),
+                lte: dayjs(targetDate).endOf("day").toDate(),
               },
             },
-            orderBy: { date: 'asc' },
+            orderBy: { date: "asc" },
           },
         },
       },
@@ -100,12 +118,12 @@ export async function calculateDirectionDailyProfit(
       const price = new Decimal(tx.price.toString());
       const fee = new Decimal(tx.fee.toString());
 
-      if (tx.type === 'BUY') {
+      if (tx.type === "BUY") {
         // 买入：增加份额和成本
         fundShares = fundShares.plus(shares);
         fundCost = fundCost.plus(amount);
         totalInvested = totalInvested.plus(amount);
-      } else if (tx.type === 'SELL') {
+      } else if (tx.type === "SELL") {
         // 卖出：减少份额和成本
         const sellShares = shares.abs();
         const avgCostPrice = fundShares.isZero()
@@ -120,7 +138,7 @@ export async function calculateDirectionDailyProfit(
         const sellRevenue = sellShares.times(price).minus(fee);
         const sellProfit = sellRevenue.minus(costOfSold);
         fundSellProfit = fundSellProfit.plus(sellProfit);
-      } else if (tx.type === 'DIVIDEND') {
+      } else if (tx.type === "DIVIDEND") {
         // 分红
         if (tx.dividendReinvest) {
           // 分红再投资：增加份额，但不增加成本
@@ -142,7 +160,7 @@ export async function calculateDirectionDailyProfit(
     // 计算当前市值（使用最新净值）
     // 取当前日期的净值：历史净值优先，其次最新净值。
     // 如果当日没有净值，使用最近的历史净值（向前找）。
-    const dateStr = dayjs(targetDate).format('YYYY-MM-DD');
+    const dateStr = dayjs(targetDate).format("YYYY-MM-DD");
     let historyNet =
       netWorthMap?.[fund.id]?.[dateStr] ??
       (fund.latestNetWorth ? parseFloat(fund.latestNetWorth.toString()) : null);
@@ -180,16 +198,16 @@ export async function calculateDirectionDailyProfit(
     : totalProfit.dividedBy(totalInvested).times(100); // 累计收益率
 
   // 计算每日盈亏（相对于前一天）
-  const previousDay = dayjs(targetDate).subtract(1, 'day');
+  const previousDay = dayjs(targetDate).subtract(1, "day");
   const previousRecord = await prisma.directionDailyProfit.findFirst({
     where: {
       directionId,
       date: {
-        gte: previousDay.startOf('day').toDate(),
-        lte: previousDay.endOf('day').toDate(),
+        gte: previousDay.startOf("day").toDate(),
+        lte: previousDay.endOf("day").toDate(),
       },
     },
-    orderBy: { date: 'desc' },
+    orderBy: { date: "desc" },
   });
 
   const previousCumulativeProfit = previousRecord
@@ -213,9 +231,9 @@ export async function calculateDirectionDailyProfit(
 export async function saveDirectionDailyProfit(
   directionId: number,
   targetDate: Date,
-  netWorthMap?: NetWorthMap
+  netWorthMap?: NetWorthMap,
 ): Promise<void> {
-  const dateOnly = dayjs(targetDate).startOf('day').toDate();
+  const dateOnly = dayjs(targetDate).startOf("day").toDate();
 
   const {
     dailyProfit,
@@ -256,7 +274,7 @@ export async function saveDirectionDailyProfit(
  * 为所有投资方向计算并保存指定日期的盈亏数据
  */
 export async function saveAllDirectionsDailyProfit(
-  targetDate: Date = new Date()
+  targetDate: Date = new Date(),
 ): Promise<{ success: number; failed: number; errors: string[] }> {
   const directions = await prisma.investmentDirection.findMany({
     select: { id: true },
@@ -273,7 +291,7 @@ export async function saveAllDirectionsDailyProfit(
     } catch (error) {
       failed++;
       const errorMsg = `投资方向 ${direction.id}: ${
-        error instanceof Error ? error.message : '未知错误'
+        error instanceof Error ? error.message : "未知错误"
       }`;
       errors.push(errorMsg);
       console.error(errorMsg, error);
@@ -286,7 +304,7 @@ export async function saveAllDirectionsDailyProfit(
 // 为指定投资方向回填最近days天的每日盈亏（使用历史净值，不持久化快照）
 export async function saveDirectionDailyProfitRange(
   directionId: number,
-  days: number
+  days: number,
 ): Promise<{ success: number; failed: number; errors: string[] }> {
   // 获取该方向的基金列表
   const funds = await prisma.fund.findMany({
@@ -301,17 +319,17 @@ export async function saveDirectionDailyProfitRange(
       if (!fund.code) return;
       netWorthMap[fund.id] = await fetchFundHistoryNetWorth(fund.code, days);
       // 确保今天也有一个净值（如果历史未包含，则用latestNetWorth兜底）
-      const todayStr = dayjs().format('YYYY-MM-DD');
+      const todayStr = dayjs().format("YYYY-MM-DD");
       if (
         fund.latestNetWorth &&
         netWorthMap[fund.id] &&
         netWorthMap[fund.id]![todayStr] === undefined
       ) {
         netWorthMap[fund.id]![todayStr] = parseFloat(
-          fund.latestNetWorth.toString()
+          fund.latestNetWorth.toString(),
         );
       }
-    })
+    }),
   );
 
   let success = 0;
@@ -319,16 +337,16 @@ export async function saveDirectionDailyProfitRange(
   const errors: string[] = [];
 
   for (let i = days - 1; i >= 0; i--) {
-    const targetDate = dayjs().subtract(i, 'day').toDate();
+    const targetDate = dayjs().subtract(i, "day").toDate();
     try {
       await saveDirectionDailyProfit(directionId, targetDate, netWorthMap);
       success++;
     } catch (error) {
       failed++;
       errors.push(
-        `${dayjs(targetDate).format('YYYY-MM-DD')}: ${
-          error instanceof Error ? error.message : '未知错误'
-        }`
+        `${dayjs(targetDate).format("YYYY-MM-DD")}: ${
+          error instanceof Error ? error.message : "未知错误"
+        }`,
       );
     }
   }

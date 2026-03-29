@@ -769,9 +769,17 @@ export default function DirectionDetailPage({
           onChartDaysChange={setChartDays}
         />
 
-        <RecentTransactions funds={funds} isMobile={isMobile} />
+        <RecentTransactions
+          funds={funds}
+          isMobile={isMobile}
+          directionType={direction?.type as any}
+        />
 
-        <IncomeSummary summary={summary} onRefresh={loadSummary} />
+        <IncomeSummary
+          summary={summary}
+          onRefresh={loadSummary}
+          directionType={direction?.type as any}
+        />
 
         <FundList
           funds={funds}
@@ -793,6 +801,7 @@ export default function DirectionDetailPage({
           editingFund={editingFund}
           categoryOptions={categoryOptions}
           categorySearchValue={categorySearchValue}
+          directionType={direction?.type as any}
           onCancel={() => {
             setModalOpen(false);
             form.resetFields();

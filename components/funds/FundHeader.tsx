@@ -24,6 +24,7 @@ export default function FundHeader({
   onPlanModalOpen,
 }: FundHeaderProps) {
   const router = useRouter();
+  const isStock = fund?.direction?.type === 'STOCK';
 
   return (
     <>
@@ -78,7 +79,7 @@ export default function FundHeader({
               </Title>
               <Space wrap>
                 <Text type="secondary" style={{ fontSize: isMobile ? 12 : 14 }}>
-                  代码：{fund?.code}
+                  {isStock ? '股票代码：' : '基金代码：'}{fund?.code}
                 </Text>
                 {fund?.category && <Tag color="blue">{fund.category}</Tag>}
               </Space>
@@ -124,7 +125,7 @@ export default function FundHeader({
                 icon={<PlusOutlined />}
                 onClick={onPlanModalOpen}
               >
-                计划买入
+                {isStock ? '计划买入股票' : '计划买入基金'}
               </Button>
             )}
           </Space>

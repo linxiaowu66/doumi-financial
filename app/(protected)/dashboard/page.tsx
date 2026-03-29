@@ -28,6 +28,7 @@ import { useRouter } from 'next/navigation';
 interface DirectionSummary {
   id: number;
   name: string;
+  type: "FUND" | "STOCK";
   expectedAmount: string;
   actualAmount: string;
   _count: {
@@ -129,13 +130,13 @@ export default function HomePage() {
     );
 
     if (totalFunds === 0) {
-      message.warning('暂无基金需要更新');
+      message.warning('暂无资产需要更新');
       return;
     }
 
     Modal.confirm({
-      title: '批量更新净值',
-      content: `即将更新 ${totalFunds} 只基金的净值，每只基金间隔 0.5 秒请求，预计需要 ${Math.ceil(
+      title: '批量更新最新净值/股价',
+      content: `即将更新 ${totalFunds} 个资产的最新价格，每只资产间隔 0.5 秒请求，预计需要 ${Math.ceil(
         (totalFunds * 0.5) / 60
       )} 分钟。是否继续？`,
       okText: '开始更新',
@@ -233,7 +234,7 @@ export default function HomePage() {
           <Col xs={12} sm={12} lg={6}>
             <Card>
               <Statistic
-                title="管理基金"
+                title="管理资产"
                 value={directions.reduce(
                   (sum, d) => sum + (d._count?.funds || 0),
                   0
@@ -585,7 +586,7 @@ export default function HomePage() {
                               textAlign: 'center',
                             }}
                           >
-                            {direction._count?.funds || 0} 只基金
+                            {direction._count?.funds || 0} 只{direction.type === 'STOCK' ? '股票' : '基金'}
                           </div>
                         </Space>
                       </Card>
@@ -611,8 +612,8 @@ export default function HomePage() {
               </Card>
             </Col>
             <Col xs={24} md={8}>
-              <Card type="inner" title="2. 添加基金">
-                <p>在投资方向下添加具体的基金产品</p>
+              <Card type="inner" title="2. 添加资产">
+                <p>在投资方向下添加具体的基金或股票产品</p>
                 <Button type="link" icon={<FundOutlined />} disabled>
                   需先创建投资方向
                 </Button>
@@ -622,7 +623,7 @@ export default function HomePage() {
               <Card type="inner" title="3. 记录交易">
                 <p>记录买入、卖出、分红等交易，系统自动计算收益</p>
                 <Button type="link" icon={<LineChartOutlined />} disabled>
-                  需先添加基金
+                  需先添加资产
                 </Button>
               </Card>
             </Col>

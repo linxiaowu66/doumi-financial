@@ -66,7 +66,7 @@ export default function Header({
                   {direction?.name}
                 </Title>
                 {!isMobile && (
-                  <Text type="secondary">管理该投资方向下的基金</Text>
+                  <Text type="secondary">{direction?.type === 'STOCK' ? '管理该投资方向下的股票' : '管理该投资方向下的基金'}</Text>
                 )}
               </div>
             </Flex>
@@ -89,7 +89,7 @@ export default function Header({
               onClick={onOpenModal}
               block={isMobile}
             >
-              新建基金
+              {direction?.type === 'STOCK' ? '新建股票' : '新建基金'}
             </Button>
           </Space>
         </Flex>

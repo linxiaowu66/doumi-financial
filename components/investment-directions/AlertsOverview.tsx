@@ -48,7 +48,7 @@ export default function AlertsOverview({ alerts, loading }: AlertsOverviewProps)
   );
 
   return (
-    <Card className="mb-6" title={<><WarningOutlined className="mr-2" />基金预警概要</>}>
+    <Card className="mb-6" title={<><WarningOutlined className="mr-2" />资产预警概要</>}>
       <Space direction="vertical" size="middle" style={{ width: '100%' }}>
         {/* 待确认交易预警 */}
         {alertsByType.pending_transaction.length > 0 && (

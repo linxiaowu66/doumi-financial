@@ -1,6 +1,7 @@
 export interface InvestmentDirection {
   id: number;
   name: string;
+  type: "FUND" | "STOCK";
   expectedAmount: number;
   actualAmount: number;
   createdAt: string;
@@ -23,7 +24,12 @@ export interface FundAlert {
   directionId: number;
   directionName: string;
   category: string | null;
-  alertType: 'price_drop' | 'price_rise' | 'category_overdue' | 'category_overweight' | 'pending_transaction';
+  alertType:
+    | "price_drop"
+    | "price_rise"
+    | "category_overdue"
+    | "category_overweight"
+    | "pending_transaction";
   alertReason: string;
   latestBuyPrice?: number;
   currentPrice?: number;

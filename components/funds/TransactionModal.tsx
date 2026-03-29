@@ -14,6 +14,9 @@ import {
 } from "antd";
 import { ClockCircleOutlined } from "@ant-design/icons";
 import { FormInstance } from "antd/es/form";
+import { useEffect } from "react";
+import { getInvestmentConfig } from "@/lib/investment-type-config";
+import { getCalculator } from "@/lib/fee-calculator";
 
 const { TextArea } = Input;
 
@@ -29,6 +32,8 @@ interface TransactionModalProps {
   fetchingHistoryPrice: boolean;
   isMobile: boolean;
   isEditing?: boolean;
+  fund?: any;
+  systemSettings?: Record<string, string>;
 }
 
 export default function TransactionModal({
@@ -42,14 +47,45 @@ export default function TransactionModal({
   fetchingHistoryPrice,
   isMobile,
   isEditing,
+  fund,
+  systemSettings,
 }: TransactionModalProps) {
+  const amountValue = Form.useWatch('amount', form);
+  const sharesValue = Form.useWatch('shares', form);
+  const priceValue = Form.useWatch('price', form);
+  const feeValue = Form.useWatch('fee', form);
+
+  const config = getInvestmentConfig(fund?.direction?.type);
+  const isStock = config.type === 'STOCK';
+
+  useEffect(() => {
+    if (isEditing || !fund) return;
+    
+    const calculator = getCalculator(config.type);
+    const result = calculator.calculate({
+      type: transactionType as any,
+      amount: Number(amountValue),
+      shares: Number(sharesValue),
+      price: Number(priceValue),
+      code: fund.code,
+      config: isStock ? systemSettings : { defaultBuyFee: fund.defaultBuyFee, defaultSellFee: fund.defaultSellFee }
+    });
+
+    if (result.fee !== undefined && result.fee !== feeValue) {
+      form.setFieldValue('fee', result.fee);
+    }
+    
+    if (isStock) {
+      if (result.amount !== undefined && result.amount !== amountValue) {
+        form.setFieldValue('amount', result.amount);
+      }
+    }
+  }, [amountValue, sharesValue, priceValue, transactionType, fund, systemSettings, isEditing, form, config.type, isStock]);
+
   const getTitle = () => {
     if (isEditing) return "编辑交易";
-    return transactionType === "BUY"
-      ? "买入"
-      : transactionType === "SELL"
-      ? "卖出"
-      : "分红";
+    if (transactionType === 'DIVIDEND') return '分红';
+    return transactionType === 'BUY' ? config.buyLabel : config.sellLabel;
   };
 
   return (
@@ -82,7 +118,7 @@ export default function TransactionModal({
           />
         </Form.Item>
 
-        {transactionType !== "DIVIDEND" && !isEditing && (
+        {transactionType !== "DIVIDEND" && !isEditing && config.allowPending && (
           <Form.Item style={{ marginBottom: 12 }}>
             <Flex gap="small">
               <Form.Item name="isPending" valuePropName="checked" noStyle>
@@ -110,48 +146,98 @@ export default function TransactionModal({
             <Row gutter={16}>
               <Col span={isPending ? 24 : 12}>
                 <Form.Item
-                  label="买入金额"
-                  name="amount"
-                  rules={[{ required: true, message: "请输入买入金额" }]}
+                  label={isStock ? `买入${config.unit}数` : "买入金额"}
+                  name={isStock ? "shares" : "amount"}
+                  rules={[{ required: true, message: `请输入买入${isStock ? config.unit + '数' : '金额'}` }]}
                 >
                   <InputNumber
                     style={{ width: "100%" }}
                     min={0}
-                    precision={2}
-                    placeholder="输入金额"
-                    prefix="¥"
+                    precision={isStock ? 0 : 2}
+                    placeholder={`输入${isStock ? config.unit + '数' : '金额'}`}
+                    prefix={isStock ? "" : "¥"}
                   />
                 </Form.Item>
               </Col>
-              {!isPending && (
+              {isStock ? (
                 <Col span={12}>
                   <Form.Item
-                    label="手续费"
-                    name="fee"
-                    tooltip="手续费将从买入金额中扣除"
+                    label={`买入${config.priceLabel}`}
+                    name="price"
+                    rules={[{ required: true, message: `请输入买入${config.priceLabel}` }]}
+                  >
+                    <InputNumber
+                      style={{ width: "100%" }}
+                      min={0}
+                      precision={4}
+                      placeholder={`输入${config.priceLabel}`}
+                    />
+                  </Form.Item>
+                </Col>
+              ) : (
+                !isPending && (
+                  <Col span={12}>
+                    <Form.Item
+                      label="手续费"
+                      name="fee"
+                      tooltip="手续费将从买入金额中扣除"
+                    >
+                      <InputNumber
+                        style={{ width: "100%" }}
+                        min={0}
+                        precision={2}
+                        placeholder="输入手续费"
+                        prefix="¥"
+                      />
+                    </Form.Item>
+                  </Col>
+                )
+              )}
+            </Row>
+            {isStock && (
+              <Row gutter={16}>
+                <Col span={12}>
+                  <Form.Item
+                    label="买入金额"
+                    name="amount"
+                    tooltip="包含手续费的总支出"
                   >
                     <InputNumber
                       style={{ width: "100%" }}
                       min={0}
                       precision={2}
-                      placeholder="输入手续费"
+                      disabled
                       prefix="¥"
                     />
                   </Form.Item>
                 </Col>
-              )}
-            </Row>
-            {!isPending && (
+                <Col span={12}>
+                  <Form.Item
+                    label="手续费"
+                    name="fee"
+                    tooltip="包含佣金、过户费等"
+                  >
+                    <InputNumber
+                      style={{ width: "100%" }}
+                      min={0}
+                      precision={2}
+                      prefix="¥"
+                    />
+                  </Form.Item>
+                </Col>
+              </Row>
+            )}
+            {!isPending && !isStock && (
               <Form.Item
-                label="买入净值"
+                label={`买入${config.priceLabel}`}
                 name="price"
-                rules={[{ required: true, message: "请输入买入净值" }]}
+                rules={[{ required: true, message: `请输入买入${config.priceLabel}` }]}
               >
                 <InputNumber
                   style={{ width: "100%" }}
                   min={0}
                   precision={4}
-                  placeholder="输入净值"
+                  placeholder={`输入${config.priceLabel}`}
                 />
               </Form.Item>
             )}
@@ -163,47 +249,97 @@ export default function TransactionModal({
             <Row gutter={16}>
               <Col span={isPending ? 24 : 12}>
                 <Form.Item
-                  label="卖出份额"
+                  label={`卖出${isStock ? config.unit + '数' : config.unit}`}
                   name="shares"
-                  rules={[{ required: true, message: "请输入卖出份额" }]}
+                  rules={[{ required: true, message: `请输入卖出${isStock ? config.unit + '数' : config.unit}` }]}
                 >
                   <InputNumber
                     style={{ width: "100%" }}
                     min={0}
-                    precision={2}
-                    placeholder="输入份额"
+                    precision={isStock ? 0 : 2}
+                    placeholder={`输入${isStock ? config.unit + '数' : config.unit}`}
                   />
                 </Form.Item>
               </Col>
-              {!isPending && (
+              {isStock ? (
                 <Col span={12}>
                   <Form.Item
-                    label="手续费"
-                    name="fee"
-                    tooltip="手续费将从卖出金额中扣除"
+                    label={`卖出${config.priceLabel}`}
+                    name="price"
+                    rules={[{ required: true, message: `请输入卖出${config.priceLabel}` }]}
+                  >
+                    <InputNumber
+                      style={{ width: "100%" }}
+                      min={0}
+                      precision={4}
+                      placeholder={`输入${config.priceLabel}`}
+                    />
+                  </Form.Item>
+                </Col>
+              ) : (
+                !isPending && (
+                  <Col span={12}>
+                    <Form.Item
+                      label="手续费"
+                      name="fee"
+                      tooltip="手续费将从卖出金额中扣除"
+                    >
+                      <InputNumber
+                        style={{ width: "100%" }}
+                        min={0}
+                        precision={2}
+                        placeholder="输入手续费"
+                        prefix="¥"
+                      />
+                    </Form.Item>
+                  </Col>
+                )
+              )}
+            </Row>
+            {isStock && (
+              <Row gutter={16}>
+                <Col span={12}>
+                  <Form.Item
+                    label="卖出金额"
+                    name="amount"
+                    tooltip="扣除手续费后的净收入"
                   >
                     <InputNumber
                       style={{ width: "100%" }}
                       min={0}
                       precision={2}
-                      placeholder="输入手续费"
+                      disabled
                       prefix="¥"
                     />
                   </Form.Item>
                 </Col>
-              )}
-            </Row>
-            {!isPending && (
+                <Col span={12}>
+                  <Form.Item
+                    label="手续费"
+                    name="fee"
+                    tooltip="包含佣金、过户费、印花税等"
+                  >
+                    <InputNumber
+                      style={{ width: "100%" }}
+                      min={0}
+                      precision={2}
+                      prefix="¥"
+                    />
+                  </Form.Item>
+                </Col>
+              </Row>
+            )}
+            {!isPending && !isStock && (
               <Form.Item
-                label="卖出净值"
+                label={`卖出${config.priceLabel}`}
                 name="price"
-                rules={[{ required: true, message: "请输入卖出净值" }]}
+                rules={[{ required: true, message: `请输入卖出${config.priceLabel}` }]}
               >
                 <InputNumber
                   style={{ width: "100%" }}
                   min={0}
                   precision={4}
-                  placeholder="输入净值"
+                  placeholder={`输入${config.priceLabel}`}
                 />
               </Form.Item>
             )}
@@ -235,22 +371,22 @@ export default function TransactionModal({
             {dividendReinvest ? (
               <>
                 <Form.Item
-                  label="再投资份数"
+                  label={`再投资${isStock ? config.unit + '数' : config.unit}`}
                   name="dividendShares"
-                  rules={[{ required: true, message: "请输入再投资份数" }]}
-                  tooltip="从支付宝等平台查看分红后增加的份数"
+                  rules={[{ required: true, message: `请输入再投资${isStock ? config.unit + '数' : config.unit}` }]}
+                  tooltip={isStock ? `分红后增加的${config.unit}数` : `从支付宝等平台查看分红后增加的${config.unit}`}
                 >
                   <InputNumber
                     style={{ width: "100%" }}
                     min={0}
                     precision={2}
-                    placeholder="输入再投资的份数"
+                    placeholder={`输入再投资的${isStock ? config.unit + '数' : config.unit}`}
                   />
                 </Form.Item>
                 <Row gutter={16}>
                   <Col span={12}>
                     <Form.Item
-                      label="当日净值"
+                      label={`当日${config.priceLabel}`}
                       name="price"
                       tooltip="系统会根据日期自动获取，也可手动修改"
                     >
@@ -267,7 +403,7 @@ export default function TransactionModal({
                     <Form.Item
                       label="分红金额"
                       name="amount"
-                      tooltip="根据份数和净值自动计算"
+                      tooltip={`根据${isStock ? config.unit + '数和' + config.priceLabel : config.unit + '和' + config.priceLabel}自动计算`}
                     >
                       <InputNumber
                         style={{ width: "100%" }}

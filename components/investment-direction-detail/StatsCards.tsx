@@ -1,6 +1,7 @@
 import { Card, Statistic, Tooltip, Space, Row, Col } from "antd";
 import { FundOutlined, QuestionCircleOutlined } from "@ant-design/icons";
-import { InvestmentDirection, FundStats } from "@/types/investment-direction-detail";
+import { InvestmentDirection } from "@/types/investment-direction-detail";
+import { useInvestmentConfig } from "@/hooks/use-investment-config";
 
 interface StatsCardsProps {
   direction: InvestmentDirection | null;
@@ -15,12 +16,14 @@ export default function StatsCards({
   totalHoldingCost,
   isMobile,
 }: StatsCardsProps) {
+  const { assetLabel } = useInvestmentConfig(direction?.type);
+
   return (
     <Row gutter={[16, 16]} style={{ marginBottom: isMobile ? 12 : 24 }}>
       <Col xs={12} sm={12} md={6}>
         <Card>
           <Statistic
-            title="基金数量"
+            title={`${assetLabel}数量`}
             value={fundsCount}
             suffix="个"
             prefix={<FundOutlined />}
@@ -60,7 +63,7 @@ export default function StatsCards({
             title={
               <Space>
                 实际投入
-                <Tooltip title="当前持仓的成本总和（买入金额 - 卖出金额 + 分红再投资）。反映当前实际还留在投资中的资金，不包括已清仓的基金。用于计算投入进度（实际投入 ÷ 预期投入）。">
+                <Tooltip title={`当前持仓的成本总和（买入金额 - 卖出金额 + 分红再投资）。反映当前实际还留在投资中的资金，不包括已清仓的${assetLabel}。用于计算投入进度（实际投入 ÷ 预期投入）。`}>
                   <QuestionCircleOutlined
                     style={{
                       color: "#1890ff",

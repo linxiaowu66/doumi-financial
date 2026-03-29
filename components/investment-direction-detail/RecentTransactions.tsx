@@ -12,18 +12,23 @@ import {
 import { DollarOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { ExtendedTransaction, Fund } from "@/types/investment-direction-detail";
+import { useInvestmentConfig } from "@/hooks/use-investment-config";
 
 const { Text } = Typography;
 
 interface RecentTransactionsProps {
   funds: Fund[];
   isMobile: boolean;
+  directionType?: "FUND" | "STOCK";
 }
 
 export default function RecentTransactions({
   funds,
   isMobile,
+  directionType,
 }: RecentTransactionsProps) {
+  const { assetLabel, unit, priceLabel } = useInvestmentConfig(directionType);
+
   // 从所有基金中提取所有交易记录
   const allTransactions: ExtendedTransaction[] = [];
 
@@ -119,7 +124,7 @@ export default function RecentTransactions({
                         {tx.shares !== undefined && (
                           <Col span={12}>
                             <Text type="secondary" style={{ fontSize: 11 }}>
-                              份额
+                              {unit}
                             </Text>
                             <div style={{ fontSize: 13 }}>
                               {Number(tx.shares).toFixed(2)}
@@ -129,7 +134,7 @@ export default function RecentTransactions({
                         {tx.price !== undefined && tx.price !== null && (
                           <Col span={12}>
                             <Text type="secondary" style={{ fontSize: 11 }}>
-                              净值
+                              {priceLabel}
                             </Text>
                             <div style={{ fontSize: 13 }}>
                               ¥{Number(tx.price).toFixed(4)}
@@ -158,7 +163,7 @@ export default function RecentTransactions({
                   render: (date: string) => dayjs(date).format("YYYY-MM-DD"),
                 },
                 {
-                  title: "基金名称",
+                  title: `${assetLabel}名称`,
                   dataIndex: "fundName",
                   key: "fundName",
                   width: 180,
@@ -195,7 +200,7 @@ export default function RecentTransactions({
                       : "-",
                 },
                 {
-                  title: "份额",
+                  title: unit,
                   dataIndex: "shares",
                   key: "shares",
                   width: 110,
@@ -204,7 +209,7 @@ export default function RecentTransactions({
                     shares !== undefined ? Number(shares).toFixed(2) : "-",
                 },
                 {
-                  title: "净值",
+                  title: priceLabel,
                   dataIndex: "price",
                   key: "price",
                   width: 100,

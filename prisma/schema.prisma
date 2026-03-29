@@ -21,14 +21,15 @@ model User {
 
 // 投资方向（海外长钱、稳钱账户、长钱账户等）
 model InvestmentDirection {
-  id              Int                    @id @default(autoincrement())
+  id              Int                           @id @default(autoincrement())
   userId          Int? // 所属用户（临时可选）
-  user            User?                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user            User?                         @relation(fields: [userId], references: [id], onDelete: Cascade)
   name            String // 投资方向名称
-  expectedAmount  Decimal                @db.Decimal(15, 2) // 预期投入金额
-  actualAmount    Decimal                @default(0) @db.Decimal(15, 2) // 实际投入金额
-  createdAt       DateTime               @default(now())
-  updatedAt       DateTime               @updatedAt
+  type            String                        @default("FUND") // 方向类型：FUND(基金), STOCK(股票)
+  expectedAmount  Decimal                       @db.Decimal(15, 2) // 预期投入金额
+  actualAmount    Decimal                       @default(0) @db.Decimal(15, 2) // 实际投入金额
+  createdAt       DateTime                      @default(now())
+  updatedAt       DateTime                      @updatedAt
   funds           Fund[] // 该方向下的基金
   categoryTargets CategoryTarget[] // 该方向下的分类目标
   dailyProfits    DirectionDailyProfit[] // 每日盈亏记录
@@ -39,13 +40,13 @@ model InvestmentDirection {
 
 // 基金分类目标仓位（标普、纳指等每个分类的投入上限）
 model CategoryTarget {
-  id           Int                 @id @default(autoincrement())
-  directionId  Int // 所属投资方向
-  direction    InvestmentDirection @relation(fields: [directionId], references: [id], onDelete: Cascade)
-  categoryName String // 分类名称（如：标普、纳指、沪深300）
-  targetPercent Decimal            @db.Decimal(5, 2) // 目标仓位百分比（0-100）
-  createdAt    DateTime            @default(now())
-  updatedAt    DateTime            @updatedAt
+  id            Int                 @id @default(autoincrement())
+  directionId   Int // 所属投资方向
+  direction     InvestmentDirection @relation(fields: [directionId], references: [id], onDelete: Cascade)
+  categoryName  String // 分类名称（如：标普、纳指、沪深300）
+  targetPercent Decimal             @db.Decimal(5, 2) // 目标仓位百分比（0-100）
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
 
   @@unique([directionId, categoryName])
   @@index([directionId])
@@ -63,16 +64,16 @@ model Fund {
   latestNetWorth   Decimal?            @db.Decimal(10, 4) // 最新净值
   netWorthDate     String? // 净值日期
   netWorthUpdateAt DateTime? // 净值更新时间
-  
-  // 交易配置
-  confirmDays      Int                 @default(1) // 确认天数：1(境内T+1), 2(QDII T+2)
-  defaultBuyFee    Decimal             @default(0.15) @db.Decimal(5, 4) // 默认买入费率 % (如0.15)
-  defaultSellFee   Decimal             @default(0.50) @db.Decimal(5, 4) // 默认卖出费率 % (如0.50)
 
-  createdAt        DateTime            @default(now())
-  updatedAt        DateTime            @updatedAt
-  transactions     Transaction[] // 交易记录
-  plannedPurchases PlannedPurchase[] // 计划买入
+  // 交易配置
+  confirmDays    Int     @default(1) // 确认天数：1(境内T+1), 2(QDII T+2)
+  defaultBuyFee  Decimal @default(0.15) @db.Decimal(5, 4) // 默认买入费率 % (如0.15)
+  defaultSellFee Decimal @default(0.50) @db.Decimal(5, 4) // 默认卖出费率 % (如0.50)
+
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  transactions        Transaction[] // 交易记录
+  plannedPurchases    PlannedPurchase[] // 计划买入
   pendingTransactions PendingTransaction[] // 待确认交易
 }
 
@@ -97,16 +98,16 @@ model Transaction {
 
 // 待确认交易（在支付宝已操作，等待净值确认）
 model PendingTransaction {
-  id            Int      @id @default(autoincrement())
-  fundId        Int // 所属基金
-  fund          Fund     @relation(fields: [fundId], references: [id], onDelete: Cascade)
-  type          String // 交易类型：BUY(买入)、SELL(卖出)
-  applyDate     DateTime // 申请日期（用户操作日期）
-  applyAmount   Decimal? @db.Decimal(15, 2) // 申请金额（买入时填）
-  applyShares   Decimal? @db.Decimal(15, 4) // 申请份额（卖出时填）
-  status        String   @default("WAITING") // 状态：WAITING(等待确认)、CONFIRMED(已确认转正)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id          Int      @id @default(autoincrement())
+  fundId      Int // 所属基金
+  fund        Fund     @relation(fields: [fundId], references: [id], onDelete: Cascade)
+  type        String // 交易类型：BUY(买入)、SELL(卖出)
+  applyDate   DateTime // 申请日期（用户操作日期）
+  applyAmount Decimal? @db.Decimal(15, 2) // 申请金额（买入时填）
+  applyShares Decimal? @db.Decimal(15, 4) // 申请份额（卖出时填）
+  status      String   @default("WAITING") // 状态：WAITING(等待确认)、CONFIRMED(已确认转正)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   @@index([fundId])
   @@index([status])
@@ -175,3 +176,13 @@ model AnnualProfitTarget {
   updatedAt    DateTime @updatedAt
 }
 
+// 添加在 schema.prisma 最后面
+
+// 系统设置（用于存储费率等）
+model SystemSetting {
+  id          Int      @id @default(autoincrement())
+  key         String   @unique
+  value       String   @db.Text
+  description String? // 描述
+  updatedAt   DateTime @updatedAt
+}

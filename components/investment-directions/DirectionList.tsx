@@ -111,7 +111,7 @@ export default function DirectionList({
       },
     },
     {
-      title: '基金数量',
+      title: '数量',
       key: 'fundsCount',
       align: 'center' as const,
       render: (_: unknown, record: InvestmentDirection) =>
@@ -169,7 +169,7 @@ export default function DirectionList({
           </Button>
           <Popconfirm
             title="确定要删除吗？"
-            description="删除后该方向下的所有基金也会被删除"
+            description="删除后该方向下的所有资产也会被删除"
             onConfirm={() => onDelete(record.id)}
             okText="确定"
             cancelText="取消"

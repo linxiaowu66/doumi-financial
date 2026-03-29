@@ -45,6 +45,7 @@ export interface CategoryPositionAlert {
 export interface InvestmentDirection {
   id: number;
   name: string;
+  type: "FUND" | "STOCK";
   expectedAmount: number;
   actualAmount: number;
 }
@@ -75,6 +76,8 @@ export interface DirectionSummary {
   totalCurrentValue: string;
   totalCost: string;
   holdingProfit: string;
+  yesterdayProfit?: string;
+  annualYield?: string;
   totalSellProfit: string;
   totalDividendCash: string;
   totalDividendReinvest: string;

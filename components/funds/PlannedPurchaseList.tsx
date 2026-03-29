@@ -20,6 +20,7 @@ interface PlannedPurchaseListProps {
   onPlanModalOpen: () => void;
   onDeletePlan: (id: number) => void;
   onOpenExecuteModal: (plan: PlannedPurchase) => void;
+  isStock?: boolean;
 }
 
 export default function PlannedPurchaseList({
@@ -28,6 +29,7 @@ export default function PlannedPurchaseList({
   onPlanModalOpen,
   onDeletePlan,
   onOpenExecuteModal,
+  isStock = false,
 }: PlannedPurchaseListProps) {
   if (plannedPurchases.length === 0) return null;
 
@@ -36,7 +38,7 @@ export default function PlannedPurchaseList({
       title={
         <Space wrap>
           <Text strong style={{ fontSize: isMobile ? 14 : 16 }}>
-            计划买入
+            {isStock ? "计划买入股票" : "计划买入基金"}
           </Text>
           <Tag color="orange">待执行</Tag>
         </Space>
@@ -122,7 +124,7 @@ export default function PlannedPurchaseList({
                   block
                   size={isMobile ? "small" : "middle"}
                 >
-                  执行买入
+                  {isStock ? "执行买入股票" : "执行买入"}
                 </Button>
               </div>
             ) : (
@@ -147,7 +149,7 @@ export default function PlannedPurchaseList({
                     type="primary"
                     onClick={() => onOpenExecuteModal(plan)}
                   >
-                    执行买入
+                    {isStock ? "执行买入股票" : "执行买入"}
                   </Button>
                   <Popconfirm
                     title="确定要删除吗？"

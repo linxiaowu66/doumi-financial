@@ -1,3 +1,4 @@
+import React, { useEffect, useState } from "react";
 import {
   Card,
   Space,
@@ -22,7 +23,16 @@ import {
   FundOutlined,
 } from "@ant-design/icons";
 import { useRouter } from "next/navigation";
-import { Fund, FundStats, FundAlert, CategoryPositionAlert, CategoryTarget, InvestmentDirection } from "@/types/investment-direction-detail";
+import {
+  Fund,
+  FundStats,
+  FundAlert,
+  CategoryPositionAlert,
+  CategoryTarget,
+  InvestmentDirection,
+} from "@/types/investment-direction-detail";
+
+import { useInvestmentConfig } from "@/hooks/use-investment-config";
 
 const { Text } = Typography;
 
@@ -37,7 +47,10 @@ interface FundListProps {
   isMobile: boolean;
   onOpenModal: (fund?: Fund) => void;
   onDelete: (id: number) => void;
-  onOpenTargetModal: (categoryName: string, currentTargetPercent?: number) => void;
+  onOpenTargetModal: (
+    categoryName: string,
+    currentTargetPercent?: number,
+  ) => void;
   isFundLiquidated: (stats: FundStats | undefined) => boolean;
 }
 
@@ -56,37 +69,84 @@ export default function FundList({
   isFundLiquidated,
 }: FundListProps) {
   const router = useRouter();
+  const config = useInvestmentConfig(direction?.type);
+
+  const [yesterdayNetMap, setYesterdayNetMap] = useState<
+    Record<number, number | null>
+  >({});
+
+  useEffect(() => {
+    // Fetch yesterday net worth for all funds used to compute 昨日收益
+    const fetchYesterday = async () => {
+      const map: Record<number, number | null> = {};
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yStr = yesterday.toISOString().slice(0, 10);
+
+      await Promise.all(
+        funds.map(async (f) => {
+          try {
+            if (!f.code) {
+              map[f.id] = null;
+              return;
+            }
+            const res = await fetch(
+              `/api/fund-price-history?code=${f.code}&date=${yStr}`,
+            );
+            if (!res.ok) {
+              map[f.id] = null;
+              return;
+            }
+            const data = await res.json();
+            map[f.id] = data?.netWorth ?? null;
+          } catch (error) {
+            map[f.id] = null;
+          }
+        }),
+      );
+
+      setYesterdayNetMap(map);
+    };
+
+    if (funds && funds.length > 0) {
+      fetchYesterday();
+    }
+  }, [funds]);
 
   // 按分类分组
-  const groupedFunds = funds.reduce((groups, fund) => {
-    const category = fund.category || "未分类";
-    if (!groups[category]) {
-      groups[category] = [];
-    }
-    groups[category].push(fund);
-    return groups;
-  }, {} as Record<string, Fund[]>);
+  const groupedFunds = funds.reduce(
+    (groups, fund) => {
+      const category = fund.category || "未分类";
+      if (!groups[category]) {
+        groups[category] = [];
+      }
+      groups[category].push(fund);
+      return groups;
+    },
+    {} as Record<string, Fund[]>,
+  );
 
   // 先计算整个投资方向的总市值（所有基金的当前市值之和）
   const totalDirectionValue = funds.reduce((sum, fund) => {
     const stats = fundsStats.get(fund.id);
     if (stats) {
-      const holdingProfit =
-        (stats.holdingCost * stats.holdingProfitRate) / 100;
+      const holdingProfit = (stats.holdingCost * stats.holdingProfitRate) / 100;
       return sum + stats.holdingCost + holdingProfit;
     }
     return sum;
   }, 0);
 
+  const isStock = direction?.type === "STOCK";
+
   const columns = [
     {
-      title: "基金代码",
+      title: config.codeLabel,
       dataIndex: "code",
       key: "code",
       width: 90,
     },
     {
-      title: "基金名称",
+      title: config.nameLabel,
       dataIndex: "name",
       key: "name",
       width: 180,
@@ -126,7 +186,12 @@ export default function FundList({
               <Tooltip title={record.remark} placement="top">
                 <Tag
                   color="blue"
-                  style={{ fontSize: 12, flexShrink: 0, margin: 0, cursor: 'help' }}
+                  style={{
+                    fontSize: 12,
+                    flexShrink: 0,
+                    margin: 0,
+                    cursor: "help",
+                  }}
                 >
                   有备注
                 </Tag>
@@ -198,7 +263,7 @@ export default function FundList({
       title: (
         <Space>
           累计收益金额
-          <Tooltip title="持仓收益 + 卖出收益 + 分红的总和，反映该基金的整体盈亏">
+          <Tooltip title={`持仓收益 + 卖出收益 + 分红的总和，反映该${config.assetLabel}的整体盈亏`}>
             <QuestionCircleOutlined
               style={{ color: "#1890ff", cursor: "help", fontSize: 12 }}
             />
@@ -223,20 +288,86 @@ export default function FundList({
       },
     },
     {
-      title: "交易记录",
-      key: "transactions",
-      align: "center" as const,
-      width: 85,
-      render: (_: unknown, record: Fund) => record._count?.transactions || 0,
+      title: "昨日收益",
+      key: "yesterdayProfit",
+      align: "right" as const,
+      width: 130,
+      render: (_: unknown, record: Fund) => {
+        const stats = fundsStats.get(record.id);
+        const yesterdayNet = yesterdayNetMap[record.id];
+        const latest = record.latestNetWorth
+          ? Number(record.latestNetWorth)
+          : null;
+        if (
+          !stats ||
+          stats.holdingShares === undefined ||
+          stats.holdingShares === null
+        )
+          return "-";
+        if (
+          latest === null ||
+          latest === undefined ||
+          yesterdayNet === null ||
+          yesterdayNet === undefined
+        )
+          return "-";
+        const profit = stats.holdingShares * (latest - yesterdayNet);
+        const color = profit >= 0 ? "#cf1322" : "#3f8600";
+        return (
+          <span style={{ color }}>
+            {profit >= 0 ? "+" : ""}¥{profit.toLocaleString()}
+          </span>
+        );
+      },
     },
     {
-      title: "待买入",
-      key: "planned",
-      align: "center" as const,
-      width: 80,
+      title: "年化收益",
+      key: "annualYield",
+      align: "right" as const,
+      width: 120,
       render: (_: unknown, record: Fund) => {
-        const count = record._count?.plannedPurchases || 0;
-        return count > 0 ? <Tag color="orange">{count}</Tag> : 0;
+        const stats = fundsStats.get(record.id);
+        if (
+          !stats ||
+          stats.totalProfitRate === undefined ||
+          stats.totalProfitRate === null
+        )
+          return "-";
+        const rate = stats.totalProfitRate; // % cumulative
+
+        // prefer first BUY transaction as holding start, fallback to fund createdAt
+        const firstBuy = record.transactions
+          ?.filter((t: any) => t.type === "BUY")
+          .sort(
+            (a: any, b: any) =>
+              new Date(a.date).getTime() - new Date(b.date).getTime(),
+          )[0];
+
+        const startDate = firstBuy
+          ? new Date(firstBuy.date)
+          : record.createdAt
+            ? new Date(record.createdAt)
+            : null;
+        const now = new Date();
+        const years = startDate
+          ? Math.max(
+              (now.getTime() - startDate.getTime()) /
+                (1000 * 60 * 60 * 24 * 365),
+              1 / 12,
+            )
+          : 1 / 12;
+
+        const factor = 1 + rate / 100;
+        if (factor <= 0) return "-"; // cannot compute CAGR when cumulative factor <= 0
+
+        const annualized = (Math.pow(factor, 1 / years) - 1) * 100;
+        const color = annualized >= 0 ? "#cf1322" : "#3f8600";
+        return (
+          <span style={{ color }}>
+            {annualized >= 0 ? "+" : ""}
+            {annualized.toFixed(2)}%
+          </span>
+        );
       },
     },
     {
@@ -247,12 +378,14 @@ export default function FundList({
       render: (_: unknown, record: Fund) => {
         const count = record._count?.pendingTransactions || 0;
         return count > 0 ? (
-          <Tooltip title={`${count} 笔交易等待确认净值`}>
+          <Tooltip title={`${count} 笔交易等待${isStock ? '成交' : '确认净值'}`}>
             <Badge count={count} size="small" offset={[5, 0]}>
-              <ClockCircleOutlined style={{ color: '#faad14', fontSize: 16 }} />
+              <ClockCircleOutlined style={{ color: "#faad14", fontSize: 16 }} />
             </Badge>
           </Tooltip>
-        ) : 0;
+        ) : (
+          0
+        );
       },
     },
     {
@@ -284,7 +417,7 @@ export default function FundList({
           />
           <Popconfirm
             title="确定要删除吗？"
-            description="删除后该基金的所有交易记录也会被删除"
+            description={`删除后该${config.assetLabel}的所有交易记录也会被删除`}
             onConfirm={() => onDelete(record.id)}
             okText="确定"
             cancelText="取消"
@@ -342,7 +475,7 @@ export default function FundList({
                       style={{
                         fontSize: 11,
                         margin: 0,
-                        cursor: 'help',
+                        cursor: "help",
                       }}
                     >
                       有备注
@@ -394,15 +527,39 @@ export default function FundList({
             </div>
           </Col>
           <Col span={12}>
-            <div style={{ fontSize: 12, color: "#999" }}>持仓份额</div>
+            <div style={{ fontSize: 12, color: "#999" }}>{isStock ? '持仓股数' : '持仓份额'}</div>
             <div style={{ fontSize: 14, fontWeight: 500 }}>
               {stats?.holdingShares?.toLocaleString() || "-"}
             </div>
           </Col>
           <Col span={12}>
-            <div style={{ fontSize: 12, color: "#999" }}>交易记录</div>
+            <div style={{ fontSize: 12, color: "#999" }}>昨日收益</div>
             <div style={{ fontSize: 14 }}>
-              {fund._count?.transactions || 0} 笔
+              {(() => {
+                const yesterdayNet = yesterdayNetMap[fund.id];
+                const latest = fund.latestNetWorth
+                  ? Number(fund.latestNetWorth)
+                  : null;
+                if (
+                  !stats ||
+                  stats.holdingShares === undefined ||
+                  stats.holdingShares === null
+                )
+                  return "-";
+                if (
+                  latest === null ||
+                  latest === undefined ||
+                  yesterdayNet === null ||
+                  yesterdayNet === undefined
+                )
+                  return "-";
+                const p = stats.holdingShares * (latest - yesterdayNet);
+                return (
+                  <span style={{ color: p >= 0 ? "#cf1322" : "#3f8600" }}>
+                    {p >= 0 ? "+" : ""}¥{p.toLocaleString()}
+                  </span>
+                );
+              })()}
             </div>
           </Col>
           <Col span={12}>
@@ -410,7 +567,7 @@ export default function FundList({
             <div style={{ fontSize: 14 }}>
               {fund._count?.pendingTransactions ? (
                 <Space>
-                  <ClockCircleOutlined style={{ color: '#faad14' }} />
+                  <ClockCircleOutlined style={{ color: "#faad14" }} />
                   <Text type="warning">{fund._count.pendingTransactions}</Text>
                 </Space>
               ) : (
@@ -419,13 +576,50 @@ export default function FundList({
             </div>
           </Col>
           <Col span={12}>
-            <div style={{ fontSize: 12, color: "#999" }}>待买入</div>
+            <div style={{ fontSize: 12, color: "#999" }}>年化收益</div>
             <div style={{ fontSize: 14 }}>
-              {fund._count?.plannedPurchases ? (
-                <Tag color="orange">{fund._count.plannedPurchases}</Tag>
-              ) : (
-                "0"
-              )}
+              {(() => {
+                if (
+                  !stats ||
+                  stats.totalProfitRate === undefined ||
+                  stats.totalProfitRate === null
+                )
+                  return "-";
+                const rate = stats.totalProfitRate;
+                // prefer first BUY transaction as holding start, fallback to fund createdAt
+                const firstBuy = fund.transactions
+                  ?.filter((t: any) => t.type === "BUY")
+                  .sort(
+                    (a: any, b: any) =>
+                      new Date(a.date).getTime() - new Date(b.date).getTime(),
+                  )[0];
+
+                const startDate = firstBuy
+                  ? new Date(firstBuy.date)
+                  : fund.createdAt
+                    ? new Date(fund.createdAt)
+                    : null;
+                const now = new Date();
+                const years = startDate
+                  ? Math.max(
+                      (now.getTime() - startDate.getTime()) /
+                        (1000 * 60 * 60 * 24 * 365),
+                      1 / 12,
+                    )
+                  : 1 / 12;
+
+                const factor = 1 + rate / 100;
+                if (factor <= 0) return "-";
+                const annualized = (Math.pow(factor, 1 / years) - 1) * 100;
+                return (
+                  <span
+                    style={{ color: annualized >= 0 ? "#cf1322" : "#3f8600" }}
+                  >
+                    {annualized >= 0 ? "+" : ""}
+                    {annualized.toFixed(2)}%
+                  </span>
+                );
+              })()}
             </div>
           </Col>
         </Row>
@@ -437,8 +631,12 @@ export default function FundList({
     <>
       {Object.entries(groupedFunds)
         .sort(([catA], [catB]) => {
-          const targetA = categoryTargets.find((t) => t.categoryName === catA)?.targetPercent || 0;
-          const targetB = categoryTargets.find((t) => t.categoryName === catB)?.targetPercent || 0;
+          const targetA =
+            categoryTargets.find((t) => t.categoryName === catA)
+              ?.targetPercent || 0;
+          const targetB =
+            categoryTargets.find((t) => t.categoryName === catB)
+              ?.targetPercent || 0;
           return targetB - targetA;
         })
         .map(([category, fundsInCategory]) => {
@@ -467,7 +665,7 @@ export default function FundList({
           }, 0);
 
           const categoryTarget = categoryTargets.find(
-            (t) => t.categoryName === category
+            (t) => t.categoryName === category,
           );
           const targetPercent = categoryTarget?.targetPercent || 0;
           const targetAmount =
@@ -497,9 +695,7 @@ export default function FundList({
                 >
                   <Space wrap>
                     <Tag color="blue">{category}</Tag>
-                    <Text type="secondary">
-                      {categoryFunds.length} 只基金
-                    </Text>
+                    <Text type="secondary">{categoryFunds.length} 只{config.assetLabel}</Text>
                     {categoryAlerts.has(category) && (
                       <Tooltip
                         title={
@@ -508,8 +704,8 @@ export default function FundList({
                               new Map(
                                 categoryAlerts
                                   .get(category)!
-                                  .map((alert) => [alert.fundId, alert])
-                              ).values()
+                                  .map((alert) => [alert.fundId, alert]),
+                              ).values(),
                             ).map((alert) => (
                               <div
                                 key={`${alert.fundId}-${alert.reason}`}
@@ -535,9 +731,8 @@ export default function FundList({
                                     {alert.reason === "price" && (
                                       <span>
                                         {" "}
-                                        净值相比上次买入下跌
-                                        {alert.priceDropPercent?.toFixed(2)}
-                                        %
+                                        {config.priceLabel}相比上次买入下跌
+                                        {alert.priceDropPercent?.toFixed(2)}%
                                       </span>
                                     )}
                                   </>
@@ -559,13 +754,13 @@ export default function FundList({
                             const categoryAlert = categoryAlerts
                               .get(category)!
                               .find(
-                                (a) => a.fundId === 0 && a.reason === "days"
+                                (a) => a.fundId === 0 && a.reason === "days",
                               );
 
                             if (fundAlerts.length > 0 && categoryAlert) {
-                              return `有${fundAlerts.length}只基金需要关注，分类超过30天未买入`;
+                              return `有${fundAlerts.length}只${config.assetLabel}需要关注，分类超过30天未买入`;
                             } else if (fundAlerts.length > 0) {
-                              return `有${fundAlerts.length}只基金需要关注`;
+                              return `有${fundAlerts.length}只${config.assetLabel}需要关注`;
                             } else if (categoryAlert) {
                               return "分类超过30天未买入";
                             }
@@ -633,16 +828,14 @@ export default function FundList({
                           {categoryHoldingCost.toLocaleString()}
                           {!isMobile &&
                             ` / 目标: ¥${Number(
-                              targetAmount
+                              targetAmount,
                             ).toLocaleString()}${
                               targetPercent > 0
                                 ? ` (${Number(targetPercent).toFixed(1)}%)`
                                 : ""
                             }`}
                         </Text>
-                        <Tag
-                          color={progress >= 100 ? "success" : "processing"}
-                        >
+                        <Tag color={progress >= 100 ? "success" : "processing"}>
                           {progress.toFixed(1)}%
                         </Tag>
                         <Text
@@ -676,9 +869,7 @@ export default function FundList({
                     <Button
                       size="small"
                       type="link"
-                      onClick={() =>
-                        onOpenTargetModal(category, targetPercent)
-                      }
+                      onClick={() => onOpenTargetModal(category, targetPercent)}
                     >
                       设置目标
                     </Button>
@@ -706,8 +897,7 @@ export default function FundList({
               )}
             </Card>
           );
-        }
-      )}
+        })}
 
       {funds.length === 0 && !loading && (
         <Card>
@@ -719,7 +909,7 @@ export default function FundList({
           >
             <FundOutlined style={{ fontSize: 64, color: "#d9d9d9" }} />
             <Text type="secondary" style={{ marginTop: 16 }}>
-              还没有添加基金，点击&ldquo;新建基金&rdquo;开始
+              还没有添加{config.assetLabel}，点击&ldquo;新建{config.assetLabel}&rdquo;开始
             </Text>
           </Flex>
         </Card>

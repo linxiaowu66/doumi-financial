@@ -1,5 +1,6 @@
-import { NextResponse } from 'next/server';
-import prisma from '@/lib/prisma';
+import { NextResponse } from "next/server";
+import prisma from "@/lib/prisma";
+import { isStockCode } from "@/lib/fund-price";
 
 // 延迟函数，用于避免限流
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -8,14 +9,35 @@ const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 // 优先使用东方财富移动端API，失败时回退到天天基金网接口
 async function fetchFundNetWorth(code: string) {
   try {
+    const stockCheck = isStockCode(code);
+    if (stockCheck.isStock) {
+      const url = `https://push2his.eastmoney.com/api/qt/stock/kline/get?secid=${stockCheck.secid}.${stockCheck.stockCode}&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61&klt=101&fqt=1&end=20500101&lmt=1`;
+      const res = await fetch(url, { cache: "no-store" });
+      const data = await res.json();
+
+      if (data?.data?.klines && data.data.klines.length > 0) {
+        const parts = data.data.klines[0].split(",");
+        return {
+          success: true,
+          netWorth: parseFloat(parts[2]),
+          netWorthDate: parts[0],
+        };
+      }
+      return {
+        success: false,
+        code,
+        error: "未获取到股票价格数据",
+      };
+    }
+
     // 优先尝试东方财富移动端API（更可靠）
     try {
       const eastmoneyUrl = `https://fundmobapi.eastmoney.com/FundMNewApi/FundMNFInfo?pageIndex=1&pageSize=20&plat=Android&appType=ttjj&product=EFund&Version=1&deviceid=123&Fcodes=${code}`;
       const eastmoneyResponse = await fetch(eastmoneyUrl, {
-        cache: 'no-store',
+        cache: "no-store",
         headers: {
-          'User-Agent':
-            'Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X) AppleWebKit/605.1.15',
+          "User-Agent":
+            "Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X) AppleWebKit/605.1.15",
         },
       });
       const eastmoneyData = await eastmoneyResponse.json();
@@ -31,7 +53,7 @@ async function fetchFundNetWorth(code: string) {
             success: true,
             code: fund.FCODE,
             netWorth: fund.NAV,
-            netWorthDate: fund.PDATE || '',
+            netWorthDate: fund.PDATE || "",
           };
         }
       }
@@ -42,7 +64,7 @@ async function fetchFundNetWorth(code: string) {
 
     // 备用方案：使用天天基金网的JSONP接口
     const url = `http://fundgz.1234567.com.cn/js/${code}.js`;
-    const response = await fetch(url, { cache: 'no-store' });
+    const response = await fetch(url, { cache: "no-store" });
     const text = await response.text();
 
     // 检查响应是否为空
@@ -50,7 +72,7 @@ async function fetchFundNetWorth(code: string) {
       return {
         success: false,
         code,
-        error: '接口返回空数据',
+        error: "接口返回空数据",
       };
     }
 
@@ -58,17 +80,17 @@ async function fetchFundNetWorth(code: string) {
     const jsonMatch = text.match(/jsonpgz\((.*)\)/);
     if (!jsonMatch || !jsonMatch[1] || jsonMatch[1].trim().length === 0) {
       // 检查是否是空响应 jsonpgz();
-      if (text.trim() === 'jsonpgz();' || text.trim() === 'jsonpgz()') {
+      if (text.trim() === "jsonpgz();" || text.trim() === "jsonpgz()") {
         return {
           success: false,
           code,
-          error: '基金不存在或已停售',
+          error: "基金不存在或已停售",
         };
       }
       return {
         success: false,
         code,
-        error: '解析净值数据失败',
+        error: "解析净值数据失败",
       };
     }
 
@@ -79,13 +101,13 @@ async function fetchFundNetWorth(code: string) {
       console.error(
         `解析基金 ${code} 数据失败:`,
         parseError,
-        '原始响应:',
-        text
+        "原始响应:",
+        text,
       );
       return {
         success: false,
         code,
-        error: '解析JSON数据失败',
+        error: "解析JSON数据失败",
       };
     }
 
@@ -94,7 +116,7 @@ async function fetchFundNetWorth(code: string) {
       return {
         success: false,
         code,
-        error: '基金不存在或已停售',
+        error: "基金不存在或已停售",
       };
     }
 
@@ -102,13 +124,13 @@ async function fetchFundNetWorth(code: string) {
       success: true,
       code: fundData.fundcode,
       netWorth: fundData.dwjz || fundData.gsz,
-      netWorthDate: fundData.jzrq || '',
+      netWorthDate: fundData.jzrq || "",
     };
   } catch (error) {
     return {
       success: false,
       code,
-      error: error instanceof Error ? error.message : '获取失败',
+      error: error instanceof Error ? error.message : "获取失败",
     };
   }
 }
@@ -141,7 +163,7 @@ export async function POST(request: Request) {
     if (funds.length === 0) {
       return NextResponse.json({
         success: true,
-        message: '没有需要更新的基金',
+        message: "没有需要更新的基金",
         results: [],
       });
     }
@@ -199,11 +221,11 @@ export async function POST(request: Request) {
       results,
     });
   } catch (error: unknown) {
-    console.error('批量更新净值失败:', error);
-    const message = error instanceof Error ? error.message : '未知错误';
+    console.error("批量更新净值失败:", error);
+    const message = error instanceof Error ? error.message : "未知错误";
     return NextResponse.json(
-      { error: '批量更新失败', details: message },
-      { status: 500 }
+      { error: "批量更新失败", details: message },
+      { status: 500 },
     );
   }
 }

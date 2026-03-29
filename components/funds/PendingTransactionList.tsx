@@ -33,6 +33,8 @@ export default function PendingTransactionList({
 }: PendingTransactionListProps) {
   if (pendingTransactions.length === 0) return null;
 
+  const isStock = fund?.direction?.type === 'STOCK';
+
   return (
     <Card
       title={
@@ -50,7 +52,7 @@ export default function PendingTransactionList({
           onClick={onBatchConfirm}
           loading={confirmLoading}
         >
-          检查转正
+          {isStock ? '检查成交' : '检查转正'}
         </Button>
       }
     >
@@ -78,7 +80,7 @@ export default function PendingTransactionList({
             render: (_: unknown, r: PendingTransaction) =>
               r.type === "BUY"
                 ? `¥${Number(r.applyAmount).toLocaleString()}`
-                : `${Number(r.applyShares)}份`,
+                : `${Number(r.applyShares)}${isStock ? '股' : '份'}`,
           },
           {
             title: "预计买入日期",
@@ -140,7 +142,7 @@ export default function PendingTransactionList({
               }
 
               let confirmDate = effectiveDate;
-              let days = fund?.confirmDays || 1;
+              let days = fund?.confirmDays || 0;
               while (days > 0) {
                 confirmDate = confirmDate.add(1, "day");
                 if (confirmDate.day() !== 0 && confirmDate.day() !== 6) {
@@ -155,7 +157,7 @@ export default function PendingTransactionList({
             title: "状态",
             dataIndex: "status",
             key: "status",
-            render: () => <Tag color="orange">等待净值</Tag>,
+            render: () => <Tag color="orange">{isStock ? '等待价格' : '等待净值'}</Tag>,
           },
           {
             title: "操作",

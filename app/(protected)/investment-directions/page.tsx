@@ -1,13 +1,13 @@
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
-import { Card, Button, Form, message, Flex, Typography } from 'antd';
-import { PlusOutlined, FundOutlined } from '@ant-design/icons';
-import { InvestmentDirection, FundAlert } from '@/types/investment-direction';
-import AlertsOverview from '@/components/investment-directions/AlertsOverview';
-import StatsCard from '@/components/investment-directions/StatsCard';
-import DirectionList from '@/components/investment-directions/DirectionList';
-import DirectionModal from '@/components/investment-directions/DirectionModal';
+import { useState, useEffect } from "react";
+import { Card, Button, Form, message, Flex, Typography } from "antd";
+import { PlusOutlined, FundOutlined } from "@ant-design/icons";
+import { InvestmentDirection, FundAlert } from "@/types/investment-direction";
+import AlertsOverview from "@/components/investment-directions/AlertsOverview";
+import StatsCard from "@/components/investment-directions/StatsCard";
+import DirectionList from "@/components/investment-directions/DirectionList";
+import DirectionModal from "@/components/investment-directions/DirectionModal";
 
 const { Title, Text } = Typography;
 
@@ -25,11 +25,11 @@ export default function InvestmentDirectionsPage() {
   const loadDirections = async () => {
     setLoading(true);
     try {
-      const response = await fetch('/api/investment-directions');
+      const response = await fetch("/api/investment-directions");
       const data = await response.json();
       setDirections(data);
     } catch {
-      message.error('加载失败');
+      message.error("加载失败");
     } finally {
       setLoading(false);
     }
@@ -39,11 +39,11 @@ export default function InvestmentDirectionsPage() {
   const loadAlerts = async () => {
     setAlertsLoading(true);
     try {
-      const response = await fetch('/api/investment-directions/alerts');
+      const response = await fetch("/api/investment-directions/alerts");
       const data = await response.json();
       setAlerts(data);
     } catch {
-      message.error('加载预警信息失败');
+      message.error("加载预警信息失败");
     } finally {
       setAlertsLoading(false);
     }
@@ -60,11 +60,13 @@ export default function InvestmentDirectionsPage() {
       setEditingDirection(direction);
       form.setFieldsValue({
         name: direction.name,
+        type: direction.type,
         expectedAmount: direction.expectedAmount,
       });
     } else {
       setEditingDirection(null);
       form.resetFields();
+      form.setFieldsValue({ type: "FUND" });
     }
     setModalOpen(true);
   };
@@ -72,31 +74,32 @@ export default function InvestmentDirectionsPage() {
   // 提交表单
   const handleSubmit = async (values: {
     name: string;
+    type: "FUND" | "STOCK";
     expectedAmount: number;
   }) => {
     try {
       const url = editingDirection
         ? `/api/investment-directions/${editingDirection.id}`
-        : '/api/investment-directions';
+        : "/api/investment-directions";
 
-      const method = editingDirection ? 'PUT' : 'POST';
+      const method = editingDirection ? "PUT" : "POST";
 
       const response = await fetch(url, {
         method,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(values),
       });
 
       if (response.ok) {
-        message.success(editingDirection ? '更新成功' : '创建成功');
+        message.success(editingDirection ? "更新成功" : "创建成功");
         setModalOpen(false);
         form.resetFields();
         loadDirections();
       } else {
-        message.error('操作失败');
+        message.error("操作失败");
       }
     } catch {
-      message.error('操作失败');
+      message.error("操作失败");
     }
   };
 
@@ -104,17 +107,17 @@ export default function InvestmentDirectionsPage() {
   const handleDelete = async (id: number) => {
     try {
       const response = await fetch(`/api/investment-directions/${id}`, {
-        method: 'DELETE',
+        method: "DELETE",
       });
 
       if (response.ok) {
-        message.success('删除成功');
+        message.success("删除成功");
         loadDirections();
       } else {
-        message.error('删除失败');
+        message.error("删除失败");
       }
     } catch {
-      message.error('删除失败');
+      message.error("删除失败");
     }
   };
 

@@ -16,6 +16,7 @@ import {
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { Fund, FundStats, Transaction } from "@/types/fund";
+import { useInvestmentConfig } from "@/hooks/use-investment-config";
 
 const { Text } = Typography;
 
@@ -44,6 +45,8 @@ export default function FundStatsCard({
   onRefresh,
   normalizeZero,
 }: FundStatsCardProps) {
+  const { priceLabel, unit, isStock } = useInvestmentConfig(fund?.direction?.type);
+
   return (
     <Card
       title={<span style={{ fontSize: isMobile ? 14 : 16 }}>持仓统计</span>}
@@ -52,7 +55,7 @@ export default function FundStatsCard({
         isMobile ? null : (
           <Space direction="vertical" size="small" align="end">
             <Space>
-              <Text>当前净值：</Text>
+              <Text>当前{priceLabel}：</Text>
               <InputNumber
                 value={currentPrice}
                 onChange={(value) => onPriceChange(value || 0)}
@@ -60,7 +63,7 @@ export default function FundStatsCard({
                 min={0}
                 step={0.0001}
                 style={{ width: 120 }}
-                placeholder="净值"
+                placeholder={priceLabel}
               />
               <Button
                 size="small"
@@ -68,7 +71,7 @@ export default function FundStatsCard({
                 loading={fetchingPrice}
                 disabled={!fund?.code}
               >
-                获取最新
+                获取最新{isStock ? '价格' : ''}
               </Button>
               <Button
                 type="primary"
@@ -81,7 +84,7 @@ export default function FundStatsCard({
             </Space>
             {fund?.netWorthDate && (
               <Text type="secondary" style={{ fontSize: 12 }}>
-                净值日期：{fund.netWorthDate}
+                {priceLabel}日期：{fund.netWorthDate}
                 {fund.netWorthUpdateAt &&
                   ` (更新于 ${dayjs(fund.netWorthUpdateAt).format(
                     "MM-DD HH:mm"
@@ -104,7 +107,7 @@ export default function FundStatsCard({
         >
           <Space direction="vertical" size="small" style={{ width: "100%" }}>
             <Flex justify="space-between" align="center">
-              <Text style={{ fontSize: 12 }}>当前净值：</Text>
+              <Text style={{ fontSize: 12 }}>当前{priceLabel}：</Text>
               <InputNumber
                 value={currentPrice}
                 onChange={(value) => onPriceChange(value || 0)}
@@ -113,7 +116,7 @@ export default function FundStatsCard({
                 step={0.0001}
                 style={{ width: 100 }}
                 size="small"
-                placeholder="净值"
+                placeholder={priceLabel}
               />
             </Flex>
             <Flex gap={8}>
@@ -124,7 +127,7 @@ export default function FundStatsCard({
                 disabled={!fund?.code}
                 block
               >
-                获取最新
+                获取最新{isStock ? '价格' : ''}
               </Button>
               <Button
                 type="primary"
@@ -138,7 +141,7 @@ export default function FundStatsCard({
             </Flex>
             {fund?.netWorthDate && (
               <Text type="secondary" style={{ fontSize: 11 }}>
-                净值日期：{fund.netWorthDate}
+                {priceLabel}日期：{fund.netWorthDate}
               </Text>
             )}
           </Space>
@@ -149,10 +152,10 @@ export default function FundStatsCard({
         <Col xs={12} sm={12} md={8}>
           <Statistic
             title={
-              <span style={{ fontSize: isMobile ? 12 : 14 }}>持仓份额</span>
+              <span style={{ fontSize: isMobile ? 12 : 14 }}>持仓{isStock ? '股' : '份'}数</span>
             }
             value={normalizeZero(stats?.holdingShares)}
-            precision={2}
+            precision={isStock ? 0 : 2}
             prefix={<DollarOutlined />}
             styles={{ content: { fontSize: isMobile ? 16 : 20 } }}
           />
@@ -263,7 +266,7 @@ export default function FundStatsCard({
               <Statistic
                 title={
                   <span style={{ fontSize: isMobile ? 12 : 14 }}>
-                    最近买入净值
+                    最近买入{priceLabel}
                   </span>
                 }
                 value={latestBuyPrice}

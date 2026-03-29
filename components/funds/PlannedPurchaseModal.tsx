@@ -7,6 +7,7 @@ interface PlannedPurchaseModalProps {
   onFinish: (values: { plannedAmount: number }) => void;
   form: FormInstance;
   isMobile: boolean;
+  isStock?: boolean;
 }
 
 export default function PlannedPurchaseModal({
@@ -15,10 +16,11 @@ export default function PlannedPurchaseModal({
   onFinish,
   form,
   isMobile,
+  isStock = false,
 }: PlannedPurchaseModalProps) {
   return (
     <Modal
-      title="新建计划买入"
+      title={isStock ? "新建股票买入计划" : "新建基金买入计划"}
       open={open}
       onCancel={onCancel}
       footer={null}
@@ -31,10 +33,10 @@ export default function PlannedPurchaseModal({
         style={{ marginTop: 24 }}
       >
         <Form.Item
-          label="计划买入金额"
+          label={isStock ? "计划买入金额" : "计划买入金额"}
           name="plannedAmount"
           rules={[{ required: true, message: "请输入计划买入金额" }]}
-          tooltip="设置一个预期买入的金额，等时机合适时再执行"
+          tooltip={isStock ? "设置一个预期买入股票的金额，等时机合适时再执行" : "设置一个预期买入的金额，等时机合适时再执行"}
         >
           <InputNumber
             style={{ width: "100%" }}

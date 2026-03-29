@@ -1,11 +1,12 @@
-import { NextResponse } from 'next/server';
-import prisma from '@/lib/prisma';
-import { Decimal } from '@prisma/client/runtime/library';
+import { NextResponse } from "next/server";
+import prisma from "@/lib/prisma";
+import { calculateDirectionDailyProfit } from "@/lib/direction-daily-profit";
+import { Decimal } from "@prisma/client/runtime/library";
 
 // GET - 获取投资方向汇总统计
 export async function GET(
   request: Request,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     const { id } = await params;
@@ -18,7 +19,7 @@ export async function GET(
         funds: {
           include: {
             transactions: {
-              orderBy: { date: 'asc' },
+              orderBy: { date: "asc" },
             },
           },
         },
@@ -26,7 +27,7 @@ export async function GET(
     });
 
     if (!direction) {
-      return NextResponse.json({ error: '投资方向不存在' }, { status: 404 });
+      return NextResponse.json({ error: "投资方向不存在" }, { status: 404 });
     }
 
     // 初始化统计数据
@@ -52,13 +53,13 @@ export async function GET(
         const price = new Decimal(tx.price.toString());
         const fee = new Decimal(tx.fee.toString());
 
-        if (tx.type === 'BUY') {
+        if (tx.type === "BUY") {
           // 买入：增加份额和成本
           fundShares = fundShares.plus(shares);
           fundCost = fundCost.plus(amount);
           // 累加总投入（包括已清仓的基金，用于计算累计收益率）
           totalInvested = totalInvested.plus(amount);
-        } else if (tx.type === 'SELL') {
+        } else if (tx.type === "SELL") {
           // 卖出：减少份额和成本
           const sellShares = shares.abs();
           const avgCostPrice = fundShares.isZero()
@@ -73,7 +74,7 @@ export async function GET(
           const sellRevenue = sellShares.times(price).minus(fee);
           const sellProfit = sellRevenue.minus(costOfSold);
           fundSellProfit = fundSellProfit.plus(sellProfit);
-        } else if (tx.type === 'DIVIDEND') {
+        } else if (tx.type === "DIVIDEND") {
           // 分红
           if (tx.dividendReinvest) {
             // 分红再投资：增加份额，但不增加成本
@@ -146,6 +147,57 @@ export async function GET(
       totalCurrentValue: normalizeZero(totalCurrentValue), // 当前总市值
       totalCost: normalizeZero(totalCost), // 持仓总成本
       holdingProfit: normalizeZero(holdingProfit), // 持仓收益
+      // 计算并返回昨日盈亏（基于已保存的 direction_daily_profit 或即时计算）
+      yesterdayProfit: await (async () => {
+        try {
+          const res = await calculateDirectionDailyProfit(
+            directionId,
+            new Date(),
+          );
+          return res.dailyProfit.toFixed(2);
+        } catch (err) {
+          return "0.00";
+        }
+      })(),
+      // 计算年化收益（CAGR），基于累计收益率和最早一次买入时间
+      annualYield: ((): string => {
+        try {
+          const rate = totalProfitRate; // Decimal
+          const factor = 1 + parseFloat(rate.toString()) / 100;
+          // 找到最早的 BUY 交易时间
+          let earliestBuy: Date | null = null;
+          for (const fund of direction.funds) {
+            if (!fund.transactions || fund.transactions.length === 0) continue;
+            const buys = fund.transactions.filter((t: any) => t.type === "BUY");
+            if (buys.length === 0) continue;
+            const first = buys.sort(
+              (a: any, b: any) =>
+                new Date(a.date).getTime() - new Date(b.date).getTime(),
+            )[0];
+            const d = new Date(first.date);
+            if (!earliestBuy || d < earliestBuy) earliestBuy = d;
+          }
+          const fallback = direction.expectedAmount ? null : null;
+          const startDate = earliestBuy
+            ? earliestBuy
+            : direction.createdAt
+              ? new Date((direction as any).createdAt)
+              : null;
+          const now = new Date();
+          const years = startDate
+            ? Math.max(
+                (now.getTime() - startDate.getTime()) /
+                  (1000 * 60 * 60 * 24 * 365),
+                1 / 12,
+              )
+            : 1 / 12;
+          if (factor <= 0) return "0.00";
+          const annualized = (Math.pow(factor, 1 / years) - 1) * 100;
+          return annualized.toFixed(2);
+        } catch (err) {
+          return "0.00";
+        }
+      })(),
       totalSellProfit: normalizeZero(totalSellProfit), // 累计卖出收益
       totalDividendCash: normalizeZero(totalDividendCash), // 累计现金分红
       totalDividendReinvest: normalizeZero(totalDividendReinvest), // 累计再投资分红
@@ -154,14 +206,14 @@ export async function GET(
       fundCount: direction.funds.length, // 基金数量
     });
   } catch (error: unknown) {
-    console.error('获取投资方向汇总统计失败:', error);
-    const message = error instanceof Error ? error.message : '未知错误';
+    console.error("获取投资方向汇总统计失败:", error);
+    const message = error instanceof Error ? error.message : "未知错误";
     return NextResponse.json(
       {
-        error: '获取投资方向汇总统计失败',
+        error: "获取投资方向汇总统计失败",
         message,
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

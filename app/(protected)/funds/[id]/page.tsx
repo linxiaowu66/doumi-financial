@@ -29,13 +29,17 @@ export default function FundDetailPage({
   const fundId = parseInt(resolvedParams.id);
 
   const [fund, setFund] = useState<Fund | null>(null);
+  const [systemSettings, setSystemSettings] = useState<Record<string, string>>(
+    {},
+  );
+
   const [stats, setStats] = useState<FundStats | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [pendingTransactions, setPendingTransactions] = useState<
     PendingTransaction[]
   >([]);
   const [plannedPurchases, setPlannedPurchases] = useState<PlannedPurchase[]>(
-    []
+    [],
   );
   const [loading, setLoading] = useState(false);
   const [confirmLoading, setConfirmLoading] = useState(false);
@@ -43,9 +47,11 @@ export default function FundDetailPage({
   const [planModalOpen, setPlanModalOpen] = useState(false);
   const [executePlanModalOpen, setExecutePlanModalOpen] = useState(false);
   const [executingPlan, setExecutingPlan] = useState<PlannedPurchase | null>(
-    null
+    null,
   );
-  const [editingTransactionId, setEditingTransactionId] = useState<number | null>(null);
+  const [editingTransactionId, setEditingTransactionId] = useState<
+    number | null
+  >(null);
   const [transactionType, setTransactionType] = useState<string>("BUY");
   const [currentPrice, setCurrentPrice] = useState<number>(0); // 当前净值
   const [fetchingPrice, setFetchingPrice] = useState(false); // 正在获取净值
@@ -82,7 +88,7 @@ export default function FundDetailPage({
 
   // 判断是否需要更新净值（今天未更新过则需要更新）
   const shouldUpdateNetWorth = (
-    lastUpdateTime: string | null | undefined
+    lastUpdateTime: string | null | undefined,
   ): boolean => {
     if (!lastUpdateTime) {
       return true; // 从未更新过，需要获取
@@ -94,6 +100,8 @@ export default function FundDetailPage({
     // 如果上次更新不是今天，需要重新获取
     return !lastUpdate.isSame(now, "day");
   };
+
+  const isStock = fund?.direction?.type === "STOCK";
 
   // 获取基金最新净值
   const fetchCurrentPrice = useCallback(
@@ -131,23 +139,25 @@ export default function FundDetailPage({
                   netWorthDate: data.netWorthDate,
                   netWorthUpdateAt: new Date().toISOString(),
                 }
-              : null
+              : null,
           );
 
           message.success(
-            `已获取最新净值：¥${price}（${data.netWorthDate || ""}）`
+            `已获取最新${isStock ? "价格" : "净值"}：¥${price}（${data.netWorthDate || ""}）`,
           );
         } else {
-          message.warning("无法获取最新净值，请手动输入");
+          message.warning(
+            `无法获取最新${isStock ? "价格" : "净值"}，请手动输入`,
+          );
         }
       } catch (error) {
-        console.error("获取净值失败:", error);
-        message.warning("获取净值失败，请手动输入");
+        console.error(`获取${isStock ? "价格" : "净值"}失败:`, error);
+        message.warning(`获取${isStock ? "价格" : "净值"}失败，请手动输入`);
       } finally {
         setFetchingPrice(false);
       }
     },
-    [fundId, fund?.code]
+    [fundId, fund?.code, isStock],
   );
 
   // 获取指定日期的历史净值
@@ -156,7 +166,7 @@ export default function FundDetailPage({
       setFetchingHistoryPrice(true);
       try {
         const response = await fetch(
-          `/api/fund-price-history?code=${code}&date=${date}`
+          `/api/fund-price-history?code=${code}&date=${date}`,
         );
         const data = await response.json();
 
@@ -171,12 +181,13 @@ export default function FundDetailPage({
             matchType: data.matchType,
           };
         } else {
-          const errorMsg = data.error || "无法获取该日期的净值数据";
+          const errorMsg =
+            data.error || `无法获取该日期的${isStock ? "价格" : "净值"}数据`;
           if (data.availableDates && data.availableDates.length > 0) {
             message.warning(
               `${errorMsg}。最近的可用日期：${data.availableDates
                 .slice(0, 3)
-                .join(", ")}`
+                .join(", ")}`,
             );
           } else {
             message.warning(errorMsg);
@@ -184,17 +195,27 @@ export default function FundDetailPage({
           return null;
         }
       } catch (error) {
-        console.error("获取历史净值失败:", error);
-        message.warning("获取历史净值失败");
+        console.error(`获取历史${isStock ? "价格" : "净值"}失败:`, error);
+        message.warning(`获取历史${isStock ? "价格" : "净值"}失败`);
         return null;
       } finally {
         setFetchingHistoryPrice(false);
       }
     },
-    []
+    [isStock],
   );
 
   // 加载基金详情
+  const loadSystemSettings = useCallback(async () => {
+    try {
+      const response = await fetch("/api/settings/system");
+      const data = await response.json();
+      setSystemSettings(data);
+    } catch (error) {
+      console.error("加载系统设置失败:", error);
+    }
+  }, []);
+
   const loadFund = useCallback(async () => {
     try {
       const response = await fetch(`/api/funds/${fundId}`);
@@ -248,7 +269,7 @@ export default function FundDetailPage({
   const loadPlannedPurchases = useCallback(async () => {
     try {
       const response = await fetch(
-        `/api/planned-purchases?fundId=${fundId}&status=PENDING`
+        `/api/planned-purchases?fundId=${fundId}&status=PENDING`,
       );
       const data = await response.json();
       setPlannedPurchases(data);
@@ -294,9 +315,9 @@ export default function FundDetailPage({
           // 只在精确匹配时显示成功消息
           if (result.matchType === "exact") {
             message.success(
-              `已获取 ${dateStr} 净值：¥${result.netWorth.toFixed(
-                4
-              )}，计算分红金额：¥${amount.toFixed(2)}`
+              `已获取 ${dateStr} ${isStock ? "价格" : "净值"}：¥${result.netWorth.toFixed(
+                4,
+              )}，计算分红金额：¥${amount.toFixed(2)}`,
             );
           } else {
             message.success(`计算分红金额：¥${amount.toFixed(2)}`);
@@ -314,6 +335,7 @@ export default function FundDetailPage({
     fund?.code,
     fetchHistoricalPrice,
     form,
+    isStock,
   ]);
 
   // 打开交易弹窗
@@ -333,7 +355,7 @@ export default function FundDetailPage({
     setTransactionType(transaction.type);
     setEditingTransactionId(transaction.id);
     form.resetFields();
-    
+
     // 填充表单
     const values: any = {
       type: transaction.type,
@@ -344,14 +366,14 @@ export default function FundDetailPage({
       dividendReinvest: transaction.dividendReinvest,
     };
 
-    if (transaction.type === 'BUY') {
+    if (transaction.type === "BUY") {
       values.amount = Number(transaction.amount); // 这里 amount 已经是总支出
-    } else if (transaction.type === 'SELL') {
+    } else if (transaction.type === "SELL") {
       values.shares = Math.abs(Number(transaction.shares));
       // 卖出时 amount 是净收入，但在界面上我们通常不显示这个字段让用户改，
       // 而是通过 shares * price - fee 自动计算，或者用户输入 shares 和 price。
       // 所以不需要填充 amount
-    } else if (transaction.type === 'DIVIDEND') {
+    } else if (transaction.type === "DIVIDEND") {
       values.amount = Number(transaction.amount);
       if (transaction.dividendReinvest) {
         values.dividendShares = Number(transaction.shares);
@@ -365,12 +387,12 @@ export default function FundDetailPage({
   // 一键清仓
   const handleLiquidateAll = () => {
     if (!stats || !stats.holdingShares || stats.holdingShares <= 0) {
-      message.warning("当前没有持仓份额，无法清仓");
+      message.warning(`当前没有持仓${isStock ? "股数" : "份额"}，无法清仓`);
       return;
     }
 
     if (!currentPrice || currentPrice <= 0) {
-      message.warning("请先获取或输入当前净值");
+      message.warning(`请先获取或输入当前${isStock ? "价格" : "净值"}`);
       return;
     }
 
@@ -439,12 +461,22 @@ export default function FundDetailPage({
 
       // 根据不同类型计算份额和金额
       if (values.type === "BUY") {
-        const netAmount = values.amount - (values.fee || 0);
-        calculatedShares = netAmount / values.price;
-        calculatedAmount = values.amount;
+        if (isStock) {
+          calculatedShares = values.shares;
+          calculatedAmount = values.amount;
+        } else {
+          const netAmount = values.amount - (values.fee || 0);
+          calculatedShares = netAmount / values.price;
+          calculatedAmount = values.amount;
+        }
       } else if (values.type === "SELL") {
-        calculatedAmount = values.shares * values.price - (values.fee || 0);
-        calculatedShares = -Math.abs(values.shares);
+        if (isStock) {
+          calculatedAmount = values.amount;
+          calculatedShares = -Math.abs(values.shares);
+        } else {
+          calculatedAmount = values.shares * values.price - (values.fee || 0);
+          calculatedShares = -Math.abs(values.shares);
+        }
       } else if (values.type === "DIVIDEND") {
         calculatedAmount = values.amount;
         if (values.dividendReinvest) {
@@ -490,7 +522,9 @@ export default function FundDetailPage({
       }
 
       if (response.ok) {
-        message.success(editingTransactionId ? "交易记录更新成功" : "交易记录添加成功");
+        message.success(
+          editingTransactionId ? "交易记录更新成功" : "交易记录添加成功",
+        );
         setModalOpen(false);
         setEditingTransactionId(null);
         form.resetFields();
@@ -551,8 +585,7 @@ export default function FundDetailPage({
       if (response.ok) {
         const confirmedCount =
           data.logs?.filter(
-            (l: string) =>
-              l.includes("成功转正") || l.includes("Confirmed")
+            (l: string) => l.includes("成功转正") || l.includes("Confirmed"),
           ).length || 0;
 
         if (confirmedCount > 0) {
@@ -560,7 +593,9 @@ export default function FundDetailPage({
           loadFund();
           loadTransactions();
         } else {
-          message.info("暂无符合确认条件的交易（可能未到确认日或无净值）");
+          message.info(
+            `暂无符合确认条件的交易（可能未到确认日或无${isStock ? "价格" : "净值"}）`,
+          );
         }
       } else {
         message.error("批量确认失败");
@@ -644,11 +679,13 @@ export default function FundDetailPage({
             fee: values.fee || 0,
             date: values.date.toISOString(),
           }),
-        }
+        },
       );
 
       if (response.ok) {
-        message.success("执行成功，已创建买入交易记录");
+        message.success(
+          `执行成功，已创建买入${isStock ? "股票" : "基金"}交易记录`,
+        );
         setExecutePlanModalOpen(false);
         executeForm.resetFields();
         loadTransactions();
@@ -701,6 +738,7 @@ export default function FundDetailPage({
         <PlannedPurchaseList
           plannedPurchases={plannedPurchases}
           isMobile={isMobile}
+          isStock={isStock}
           onPlanModalOpen={() => setPlanModalOpen(true)}
           onDeletePlan={handleDeletePlan}
           onOpenExecuteModal={handleOpenExecuteModal}
@@ -716,6 +754,7 @@ export default function FundDetailPage({
         />
 
         <TransactionList
+          fund={fund}
           transactions={transactions}
           loading={loading}
           isMobile={isMobile}
@@ -740,6 +779,8 @@ export default function FundDetailPage({
           fetchingHistoryPrice={fetchingHistoryPrice}
           isMobile={isMobile}
           isEditing={!!editingTransactionId}
+          fund={fund}
+          systemSettings={systemSettings}
         />
 
         <PlannedPurchaseModal
@@ -751,6 +792,7 @@ export default function FundDetailPage({
           onFinish={handleCreatePlan}
           form={planForm}
           isMobile={isMobile}
+          isStock={isStock}
         />
 
         <ExecutePlanModal
@@ -762,6 +804,7 @@ export default function FundDetailPage({
           onFinish={handleExecutePlan}
           form={executeForm}
           isMobile={isMobile}
+          isStock={isStock}
         />
       </div>
     </div>
