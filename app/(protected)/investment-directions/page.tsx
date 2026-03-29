@@ -19,7 +19,20 @@ export default function InvestmentDirectionsPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingDirection, setEditingDirection] =
     useState<InvestmentDirection | null>(null);
+  const [isMobile, setIsMobile] = useState(false);
   const [form] = Form.useForm();
+
+  // 检测屏幕尺寸
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
 
   // 加载投资方向列表
   const loadDirections = async () => {
@@ -122,13 +135,18 @@ export default function InvestmentDirectionsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-8">
+    <div className="min-h-screen bg-gray-50 p-4 md:p-8">
       <div className="max-w-7xl mx-auto">
-        <Card className="mb-6">
-          <Flex justify="space-between" align="center">
+        <Card className="mb-4 md:mb-6">
+          <Flex
+            justify="space-between"
+            align={isMobile ? "flex-start" : "center"}
+            vertical={isMobile}
+            gap={isMobile ? 12 : 0}
+          >
             <div>
-              <Title level={2} style={{ marginBottom: 8 }}>
-                <FundOutlined className="mr-3" />
+              <Title level={isMobile ? 3 : 2} style={{ marginBottom: 8, marginTop: 0 }}>
+                <FundOutlined className="mr-2 md:mr-3" />
                 投资方向管理
               </Title>
               <Text type="secondary">
@@ -138,8 +156,9 @@ export default function InvestmentDirectionsPage() {
             <Button
               type="primary"
               icon={<PlusOutlined />}
-              size="large"
+              size={isMobile ? "middle" : "large"}
               onClick={() => handleOpenModal()}
+              block={isMobile}
             >
               新建投资方向
             </Button>
@@ -153,6 +172,7 @@ export default function InvestmentDirectionsPage() {
         <DirectionList
           directions={directions}
           loading={loading}
+          isMobile={isMobile}
           onEdit={handleOpenModal}
           onDelete={handleDelete}
         />

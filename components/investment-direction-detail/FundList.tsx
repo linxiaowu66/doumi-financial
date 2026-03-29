@@ -263,7 +263,9 @@ export default function FundList({
       title: (
         <Space>
           累计收益金额
-          <Tooltip title={`持仓收益 + 卖出收益 + 分红的总和，反映该${config.assetLabel}的整体盈亏`}>
+          <Tooltip
+            title={`持仓收益 + 卖出收益 + 分红的总和，反映该${config.assetLabel}的整体盈亏`}
+          >
             <QuestionCircleOutlined
               style={{ color: "#1890ff", cursor: "help", fontSize: 12 }}
             />
@@ -378,7 +380,9 @@ export default function FundList({
       render: (_: unknown, record: Fund) => {
         const count = record._count?.pendingTransactions || 0;
         return count > 0 ? (
-          <Tooltip title={`${count} 笔交易等待${isStock ? '成交' : '确认净值'}`}>
+          <Tooltip
+            title={`${count} 笔交易等待${isStock ? "成交" : "确认净值"}`}
+          >
             <Badge count={count} size="small" offset={[5, 0]}>
               <ClockCircleOutlined style={{ color: "#faad14", fontSize: 16 }} />
             </Badge>
@@ -527,7 +531,9 @@ export default function FundList({
             </div>
           </Col>
           <Col span={12}>
-            <div style={{ fontSize: 12, color: "#999" }}>{isStock ? '持仓股数' : '持仓份额'}</div>
+            <div style={{ fontSize: 12, color: "#999" }}>
+              {isStock ? "持仓股数" : "持仓份额"}
+            </div>
             <div style={{ fontSize: 14, fontWeight: 500 }}>
               {stats?.holdingShares?.toLocaleString() || "-"}
             </div>
@@ -622,6 +628,20 @@ export default function FundList({
               })()}
             </div>
           </Col>
+          <Col span={12}>
+            <div style={{ fontSize: 12, color: "#999" }}>累计收益</div>
+            <div
+              style={{
+                fontSize: 14,
+                fontWeight: 600,
+                color: stats?.totalProfit >= 0 ? "#cf1322" : "#3f8600",
+              }}
+            >
+              {stats?.totalProfit !== undefined && stats?.totalProfit !== null
+                ? `${stats.totalProfit >= 0 ? "+" : ""}¥${stats.totalProfit.toLocaleString()}`
+                : "-"}
+            </div>
+          </Col>
         </Row>
       </Card>
     );
@@ -695,7 +715,9 @@ export default function FundList({
                 >
                   <Space wrap>
                     <Tag color="blue">{category}</Tag>
-                    <Text type="secondary">{categoryFunds.length} 只{config.assetLabel}</Text>
+                    <Text type="secondary">
+                      {categoryFunds.length} 只{config.assetLabel}
+                    </Text>
                     {categoryAlerts.has(category) && (
                       <Tooltip
                         title={
@@ -876,6 +898,17 @@ export default function FundList({
                   </Space>
                 </Flex>
               }
+              headStyle={{
+                paddingTop: isMobile ? 18 : 12,
+                paddingBottom: 12,
+                paddingLeft: isMobile ? 16 : 20,
+                paddingRight: isMobile ? 16 : 20,
+              }}
+              bodyStyle={{
+                paddingTop: isMobile ? 14 : 12,
+                paddingLeft: isMobile ? 16 : 20,
+                paddingRight: isMobile ? 16 : 20,
+              }}
               style={{ marginBottom: isMobile ? 12 : 16 }}
             >
               {isMobile ? (
@@ -909,7 +942,8 @@ export default function FundList({
           >
             <FundOutlined style={{ fontSize: 64, color: "#d9d9d9" }} />
             <Text type="secondary" style={{ marginTop: 16 }}>
-              还没有添加{config.assetLabel}，点击&ldquo;新建{config.assetLabel}&rdquo;开始
+              还没有添加{config.assetLabel}，点击&ldquo;新建{config.assetLabel}
+              &rdquo;开始
             </Text>
           </Flex>
         </Card>

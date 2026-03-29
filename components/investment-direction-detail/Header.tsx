@@ -2,30 +2,31 @@ import { Card, Flex, Button, Typography, Space, Breadcrumb } from "antd";
 import { ArrowLeftOutlined, PlusOutlined, FundOutlined, RobotOutlined } from "@ant-design/icons";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { InvestmentDirection } from "@/types/investment-direction-detail";
+import { useInvestmentConfig } from "@/hooks/use-investment-config";
 
 const { Title, Text } = Typography;
 
 interface HeaderProps {
-  direction: InvestmentDirection | null;
-  isMobile: boolean;
-  onOpenModal: () => void;
-  onAnalyze: () => void;
+  direction: any;
   analyzing: boolean;
+  onAnalyze: () => void;
+  onOpenModal: () => void;
+  isMobile: boolean;
 }
 
 export default function Header({
   direction,
-  isMobile,
-  onOpenModal,
-  onAnalyze,
   analyzing,
+  onAnalyze,
+  onOpenModal,
+  isMobile,
 }: HeaderProps) {
   const router = useRouter();
+  const { assetLabel } = useInvestmentConfig(direction?.type);
 
   return (
     <>
-      {/* 面包屑 - 移动端简化 */}
+      {/* 面包屑 - 移动端隐藏 */}
       {!isMobile && (
         <Breadcrumb
           items={[
@@ -40,33 +41,31 @@ export default function Header({
         />
       )}
 
-      {/* 顶部信息卡片 */}
-      <Card style={{ marginBottom: isMobile ? 12 : 24 }}>
+      <Card className="mb-4 md:mb-6">
         <Flex
           justify="space-between"
           align={isMobile ? "flex-start" : "center"}
           vertical={isMobile}
           gap={isMobile ? 12 : 0}
         >
-          <div style={{ width: isMobile ? "100%" : "auto" }}>
-            <Flex align="center" gap="middle" wrap="wrap">
-              <Button
-                icon={<ArrowLeftOutlined />}
-                onClick={() => router.push("/investment-directions")}
-                size={isMobile ? "small" : "middle"}
-              >
-                返回
-              </Button>
+          <div style={{ flex: 1 }}>
+            <Flex align="center" gap="middle">
+              {!isMobile && (
+                <Button
+                  icon={<ArrowLeftOutlined />}
+                  onClick={() => router.push("/investment-directions")}
+                />
+              )}
               <div>
                 <Title
                   level={isMobile ? 4 : 2}
-                  style={{ marginBottom: isMobile ? 4 : 8 }}
+                  style={{ marginBottom: isMobile ? 4 : 8, marginTop: 0 }}
                 >
                   <FundOutlined style={{ marginRight: 8 }} />
                   {direction?.name}
                 </Title>
                 {!isMobile && (
-                  <Text type="secondary">{direction?.type === 'STOCK' ? '管理该投资方向下的股票' : '管理该投资方向下的基金'}</Text>
+                  <Text type="secondary">管理该投资方向下的{assetLabel}</Text>
                 )}
               </div>
             </Flex>
@@ -89,7 +88,7 @@ export default function Header({
               onClick={onOpenModal}
               block={isMobile}
             >
-              {direction?.type === 'STOCK' ? '新建股票' : '新建基金'}
+              新建{assetLabel}
             </Button>
           </Space>
         </Flex>

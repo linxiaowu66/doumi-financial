@@ -7,6 +7,10 @@ import {
   Tooltip,
   Badge,
   Popconfirm,
+  Flex,
+  Row,
+  Col,
+  Statistic,
 } from 'antd';
 import {
   ArrowRightOutlined,
@@ -24,6 +28,7 @@ const { Text } = Typography;
 interface DirectionListProps {
   directions: InvestmentDirection[];
   loading: boolean;
+  isMobile?: boolean;
   onEdit: (direction: InvestmentDirection) => void;
   onDelete: (id: number) => void;
 }
@@ -31,6 +36,7 @@ interface DirectionListProps {
 export default function DirectionList({
   directions,
   loading,
+  isMobile = false,
   onEdit,
   onDelete,
 }: DirectionListProps) {
@@ -182,6 +188,97 @@ export default function DirectionList({
       ),
     },
   ];
+
+  if (isMobile) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        {directions.map((record) => {
+          const progress =
+            Number(record.expectedAmount) > 0
+              ? (Number(record.actualAmount) / Number(record.expectedAmount)) * 100
+              : 0;
+
+          return (
+            <Card key={record.id} size="small">
+              <Flex justify="space-between" align="center" style={{ marginBottom: 12 }}>
+                <Link href={`/investment-directions/${record.id}`}>
+                  <Text strong style={{ fontSize: 16, color: '#1890ff' }}>{record.name}</Text>
+                </Link>
+                {record.pendingCount && record.pendingCount > 0 && (
+                  <Badge count={record.pendingCount} size="small">
+                    <ClockCircleOutlined style={{ color: '#faad14' }} />
+                  </Badge>
+                )}
+              </Flex>
+              
+              <Row gutter={[8, 8]} style={{ marginBottom: 16 }}>
+                <Col span={12}>
+                  <Statistic
+                    title="预期金额"
+                    value={record.expectedAmount}
+                    precision={0}
+                    prefix="¥"
+                    valueStyle={{ fontSize: 14 }}
+                  />
+                </Col>
+                <Col span={12}>
+                  <Statistic
+                    title="实际投入"
+                    value={record.actualAmount}
+                    precision={2}
+                    prefix="¥"
+                    valueStyle={{ fontSize: 14 }}
+                  />
+                </Col>
+                <Col span={12}>
+                  <Statistic
+                    title="投入进度"
+                    value={progress}
+                    precision={1}
+                    suffix="%"
+                    valueStyle={{ fontSize: 14, color: progress >= 100 ? '#52c41a' : '#faad14' }}
+                  />
+                </Col>
+                <Col span={12}>
+                  <Statistic
+                    title="资产数量"
+                    value={record._count?.funds || 0}
+                    valueStyle={{ fontSize: 14 }}
+                  />
+                </Col>
+              </Row>
+
+              <Flex justify="space-between" align="center" style={{ borderTop: '1px solid #f0f0f0', paddingTop: 8 }}>
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  {record.latestTransaction 
+                    ? `最近: ${dayjs(record.latestTransaction.date).format('MM-DD')}`
+                    : '暂无操作'}
+                </Text>
+                <Space>
+                  <Button 
+                    type="link" 
+                    size="small" 
+                    icon={<EditOutlined />}
+                    onClick={() => onEdit(record)}
+                  >
+                    编辑
+                  </Button>
+                  <Popconfirm
+                    title="确定删除吗？"
+                    onConfirm={() => onDelete(record.id)}
+                  >
+                    <Button type="link" size="small" danger icon={<DeleteOutlined />}>
+                      删除
+                    </Button>
+                  </Popconfirm>
+                </Space>
+              </Flex>
+            </Card>
+          );
+        })}
+      </div>
+    );
+  }
 
   return (
     <Card>

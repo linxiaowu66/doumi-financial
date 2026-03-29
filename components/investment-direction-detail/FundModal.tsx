@@ -11,6 +11,7 @@ import {
 } from "antd";
 import { FormInstance } from "antd/es/form";
 import { Fund } from "@/types/investment-direction-detail";
+import { useInvestmentConfig } from "@/hooks/use-investment-config";
 
 const { TextArea } = Input;
 
@@ -45,23 +46,17 @@ export default function FundModal({
   onBlur,
   directionType = "FUND",
 }: FundModalProps) {
-  const isStock = directionType === "STOCK";
+  const { assetLabel, codeLabel, nameLabel, confirmDaysDefault, isStock } =
+    useInvestmentConfig(directionType);
 
   return (
     <Modal
-      title={
-        editingFund
-          ? isStock
-            ? "编辑股票"
-            : "编辑基金"
-          : isStock
-            ? "新建股票"
-            : "新建基金"
-      }
+      title={editingFund ? `编辑${assetLabel}` : `新建${assetLabel}`}
       open={open}
       onCancel={onCancel}
       footer={null}
       width={600}
+      style={{ maxWidth: "calc(100% - 32px)" }}
     >
       <Form
         form={form}
@@ -70,16 +65,11 @@ export default function FundModal({
         style={{ marginTop: 24 }}
       >
         <Row gutter={16}>
-          <Col span={12}>
+          <Col xs={24} sm={12}>
             <Form.Item
-              label={isStock ? "股票代码" : "基金代码"}
+              label={codeLabel}
               name="code"
-              rules={[
-                {
-                  required: true,
-                  message: `请输入${isStock ? "股票" : "基金"}代码`,
-                },
-              ]}
+              rules={[{ required: true, message: `请输入${assetLabel}代码` }]}
             >
               <Input
                 placeholder={
@@ -91,7 +81,7 @@ export default function FundModal({
               />
             </Form.Item>
           </Col>
-          <Col span={12}>
+          <Col xs={24} sm={12}>
             <Form.Item
               label="分类标识"
               name="category"
@@ -128,72 +118,82 @@ export default function FundModal({
           </Col>
         </Row>
 
-        <Row gutter={16}>
-          <Col span={8}>
-            <Form.Item
-              label="确认天数"
-              name="confirmDays"
-              initialValue={isStock ? 0 : 1}
-              tooltip={
-                isStock ? "股票通常成交即确认，设为0" : "交易确认所需工作日"
-              }
-            >
-              <Select size="large">
-                {isStock && <Select.Option value={0}>T+0 (即时)</Select.Option>}
-                <Select.Option value={1}>T+1 (境内)</Select.Option>
-                <Select.Option value={2}>T+2 (QDII)</Select.Option>
-              </Select>
-            </Form.Item>
-          </Col>
-          <Col span={8}>
-            <Form.Item
-              label="买入费率 (%)"
-              name="defaultBuyFee"
-              initialValue={isStock ? 0 : 0.15}
-              tooltip={isStock ? "股票交易将使用系统费率设置" : "预估买入费率"}
-            >
-              <InputNumber<number>
-                min={0}
-                max={100}
-                precision={4}
-                step={0.01}
-                addonAfter="%"
-                style={{ width: "100%" }}
-                size="large"
-                disabled={isStock}
-              />
-            </Form.Item>
-          </Col>
-          <Col span={8}>
-            <Form.Item
-              label="卖出费率 (%)"
-              name="defaultSellFee"
-              initialValue={isStock ? 0 : 0.5}
-              tooltip={isStock ? "股票交易将使用系统费率设置" : "预估卖出费率"}
-            >
-              <InputNumber<number>
-                min={0}
-                max={100}
-                precision={4}
-                step={0.01}
-                addonAfter="%"
-                style={{ width: "100%" }}
-                size="large"
-                disabled={isStock}
-              />
-            </Form.Item>
-          </Col>
-        </Row>
+        {/* 对于新增股票（isStock && !editingFund）不显示确认天数与费率字段 */}
+        {!(isStock && !editingFund) && (
+          <Row gutter={16}>
+            <Col xs={24} sm={8}>
+              <Form.Item
+                label="确认天数"
+                name="confirmDays"
+                initialValue={confirmDaysDefault}
+                tooltip={
+                  isStock
+                    ? `${assetLabel}通常成交即确认，设为0`
+                    : "交易确认所需工作日"
+                }
+              >
+                <Select size="large">
+                  {isStock && (
+                    <Select.Option value={0}>T+0 (即时)</Select.Option>
+                  )}
+                  <Select.Option value={1}>T+1 (境内)</Select.Option>
+                  <Select.Option value={2}>T+2 (QDII)</Select.Option>
+                </Select>
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={8}>
+              <Form.Item
+                label="买入费率 (%)"
+                name="defaultBuyFee"
+                initialValue={isStock ? 0 : 0.15}
+                tooltip={
+                  isStock
+                    ? `${assetLabel}交易将使用系统费率设置`
+                    : "预估买入费率"
+                }
+              >
+                <InputNumber<number>
+                  min={0}
+                  max={100}
+                  precision={4}
+                  step={0.01}
+                  addonAfter="%"
+                  style={{ width: "100%" }}
+                  size="large"
+                  disabled={isStock}
+                />
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={8}>
+              <Form.Item
+                label="卖出费率 (%)"
+                name="defaultSellFee"
+                initialValue={isStock ? 0 : 0.5}
+                tooltip={
+                  isStock
+                    ? `${assetLabel}交易将使用系统费率设置`
+                    : "预估卖出费率"
+                }
+              >
+                <InputNumber<number>
+                  min={0}
+                  max={100}
+                  precision={4}
+                  step={0.01}
+                  addonAfter="%"
+                  style={{ width: "100%" }}
+                  size="large"
+                  disabled={isStock}
+                />
+              </Form.Item>
+            </Col>
+          </Row>
+        )}
 
         <Form.Item
-          label={isStock ? "股票名称" : "基金名称"}
+          label={nameLabel}
           name="name"
-          rules={[
-            {
-              required: true,
-              message: `请输入${isStock ? "股票" : "基金"}名称`,
-            },
-          ]}
+          rules={[{ required: true, message: `请输入${assetLabel}名称` }]}
         >
           <Input
             placeholder={
