@@ -12,7 +12,7 @@ import {
 } from "antd";
 import { PlusOutlined, DeleteOutlined, EditOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
-import { Transaction } from "@/types/fund";
+import { Transaction, Fund } from "@/types/fund";
 import type { ColumnsType } from "antd/es/table";
 
 const { Text } = Typography;
