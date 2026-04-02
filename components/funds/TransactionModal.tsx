@@ -14,7 +14,7 @@ import {
 } from "antd";
 import { ClockCircleOutlined } from "@ant-design/icons";
 import { FormInstance } from "antd/es/form";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { getInvestmentConfig } from "@/lib/investment-type-config";
 import { getCalculator } from "@/lib/fee-calculator";
 
@@ -58,17 +58,24 @@ export default function TransactionModal({
   const config = getInvestmentConfig(fund?.direction?.type);
   const isStock = config.type === 'STOCK';
 
+  // 记录上一次自动计算出的手续费，用于区分"系统写入"和"用户手动修改"
+  const autoCalcFeeRef = useRef<number | undefined>(undefined);
+
   useEffect(() => {
     if (isEditing || !fund) return;
 
     // 股票模式下，股数和价格都必须有值才能计算
     if (isStock && (transactionType === 'BUY' || transactionType === 'SELL')) {
       if (!sharesValue || !priceValue) {
+        autoCalcFeeRef.current = undefined;
         form.setFieldValue('fee', undefined);
         form.setFieldValue('amount', undefined);
         return;
       }
     }
+
+    // 只有 feeValue 与上次自动计算值不同时，才视为用户手动修改
+    const isManualFee = feeValue !== undefined && feeValue !== null && feeValue !== autoCalcFeeRef.current;
 
     const calculator = getCalculator(config.type);
     const result = calculator.calculate({
@@ -76,12 +83,13 @@ export default function TransactionModal({
       amount: Number(amountValue) || 0,
       shares: Number(sharesValue) || 0,
       price: Number(priceValue) || 0,
-      fee: feeValue !== undefined && feeValue !== null ? Number(feeValue) : undefined,
+      fee: isManualFee ? Number(feeValue) : undefined,
       code: fund.code,
       config: isStock ? systemSettings : { defaultBuyFee: fund.defaultBuyFee, defaultSellFee: fund.defaultSellFee }
     });
 
-    if (result.fee !== undefined && result.fee !== feeValue) {
+    if (!isManualFee && result.fee !== undefined && result.fee !== feeValue) {
+      autoCalcFeeRef.current = result.fee;
       form.setFieldValue('fee', result.fee);
     }
 
