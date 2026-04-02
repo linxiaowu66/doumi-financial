@@ -60,13 +60,23 @@ export default function TransactionModal({
 
   useEffect(() => {
     if (isEditing || !fund) return;
-    
+
+    // 股票模式下，股数和价格都必须有值才能计算
+    if (isStock && (transactionType === 'BUY' || transactionType === 'SELL')) {
+      if (!sharesValue || !priceValue) {
+        form.setFieldValue('fee', undefined);
+        form.setFieldValue('amount', undefined);
+        return;
+      }
+    }
+
     const calculator = getCalculator(config.type);
     const result = calculator.calculate({
       type: transactionType as any,
-      amount: Number(amountValue),
-      shares: Number(sharesValue),
-      price: Number(priceValue),
+      amount: Number(amountValue) || 0,
+      shares: Number(sharesValue) || 0,
+      price: Number(priceValue) || 0,
+      fee: feeValue !== undefined && feeValue !== null ? Number(feeValue) : undefined,
       code: fund.code,
       config: isStock ? systemSettings : { defaultBuyFee: fund.defaultBuyFee, defaultSellFee: fund.defaultSellFee }
     });
@@ -74,13 +84,13 @@ export default function TransactionModal({
     if (result.fee !== undefined && result.fee !== feeValue) {
       form.setFieldValue('fee', result.fee);
     }
-    
+
     if (isStock) {
       if (result.amount !== undefined && result.amount !== amountValue) {
         form.setFieldValue('amount', result.amount);
       }
     }
-  }, [amountValue, sharesValue, priceValue, transactionType, fund, systemSettings, isEditing, form, config.type, isStock]);
+  }, [amountValue, sharesValue, priceValue, feeValue, transactionType, fund, systemSettings, isEditing, form, config.type, isStock]);
 
   const getTitle = () => {
     if (isEditing) return "编辑交易";

@@ -52,7 +52,8 @@ export class FundCalculator implements InvestmentCalculator {
 // 股票计算策略
 export class StockCalculator implements InvestmentCalculator {
   private isETF(code: string): boolean {
-    return /^(5|1|159|51|58|16)/.test(code);
+    const pureCode = code.replace(/^(sh|sz|bj)/i, '');
+    return /^(5|1|159|51|58|16)/.test(pureCode);
   }
 
   calculate(params: CalculationParams): CalculationResult {
