@@ -1,5 +1,5 @@
 export interface CalculationParams {
-  type: 'BUY' | 'SELL' | 'DIVIDEND';
+  type: "BUY" | "SELL" | "DIVIDEND";
   amount?: number;
   shares?: number;
   price?: number;
@@ -27,20 +27,26 @@ export class FundCalculator implements InvestmentCalculator {
     let resShares = shares;
     let resFee = fee ?? 0;
 
-    if (type === 'BUY') {
+    if (type === "BUY") {
       // 默认买入费率逻辑
       if (fee === undefined && config?.defaultBuyFee) {
-        resFee = parseFloat((amount * (parseFloat(config.defaultBuyFee) / 100)).toFixed(2));
+        resFee = parseFloat(
+          (amount * (parseFloat(config.defaultBuyFee) / 100)).toFixed(2),
+        );
       }
       const netAmount = amount - resFee;
       resShares = price > 0 ? netAmount / price : 0;
-    } else if (type === 'SELL') {
+    } else if (type === "SELL") {
       if (fee === undefined && config?.defaultSellFee) {
-        resFee = parseFloat(((shares * price) * (parseFloat(config.defaultSellFee) / 100)).toFixed(2));
+        resFee = parseFloat(
+          (shares * price * (parseFloat(config.defaultSellFee) / 100)).toFixed(
+            2,
+          ),
+        );
       }
       resAmount = shares * price - resFee;
       resShares = -Math.abs(shares);
-    } else if (type === 'DIVIDEND') {
+    } else if (type === "DIVIDEND") {
       // 分红逻辑由外部控制更多，这里做简单处理
       resShares = shares;
     }
@@ -52,26 +58,30 @@ export class FundCalculator implements InvestmentCalculator {
 // 股票计算策略
 export class StockCalculator implements InvestmentCalculator {
   private isETF(code: string): boolean {
-    const pureCode = code.replace(/^(sh|sz|bj)/i, '');
+    const pureCode = code.replace(/^(sh|sz|bj)/i, "");
     return /^(5|1|159|51|58|16)/.test(pureCode);
   }
 
   calculate(params: CalculationParams): CalculationResult {
-    const { type, shares = 0, price = 0, code = '', config } = params;
+    const { type, shares = 0, price = 0, code = "", config } = params;
     const systemSettings = config;
     const calAmount = shares * price;
-    
+
     let resFee = params.fee ?? 0;
     let resAmount = params.amount ?? 0;
 
-    if (type === 'BUY' || type === 'SELL') {
+    if (type === "BUY" || type === "SELL") {
       if (params.fee === undefined) {
-        const commRate = parseFloat(systemSettings?.stock_commission_rate || "0.1154") / 1000;
-        const fundCommRate = parseFloat(systemSettings?.fund_commission_rate || "0.1") / 1000;
-        const transRate = parseFloat(systemSettings?.transfer_fee_rate || "0.01") / 1000;
-        const stampRate = parseFloat(systemSettings?.stamp_duty_rate || "0.5") / 1000;
+        const commRate =
+          parseFloat(systemSettings?.stock_commission_rate || "0.1154") / 1000;
+        const fundCommRate =
+          parseFloat(systemSettings?.fund_commission_rate || "0.1") / 1000;
+        const transRate =
+          parseFloat(systemSettings?.transfer_fee_rate || "0.01") / 1000;
+        const stampRate =
+          parseFloat(systemSettings?.stamp_duty_rate || "0.5") / 1000;
         const isETF = this.isETF(code);
-        const pureCode = code.replace(/^(sh|sz|bj)/i, '');
+        const pureCode = code.replace(/^(sh|sz|bj)/i, "");
         const isShanghai = /^sh/i.test(code) || /^6/.test(pureCode);
         const rate = isETF ? fundCommRate : commRate;
 
@@ -82,12 +92,18 @@ export class StockCalculator implements InvestmentCalculator {
         }
 
         // 过户费：仅适用于上交所 A 股（且非场内基金/ETF）
-        const transferFee = (!isETF && isShanghai) ? parseFloat((calAmount * transRate).toFixed(2)) : 0;
+        const transferFee =
+          !isETF && isShanghai
+            ? parseFloat((calAmount * transRate).toFixed(2))
+            : 0;
 
         // 印花税：仅在卖出时由股票（非场内基金/ETF）承担
-        const stampDuty = (!isETF && type === 'SELL') ? parseFloat((calAmount * stampRate).toFixed(2)) : 0;
+        const stampDuty =
+          !isETF && type === "SELL"
+            ? parseFloat((calAmount * stampRate).toFixed(2))
+            : 0;
 
-        if (type === 'BUY') {
+        if (type === "BUY") {
           resFee = commission + transferFee;
           resAmount = calAmount + resFee;
         } else {
@@ -97,20 +113,20 @@ export class StockCalculator implements InvestmentCalculator {
       } else {
         // 如果手动输入了手续费，重新根据 type 计算总金额
         resFee = params.fee;
-        if (type === 'BUY') resAmount = calAmount + resFee;
+        if (type === "BUY") resAmount = calAmount + resFee;
         else resAmount = calAmount - resFee;
       }
     }
 
     return {
       amount: parseFloat(resAmount.toFixed(2)),
-      shares: type === 'SELL' ? -Math.abs(shares) : shares,
+      shares: type === "SELL" ? -Math.abs(shares) : shares,
       fee: parseFloat(resFee.toFixed(2)),
-      price
+      price,
     };
   }
 }
 
 export const getCalculator = (type: string): InvestmentCalculator => {
-  return type === 'STOCK' ? new StockCalculator() : new FundCalculator();
+  return type === "STOCK" ? new StockCalculator() : new FundCalculator();
 };

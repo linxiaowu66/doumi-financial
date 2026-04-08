@@ -726,7 +726,9 @@ export default function FundList({
                               new Map(
                                 // filter out "days" alerts for stock directions
                                 (categoryAlerts.get(category) || [])
-                                  .filter((a) => !(isStock && a.reason === "days"))
+                                  .filter(
+                                    (a) => !(isStock && a.reason === "days"),
+                                  )
                                   .map((alert) => [alert.fundId, alert]),
                               ).values(),
                             ).map((alert) => (
@@ -734,9 +736,11 @@ export default function FundList({
                                 key={`${alert.fundId}-${alert.reason}`}
                                 style={{ marginBottom: 4 }}
                               >
-                                {alert.reason === "days" && alert.fundId === 0 ? (
+                                {alert.reason === "days" &&
+                                alert.fundId === 0 ? (
                                   <div>
-                                    <strong>{alert.fundName}</strong> 分类距离上次买入已超过
+                                    <strong>{alert.fundName}</strong>{" "}
+                                    分类距离上次买入已超过
                                     {alert.daysSinceLastBuy}天
                                   </div>
                                 ) : (
@@ -744,12 +748,16 @@ export default function FundList({
                                     <strong>{alert.fundName}</strong>:
                                     {alert.reason === "days" && (
                                       <span>
-                                        {' '}距离上次买入已超过{alert.daysSinceLastBuy}天
+                                        {" "}
+                                        距离上次买入已超过
+                                        {alert.daysSinceLastBuy}天
                                       </span>
                                     )}
                                     {alert.reason === "price" && (
                                       <span>
-                                        {' '}{config.priceLabel}相比上次买入下跌{alert.priceDropPercent?.toFixed(2)}%
+                                        {" "}
+                                        {config.priceLabel}相比上次买入下跌
+                                        {alert.priceDropPercent?.toFixed(2)}%
                                       </span>
                                     )}
                                   </>
@@ -765,12 +773,14 @@ export default function FundList({
                           style={{ cursor: "help" }}
                         >
                           {(() => {
-                            const visibleAlerts = (categoryAlerts.get(category) || []).filter(
-                              (a) => !(isStock && a.reason === 'days')
+                            const visibleAlerts = (
+                              categoryAlerts.get(category) || []
+                            ).filter((a) => !(isStock && a.reason === "days"));
+                            const fundAlerts = visibleAlerts.filter(
+                              (a) => a.fundId !== 0,
                             );
-                            const fundAlerts = visibleAlerts.filter((a) => a.fundId !== 0);
                             const categoryAlert = visibleAlerts.find(
-                              (a) => a.fundId === 0 && a.reason === 'days',
+                              (a) => a.fundId === 0 && a.reason === "days",
                             );
 
                             if (fundAlerts.length > 0 && categoryAlert) {

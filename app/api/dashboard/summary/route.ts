@@ -1,7 +1,7 @@
-import { NextResponse } from 'next/server';
-import prisma from '@/lib/prisma';
-import { Decimal } from '@prisma/client/runtime/library';
-import dayjs from 'dayjs';
+import { NextResponse } from "next/server";
+import prisma from "@/lib/prisma";
+import { Decimal } from "@prisma/client/runtime/library";
+import dayjs from "dayjs";
 
 // GET - 获取Dashboard汇总统计（所有投资方向）
 export async function GET() {
@@ -12,7 +12,7 @@ export async function GET() {
         funds: {
           include: {
             transactions: {
-              orderBy: { date: 'asc' },
+              orderBy: { date: "asc" },
             },
           },
         },
@@ -25,7 +25,15 @@ export async function GET() {
     let totalCost = new Decimal(0); // 持仓总成本
     let totalInvested = new Decimal(0); // 历史总投入（用于计算累计收益率）
 
-    const directionStatsMap: Record<number, { holdingProfit: string; totalProfitRate: string; monthProfit: string; yesterdayProfit: string }> = {};
+    const directionStatsMap: Record<
+      number,
+      {
+        holdingProfit: string;
+        totalProfitRate: string;
+        monthProfit: string;
+        yesterdayProfit: string;
+      }
+    > = {};
 
     // 遍历每个投资方向，计算其累计收益
     for (const direction of directions) {
@@ -51,13 +59,13 @@ export async function GET() {
           const price = new Decimal(tx.price.toString());
           const fee = new Decimal(tx.fee.toString());
 
-          if (tx.type === 'BUY') {
+          if (tx.type === "BUY") {
             // 买入：增加份额和成本，并累加到总投入
             fundShares = fundShares.plus(shares);
             fundCost = fundCost.plus(amount);
             totalInvested = totalInvested.plus(amount);
             directionInvested = directionInvested.plus(amount);
-          } else if (tx.type === 'SELL') {
+          } else if (tx.type === "SELL") {
             // 卖出：减少份额和成本
             const sellShares = shares.abs();
             const avgCostPrice = fundShares.isZero()
@@ -72,7 +80,7 @@ export async function GET() {
             const sellRevenue = sellShares.times(price).minus(fee);
             const sellProfit = sellRevenue.minus(costOfSold);
             fundSellProfit = fundSellProfit.plus(sellProfit);
-          } else if (tx.type === 'DIVIDEND') {
+          } else if (tx.type === "DIVIDEND") {
             // 分红
             if (tx.dividendReinvest) {
               // 分红再投资：增加份额，但不增加成本
@@ -110,10 +118,10 @@ export async function GET() {
       directionStatsMap[direction.id] = {
         holdingProfit: directionHoldingProfit.toFixed(2),
         totalProfitRate: directionInvested.isZero()
-          ? '0.00'
+          ? "0.00"
           : directionProfit.dividedBy(directionInvested).times(100).toFixed(2),
-        monthProfit: '0.00',
-        yesterdayProfit: '0.00',
+        monthProfit: "0.00",
+        yesterdayProfit: "0.00",
       };
 
       totalProfit = totalProfit.plus(directionProfit);
@@ -125,32 +133,35 @@ export async function GET() {
     // 获取最近的记录
     const latestRecords = await prisma.directionDailyProfit.findMany({
       orderBy: {
-        date: 'desc',
+        date: "desc",
       },
       take: 100, // 获取最近的记录（假设有多个投资方向）
     });
 
     // 按日期分组
-    const groupedByDate = latestRecords.reduce((acc, record) => {
-      const dateStr = dayjs(record.date).format('YYYY-MM-DD');
-      if (!acc[dateStr]) {
-        acc[dateStr] = [];
-      }
-      acc[dateStr].push(record);
-      return acc;
-    }, {} as Record<string, typeof latestRecords>);
+    const groupedByDate = latestRecords.reduce(
+      (acc, record) => {
+        const dateStr = dayjs(record.date).format("YYYY-MM-DD");
+        if (!acc[dateStr]) {
+          acc[dateStr] = [];
+        }
+        acc[dateStr].push(record);
+        return acc;
+      },
+      {} as Record<string, typeof latestRecords>,
+    );
 
     // 找到最近的日期（通常是昨天或最近的交易日）
     const dates = Object.keys(groupedByDate).sort().reverse();
     let todayProfit = new Decimal(0);
-    let lastTradeDate = '';
+    let lastTradeDate = "";
 
     if (dates.length > 0) {
       lastTradeDate = dates[0];
       const latestDayRecords = groupedByDate[lastTradeDate];
       todayProfit = latestDayRecords.reduce(
         (sum, record) => sum.plus(new Decimal(record.dailyProfit.toString())),
-        new Decimal(0)
+        new Decimal(0),
       );
 
       // 将每个投资方向的昨日（最近交易日）盈亏写入 directionStatsMap
@@ -158,41 +169,51 @@ export async function GET() {
         const dirId = record.directionId;
         if (!directionStatsMap[dirId]) {
           directionStatsMap[dirId] = {
-            holdingProfit: '0.00',
-            totalProfitRate: '0.00',
-            monthProfit: '0.00',
-            yesterdayProfit: new Decimal(record.dailyProfit.toString()).toFixed(2),
+            holdingProfit: "0.00",
+            totalProfitRate: "0.00",
+            monthProfit: "0.00",
+            yesterdayProfit: new Decimal(record.dailyProfit.toString()).toFixed(
+              2,
+            ),
           };
         } else {
-          directionStatsMap[dirId].yesterdayProfit = new Decimal(record.dailyProfit.toString()).toFixed(2);
+          directionStatsMap[dirId].yesterdayProfit = new Decimal(
+            record.dailyProfit.toString(),
+          ).toFixed(2);
         }
       }
     }
 
     // 计算本月和今年盈亏
-    const firstDayOfYear = dayjs().startOf('year').toDate();
-    const firstDayOfMonth = dayjs().startOf('month').toDate();
+    const firstDayOfYear = dayjs().startOf("year").toDate();
+    const firstDayOfMonth = dayjs().startOf("month").toDate();
 
     const yearRecords = await prisma.directionDailyProfit.findMany({
       where: {
-        date: { gte: firstDayOfYear }
-      }
+        date: { gte: firstDayOfYear },
+      },
     });
 
     let yearProfit = new Decimal(0);
     let monthProfit = new Decimal(0);
 
-    yearRecords.forEach(record => {
+    yearRecords.forEach((record) => {
       const profit = new Decimal(record.dailyProfit.toString());
       yearProfit = yearProfit.plus(profit);
-      
+
       // 注意：由于存储的是计算日期（即通常表示前一天的盈亏），
       // 但为了简单汇总，只要日历日期在本月内即可（这可能包含上个月最后一天的盈亏，取决于计算时间）
       // 为保证准确，可以简单地按记录的 date 字段聚合
-      if (dayjs(record.date).isAfter(dayjs(firstDayOfMonth).subtract(1, 'second'))) {
+      if (
+        dayjs(record.date).isAfter(dayjs(firstDayOfMonth).subtract(1, "second"))
+      ) {
         monthProfit = monthProfit.plus(profit);
         if (directionStatsMap[record.directionId]) {
-          directionStatsMap[record.directionId].monthProfit = new Decimal(directionStatsMap[record.directionId].monthProfit).plus(profit).toFixed(2);
+          directionStatsMap[record.directionId].monthProfit = new Decimal(
+            directionStatsMap[record.directionId].monthProfit,
+          )
+            .plus(profit)
+            .toFixed(2);
         }
       }
     });
@@ -224,9 +245,11 @@ export async function GET() {
 
     const currentYear = dayjs().year();
     const annualTarget = await prisma.annualProfitTarget.findUnique({
-      where: { year: currentYear }
+      where: { year: currentYear },
     });
-    const annualTargetAmount = annualTarget ? new Decimal(annualTarget.targetAmount.toString()) : new Decimal(0);
+    const annualTargetAmount = annualTarget
+      ? new Decimal(annualTarget.targetAmount.toString())
+      : new Decimal(0);
 
     return NextResponse.json({
       totalProfit: totalProfit.toFixed(2), // 累计盈亏
@@ -238,7 +261,7 @@ export async function GET() {
       yearProfit: yearProfit.toFixed(2), // 今年盈亏
       yearProfitRate: yearProfitRate.toFixed(2), // 今年盈亏率(%)
       annualTargetAmount: annualTargetAmount.toFixed(2), // 本年度盈利目标
-      lastTradeDate: lastTradeDate || '', // 最近交易日日期
+      lastTradeDate: lastTradeDate || "", // 最近交易日日期
       totalCurrentValue: totalCurrentValue.toFixed(2), // 当前总市值
       totalCost: totalCost.toFixed(2), // 持仓总成本
       totalInvested: totalInvested.toFixed(2), // 历史总投入
@@ -246,14 +269,14 @@ export async function GET() {
       directionStats: directionStatsMap, // 各投资方向的额外统计数据
     });
   } catch (error: unknown) {
-    console.error('获取Dashboard汇总统计失败:', error);
-    const message = error instanceof Error ? error.message : '未知错误';
+    console.error("获取Dashboard汇总统计失败:", error);
+    const message = error instanceof Error ? error.message : "未知错误";
     return NextResponse.json(
       {
-        error: '获取Dashboard汇总统计失败',
+        error: "获取Dashboard汇总统计失败",
         message,
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

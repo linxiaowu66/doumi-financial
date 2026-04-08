@@ -20,166 +20,184 @@ const MockDashboard = () => {
   const dateStr = yesterday.toISOString().slice(0, 10);
 
   return (
-  <div className="relative rounded-xl bg-gray-50 dark:bg-[#141414] shadow-2xl border border-gray-200 dark:border-gray-800 overflow-hidden select-none transform transition-transform duration-500 hover:scale-[1.02] text-left font-sans">
-    {/* Window Header */}
-    <div className="bg-white dark:bg-[#1f1f1f] border-b border-gray-200 dark:border-gray-800 px-4 py-3 flex items-center gap-2">
-      <div className="w-3 h-3 rounded-full bg-[#ff4d4f]" />
-      <div className="w-3 h-3 rounded-full bg-[#ffc53d]" />
-      <div className="w-3 h-3 rounded-full bg-[#52c41a]" />
-      <div className="ml-4 px-3 py-1 bg-gray-100 dark:bg-gray-800 rounded-md text-xs text-gray-500 dark:text-gray-400 font-mono flex-1 text-center truncate">
-        doumi-financial.com/dashboard
-      </div>
-    </div>
-
-    {/* Dashboard Content */}
-    <div className="p-6 bg-[#f5f5f5] dark:bg-black min-h-[400px]">
-      {/* Header */}
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-xl font-medium text-black dark:text-white flex items-center gap-2 m-0">
-          <DollarOutlined /> 投资概览
-        </h1>
-        <Button
-          type="primary"
-          size="small"
-          icon={<ArrowUpOutlined rotate={45} />}
-        >
-          更新所有净值
-        </Button>
+    <div className="relative rounded-xl bg-gray-50 dark:bg-[#141414] shadow-2xl border border-gray-200 dark:border-gray-800 overflow-hidden select-none transform transition-transform duration-500 hover:scale-[1.02] text-left font-sans">
+      {/* Window Header */}
+      <div className="bg-white dark:bg-[#1f1f1f] border-b border-gray-200 dark:border-gray-800 px-4 py-3 flex items-center gap-2">
+        <div className="w-3 h-3 rounded-full bg-[#ff4d4f]" />
+        <div className="w-3 h-3 rounded-full bg-[#ffc53d]" />
+        <div className="w-3 h-3 rounded-full bg-[#52c41a]" />
+        <div className="ml-4 px-3 py-1 bg-gray-100 dark:bg-gray-800 rounded-md text-xs text-gray-500 dark:text-gray-400 font-mono flex-1 text-center truncate">
+          doumi-financial.com/dashboard
+        </div>
       </div>
 
-      {/* Stats Row 1 */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-        {[
-          {
-            title: "投资方向",
-            val: "4",
-            suffix: "个",
-            icon: <FundOutlined />,
-            color: "#1890ff",
-          },
-          {
-            title: "管理基金",
-            val: "12",
-            suffix: "只",
-            icon: <LineChartOutlined />,
-            color: "#52c41a",
-          },
-          { title: "预期投入", val: "500,000", prefix: "¥", color: "#faad14" },
-          { title: "实际投入", val: "215,800", prefix: "¥", color: "#722ed1" },
-        ].map((item, i) => (
-          <div
-            key={i}
-            className="bg-white dark:bg-[#1f1f1f] p-4 rounded-lg border border-gray-200 dark:border-gray-800 shadow-sm"
+      {/* Dashboard Content */}
+      <div className="p-6 bg-[#f5f5f5] dark:bg-black min-h-[400px]">
+        {/* Header */}
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-xl font-medium text-black dark:text-white flex items-center gap-2 m-0">
+            <DollarOutlined /> 投资概览
+          </h1>
+          <Button
+            type="primary"
+            size="small"
+            icon={<ArrowUpOutlined rotate={45} />}
           >
-            <div className="text-gray-500 dark:text-gray-400 text-sm mb-1">
-              {item.title}
-            </div>
-            <div className="text-2xl font-medium" style={{ color: item.color }}>
-              {item.prefix && (
-                <span className="text-lg mr-1">{item.prefix}</span>
-              )}
-              {item.icon && <span className="text-lg mr-2">{item.icon}</span>}
-              {item.val}
-              {item.suffix && (
-                <span className="text-sm ml-1 text-gray-500">
-                  {item.suffix}
-                </span>
-              )}
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* Stats Row 2 (Profit) */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-        <div className="bg-white dark:bg-[#1f1f1f] p-6 rounded-lg border border-gray-200 dark:border-gray-800 shadow-sm">
-          <div className="text-gray-500 dark:text-gray-400 text-sm mb-2">
-            昨日盈亏 <span className="ml-2 text-xs text-gray-400">{dateStr}</span>
-          </div>
-          <div className="flex items-baseline gap-2">
-            <span className="text-[#cf1322] text-3xl font-bold">+1,240.50</span>
-            <span className="text-gray-500 dark:text-gray-400">(+0.58%)</span>
-          </div>
-        </div>
-        <div className="bg-white dark:bg-[#1f1f1f] p-6 rounded-lg border border-gray-200 dark:border-gray-800 shadow-sm">
-          <div className="text-gray-500 dark:text-gray-400 text-sm mb-2">
-            累计盈亏
-          </div>
-          <div className="flex items-baseline gap-2">
-            <span className="text-[#cf1322] text-3xl font-bold">
-              +32,850.20
-            </span>
-            <span className="text-gray-500 dark:text-gray-400">(+15.22%)</span>
-          </div>
-        </div>
-      </div>
-
-      {/* List Preview */}
-      <div className="bg-white dark:bg-[#1f1f1f] rounded-lg border border-gray-200 dark:border-gray-800 shadow-sm p-0 overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-800 font-medium flex justify-between">
-          <span>投资方向列表</span>
-          <Button type="primary" size="small" icon={<PlusOutlined />}>
-            管理投资方向
+            更新所有净值
           </Button>
         </div>
-        <div className="p-4 grid grid-cols-1 md:grid-cols-3 gap-4">
-          {/* Direction Card 1 */}
-          <div className="border border-gray-200 dark:border-gray-800 rounded p-4 hover:shadow-md transition-shadow cursor-pointer">
-            <div className="flex items-center gap-2 mb-4 font-medium text-base">
-              <FundOutlined /> 养老金账户
-            </div>
-            <div className="flex justify-between mb-2">
-              <div>
-                <div className="text-xs text-gray-500">预期投入</div>
-                <div className="text-base font-medium">¥200,000</div>
+
+        {/* Stats Row 1 */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+          {[
+            {
+              title: "投资方向",
+              val: "4",
+              suffix: "个",
+              icon: <FundOutlined />,
+              color: "#1890ff",
+            },
+            {
+              title: "管理基金",
+              val: "12",
+              suffix: "只",
+              icon: <LineChartOutlined />,
+              color: "#52c41a",
+            },
+            {
+              title: "预期投入",
+              val: "500,000",
+              prefix: "¥",
+              color: "#faad14",
+            },
+            {
+              title: "实际投入",
+              val: "215,800",
+              prefix: "¥",
+              color: "#722ed1",
+            },
+          ].map((item, i) => (
+            <div
+              key={i}
+              className="bg-white dark:bg-[#1f1f1f] p-4 rounded-lg border border-gray-200 dark:border-gray-800 shadow-sm"
+            >
+              <div className="text-gray-500 dark:text-gray-400 text-sm mb-1">
+                {item.title}
               </div>
-              <div>
-                <div className="text-xs text-gray-500">实际投入</div>
-                <div className="text-base font-medium">¥85,000</div>
-              </div>
-            </div>
-            <div className="w-full bg-gray-100 rounded-full h-1.5 mb-2">
               <div
-                className="bg-[#1890ff] h-1.5 rounded-full"
-                style={{ width: "42.5%" }}
-              ></div>
-            </div>
-            <div className="text-xs text-gray-400">4 只基金</div>
-          </div>
-          {/* Direction Card 2 */}
-          <div className="border border-gray-200 dark:border-gray-800 rounded p-4 hover:shadow-md transition-shadow cursor-pointer">
-            <div className="flex items-center gap-2 mb-4 font-medium text-base">
-              <FundOutlined /> 子女教育
-            </div>
-            <div className="flex justify-between mb-2">
-              <div>
-                <div className="text-xs text-gray-500">预期投入</div>
-                <div className="text-base font-medium">¥300,000</div>
-              </div>
-              <div>
-                <div className="text-xs text-gray-500">实际投入</div>
-                <div className="text-base font-medium">¥130,800</div>
+                className="text-2xl font-medium"
+                style={{ color: item.color }}
+              >
+                {item.prefix && (
+                  <span className="text-lg mr-1">{item.prefix}</span>
+                )}
+                {item.icon && <span className="text-lg mr-2">{item.icon}</span>}
+                {item.val}
+                {item.suffix && (
+                  <span className="text-sm ml-1 text-gray-500">
+                    {item.suffix}
+                  </span>
+                )}
               </div>
             </div>
-            <div className="w-full bg-gray-100 rounded-full h-1.5 mb-2">
-              <div
-                className="bg-[#1890ff] h-1.5 rounded-full"
-                style={{ width: "43.6%" }}
-              ></div>
+          ))}
+        </div>
+
+        {/* Stats Row 2 (Profit) */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+          <div className="bg-white dark:bg-[#1f1f1f] p-6 rounded-lg border border-gray-200 dark:border-gray-800 shadow-sm">
+            <div className="text-gray-500 dark:text-gray-400 text-sm mb-2">
+              昨日盈亏{" "}
+              <span className="ml-2 text-xs text-gray-400">{dateStr}</span>
             </div>
-            <div className="text-xs text-gray-400">8 只基金</div>
+            <div className="flex items-baseline gap-2">
+              <span className="text-[#cf1322] text-3xl font-bold">
+                +1,240.50
+              </span>
+              <span className="text-gray-500 dark:text-gray-400">(+0.58%)</span>
+            </div>
           </div>
-          {/* Direction Card 3 */}
-          <div className="border border-gray-200 dark:border-gray-800 rounded p-4 border-dashed flex flex-col items-center justify-center text-gray-400 min-h-[140px]">
-            <PlusOutlined className="text-2xl mb-2" />
-            <span>创建新方向</span>
+          <div className="bg-white dark:bg-[#1f1f1f] p-6 rounded-lg border border-gray-200 dark:border-gray-800 shadow-sm">
+            <div className="text-gray-500 dark:text-gray-400 text-sm mb-2">
+              累计盈亏
+            </div>
+            <div className="flex items-baseline gap-2">
+              <span className="text-[#cf1322] text-3xl font-bold">
+                +32,850.20
+              </span>
+              <span className="text-gray-500 dark:text-gray-400">
+                (+15.22%)
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* List Preview */}
+        <div className="bg-white dark:bg-[#1f1f1f] rounded-lg border border-gray-200 dark:border-gray-800 shadow-sm p-0 overflow-hidden">
+          <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-800 font-medium flex justify-between">
+            <span>投资方向列表</span>
+            <Button type="primary" size="small" icon={<PlusOutlined />}>
+              管理投资方向
+            </Button>
+          </div>
+          <div className="p-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Direction Card 1 */}
+            <div className="border border-gray-200 dark:border-gray-800 rounded p-4 hover:shadow-md transition-shadow cursor-pointer">
+              <div className="flex items-center gap-2 mb-4 font-medium text-base">
+                <FundOutlined /> 养老金账户
+              </div>
+              <div className="flex justify-between mb-2">
+                <div>
+                  <div className="text-xs text-gray-500">预期投入</div>
+                  <div className="text-base font-medium">¥200,000</div>
+                </div>
+                <div>
+                  <div className="text-xs text-gray-500">实际投入</div>
+                  <div className="text-base font-medium">¥85,000</div>
+                </div>
+              </div>
+              <div className="w-full bg-gray-100 rounded-full h-1.5 mb-2">
+                <div
+                  className="bg-[#1890ff] h-1.5 rounded-full"
+                  style={{ width: "42.5%" }}
+                ></div>
+              </div>
+              <div className="text-xs text-gray-400">4 只基金</div>
+            </div>
+            {/* Direction Card 2 */}
+            <div className="border border-gray-200 dark:border-gray-800 rounded p-4 hover:shadow-md transition-shadow cursor-pointer">
+              <div className="flex items-center gap-2 mb-4 font-medium text-base">
+                <FundOutlined /> 子女教育
+              </div>
+              <div className="flex justify-between mb-2">
+                <div>
+                  <div className="text-xs text-gray-500">预期投入</div>
+                  <div className="text-base font-medium">¥300,000</div>
+                </div>
+                <div>
+                  <div className="text-xs text-gray-500">实际投入</div>
+                  <div className="text-base font-medium">¥130,800</div>
+                </div>
+              </div>
+              <div className="w-full bg-gray-100 rounded-full h-1.5 mb-2">
+                <div
+                  className="bg-[#1890ff] h-1.5 rounded-full"
+                  style={{ width: "43.6%" }}
+                ></div>
+              </div>
+              <div className="text-xs text-gray-400">8 只基金</div>
+            </div>
+            {/* Direction Card 3 */}
+            <div className="border border-gray-200 dark:border-gray-800 rounded p-4 border-dashed flex flex-col items-center justify-center text-gray-400 min-h-[140px]">
+              <PlusOutlined className="text-2xl mb-2" />
+              <span>创建新方向</span>
+            </div>
           </div>
         </div>
       </div>
     </div>
-  </div>
   );
-}
+};
 
 // 模拟资产分布组件 - 仿照实际 Card UI
 const MockAllocationCard = () => (
