@@ -327,7 +327,8 @@ export default function DirectionDetailPage({
 
         // 如果满足条件1（分类超过30天未买入），添加到提醒列表
         // 但是，如果仓位已经超过100%，就不需要提示了
-        if (condition1) {
+        // 对于股票类方向，不显示“分类超过30天未买入”的提醒
+        if (condition1 && direction?.type !== 'STOCK') {
           // 检查该分类的仓位是否已经超过100%
           const categoryTarget = categoryTargets.find(
             (t) => t.categoryName === category,

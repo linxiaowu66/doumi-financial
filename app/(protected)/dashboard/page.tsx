@@ -55,6 +55,7 @@ interface DashboardSummary {
     holdingProfit: string;
     totalProfitRate: string;
     monthProfit: string;
+    yesterdayProfit?: string;
   }>;
 }
 
@@ -287,7 +288,12 @@ export default function HomePage() {
             <Col xs={12} sm={12} lg={6}>
               <Card>
                 <Statistic
-                  title="今日盈亏"
+                  title={
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span>昨日盈亏</span>
+                      <span style={{ fontSize: 11, color: '#999', fontWeight: 'normal' }}>{summary.lastTradeDate}</span>
+                    </div>
+                  }
                   value={Math.abs(parseFloat(summary.todayProfit))}
                   precision={2}
                   prefix={
@@ -501,7 +507,7 @@ export default function HomePage() {
                             </h3>
                           </div>
                           <Row gutter={8}>
-                            <Col span={8}>
+                            <Col span={6}>
                               <Statistic
                                 title={<span style={{ fontSize: 12 }}>持仓收益</span>}
                                 value={stats ? parseFloat(stats.holdingProfit) : 0}
@@ -513,7 +519,7 @@ export default function HomePage() {
                                 }}
                               />
                             </Col>
-                            <Col span={8}>
+                            <Col span={6}>
                               <Statistic
                                 title={<span style={{ fontSize: 12 }}>累计收益率</span>}
                                 value={stats ? parseFloat(stats.totalProfitRate) : 0}
@@ -526,13 +532,25 @@ export default function HomePage() {
                                 }}
                               />
                             </Col>
-                            <Col span={8}>
+                            <Col span={6}>
                               <Statistic
                                 title={<span style={{ fontSize: 12 }}>本月盈亏</span>}
                                 value={stats ? parseFloat(stats.monthProfit) : 0}
                                 precision={2}
                                 valueStyle={{
                                   color: stats && parseFloat(stats.monthProfit) >= 0 ? '#cf1322' : '#3f8600',
+                                  fontSize: 15,
+                                  fontWeight: 500
+                                }}
+                              />
+                            </Col>
+                            <Col span={6}>
+                              <Statistic
+                                title={<span style={{ fontSize: 12 }}>昨日盈亏</span>}
+                                value={stats && stats.yesterdayProfit ? parseFloat(stats.yesterdayProfit) : 0}
+                                precision={2}
+                                valueStyle={{
+                                  color: stats && parseFloat(stats.yesterdayProfit || '0') >= 0 ? '#cf1322' : '#3f8600',
                                   fontSize: 15,
                                   fontWeight: 500
                                 }}

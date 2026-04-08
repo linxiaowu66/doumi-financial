@@ -25,7 +25,7 @@ export async function GET() {
     let totalCost = new Decimal(0); // 持仓总成本
     let totalInvested = new Decimal(0); // 历史总投入（用于计算累计收益率）
 
-    const directionStatsMap: Record<number, { holdingProfit: string; totalProfitRate: string; monthProfit: string }> = {};
+    const directionStatsMap: Record<number, { holdingProfit: string; totalProfitRate: string; monthProfit: string; yesterdayProfit: string }> = {};
 
     // 遍历每个投资方向，计算其累计收益
     for (const direction of directions) {
@@ -113,6 +113,7 @@ export async function GET() {
           ? '0.00'
           : directionProfit.dividedBy(directionInvested).times(100).toFixed(2),
         monthProfit: '0.00',
+        yesterdayProfit: '0.00',
       };
 
       totalProfit = totalProfit.plus(directionProfit);
@@ -151,6 +152,21 @@ export async function GET() {
         (sum, record) => sum.plus(new Decimal(record.dailyProfit.toString())),
         new Decimal(0)
       );
+
+      // 将每个投资方向的昨日（最近交易日）盈亏写入 directionStatsMap
+      for (const record of latestDayRecords) {
+        const dirId = record.directionId;
+        if (!directionStatsMap[dirId]) {
+          directionStatsMap[dirId] = {
+            holdingProfit: '0.00',
+            totalProfitRate: '0.00',
+            monthProfit: '0.00',
+            yesterdayProfit: new Decimal(record.dailyProfit.toString()).toFixed(2),
+          };
+        } else {
+          directionStatsMap[dirId].yesterdayProfit = new Decimal(record.dailyProfit.toString()).toFixed(2);
+        }
+      }
     }
 
     // 计算本月和今年盈亏

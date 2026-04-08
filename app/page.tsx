@@ -14,7 +14,12 @@ import {
 } from "@ant-design/icons";
 
 // 模拟仪表盘组件 - 仿照实际 Dashboard UI
-const MockDashboard = () => (
+const MockDashboard = () => {
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  const dateStr = yesterday.toISOString().slice(0, 10);
+
+  return (
   <div className="relative rounded-xl bg-gray-50 dark:bg-[#141414] shadow-2xl border border-gray-200 dark:border-gray-800 overflow-hidden select-none transform transition-transform duration-500 hover:scale-[1.02] text-left font-sans">
     {/* Window Header */}
     <div className="bg-white dark:bg-[#1f1f1f] border-b border-gray-200 dark:border-gray-800 px-4 py-3 flex items-center gap-2">
@@ -89,7 +94,7 @@ const MockDashboard = () => (
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         <div className="bg-white dark:bg-[#1f1f1f] p-6 rounded-lg border border-gray-200 dark:border-gray-800 shadow-sm">
           <div className="text-gray-500 dark:text-gray-400 text-sm mb-2">
-            今日盈亏
+            昨日盈亏 <span className="ml-2 text-xs text-gray-400">{dateStr}</span>
           </div>
           <div className="flex items-baseline gap-2">
             <span className="text-[#cf1322] text-3xl font-bold">+1,240.50</span>
@@ -173,7 +178,8 @@ const MockDashboard = () => (
       </div>
     </div>
   </div>
-);
+  );
+}
 
 // 模拟资产分布组件 - 仿照实际 Card UI
 const MockAllocationCard = () => (

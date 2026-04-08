@@ -70,23 +70,27 @@ export class StockCalculator implements InvestmentCalculator {
         const fundCommRate = parseFloat(systemSettings?.fund_commission_rate || "0.1") / 1000;
         const transRate = parseFloat(systemSettings?.transfer_fee_rate || "0.01") / 1000;
         const stampRate = parseFloat(systemSettings?.stamp_duty_rate || "0.5") / 1000;
-        
         const isETF = this.isETF(code);
+        const pureCode = code.replace(/^(sh|sz|bj)/i, '');
+        const isShanghai = /^sh/i.test(code) || /^6/.test(pureCode);
         const rate = isETF ? fundCommRate : commRate;
 
-        // 佣金（最小5元规则，A股）
+        // 佣金（对股票应用最低佣金规则，场内基金/ETF 常按比例计费）
         let commission = parseFloat((calAmount * rate).toFixed(2));
         if (!isETF && commission < 5 && calAmount > 0) {
           commission = 5;
         }
 
-        const transferFee = parseFloat((calAmount * transRate).toFixed(2));
-        
+        // 过户费：仅适用于上交所 A 股（且非场内基金/ETF）
+        const transferFee = (!isETF && isShanghai) ? parseFloat((calAmount * transRate).toFixed(2)) : 0;
+
+        // 印花税：仅在卖出时由股票（非场内基金/ETF）承担
+        const stampDuty = (!isETF && type === 'SELL') ? parseFloat((calAmount * stampRate).toFixed(2)) : 0;
+
         if (type === 'BUY') {
           resFee = commission + transferFee;
           resAmount = calAmount + resFee;
         } else {
-          const stampDuty = parseFloat((calAmount * stampRate).toFixed(2));
           resFee = commission + transferFee + stampDuty;
           resAmount = calAmount - resFee;
         }

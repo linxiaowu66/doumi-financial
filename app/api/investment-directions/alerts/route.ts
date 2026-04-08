@@ -200,7 +200,7 @@ export async function GET() {
                 (1000 * 60 * 60 * 24),
             );
 
-            if (daysDiff > 30) {
+            if (daysDiff > 30 && direction.type !== 'STOCK') {
               for (const { fund, holdingShares } of categoryFundStats) {
                 if (holdingShares > 0) {
                   alerts.push({
