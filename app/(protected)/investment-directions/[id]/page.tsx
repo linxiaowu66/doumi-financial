@@ -422,25 +422,21 @@ export default function DirectionDetailPage({
         const targetAmount =
           (Number(direction.expectedAmount) * targetPercent) / 100;
 
-        // 计算当前市值（持仓成本 + 持仓收益）
-        let currentValue = 0;
+        // 用持仓成本（实际投入）对比目标金额，而非市值（市值受涨跌影响会误报）
+        let holdingCost = 0;
         categoryFunds.forEach((fund) => {
           const stats = statsMap.get(fund.id);
           if (stats) {
-            // 当前市值 = 持仓成本 + 持仓收益
-            // 持仓收益 = 持仓成本 * 持仓收益率 / 100
-            const holdingProfit =
-              (stats.holdingCost * stats.holdingProfitRate) / 100;
-            currentValue += stats.holdingCost + holdingProfit;
+            holdingCost += stats.holdingCost;
           }
         });
 
-        if (isCategoryOverweight(currentValue, targetAmount)) {
+        if (isCategoryOverweight(holdingCost, targetAmount)) {
           positionAlertsMap.set(category, {
             categoryName: category,
-            currentValue,
+            currentValue: holdingCost,
             targetAmount,
-            excessPercent: categoryOverweightPercent(currentValue, targetAmount),
+            excessPercent: categoryOverweightPercent(holdingCost, targetAmount),
           });
         }
       });

@@ -823,7 +823,7 @@ export default function FundList({
                               <strong>仓位超标提醒</strong>
                             </div>
                             <div>
-                              当前市值: ¥
+                              当前投入: ¥
                               {categoryPositionAlerts
                                 .get(category)!
                                 .currentValue.toLocaleString()}
