@@ -15,6 +15,7 @@ import {
   FundAlert,
   CategoryPositionAlert,
 } from "@/types/investment-direction-detail";
+import { isCategoryOverweight, categoryOverweightPercent } from "@/lib/category-position";
 import Header from "@/components/investment-direction-detail/Header";
 import StatsCards from "@/components/investment-direction-detail/StatsCards";
 import ProfitChart from "@/components/investment-direction-detail/ProfitChart";
@@ -434,15 +435,12 @@ export default function DirectionDetailPage({
           }
         });
 
-        // 检查是否超过目标仓位的110%（即超过10%）
-        if (targetAmount > 0 && currentValue > targetAmount * 1.1) {
-          const excessPercent =
-            ((currentValue - targetAmount) / targetAmount) * 100;
+        if (isCategoryOverweight(currentValue, targetAmount)) {
           positionAlertsMap.set(category, {
             categoryName: category,
             currentValue,
             targetAmount,
-            excessPercent,
+            excessPercent: categoryOverweightPercent(currentValue, targetAmount),
           });
         }
       });

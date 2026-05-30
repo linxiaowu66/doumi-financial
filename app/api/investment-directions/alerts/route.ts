@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { Decimal } from "@prisma/client/runtime/library";
+import { isCategoryOverweight, categoryOverweightPercent } from "@/lib/category-position";
 
 interface FundAlertItem {
   fundId: number;
@@ -149,10 +150,8 @@ export async function GET() {
           if (categoryHoldingCost >= targetAmount * 0.995) {
             isCategoryTargetReached = true;
           }
-          const overweightAmount = categoryHoldingCost - targetAmount;
-
-          if (overweightAmount > 0) {
-            const overweightPercent = (overweightAmount / targetAmount) * 100;
+          if (isCategoryOverweight(categoryHoldingCost, targetAmount)) {
+            const overweightPercent = categoryOverweightPercent(categoryHoldingCost, targetAmount);
             for (const { fund, holdingShares } of categoryFundStats) {
               if (holdingShares > 0) {
                 alerts.push({
