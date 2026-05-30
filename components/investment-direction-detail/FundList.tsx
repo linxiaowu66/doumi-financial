@@ -76,30 +76,50 @@ export default function FundList({
   >({});
 
   useEffect(() => {
-    // Fetch yesterday net worth for all funds used to compute 昨日收益
+    // 昨日收益 = holdingShares * (latestNetWorth - prevTradingDayNetWorth)
+    // 优先从本地净值历史表获取上一交易日净值，没有时回退外部 API
     const fetchYesterday = async () => {
       const map: Record<number, number | null> = {};
-      const yesterday = new Date();
-      yesterday.setDate(yesterday.getDate() - 1);
-      const yStr = yesterday.toISOString().slice(0, 10);
 
       await Promise.all(
         funds.map(async (f) => {
           try {
+            if (!f.netWorthDate) {
+              map[f.id] = null;
+              return;
+            }
+
+            // 1. 先查本地历史表（取 netWorthDate 之前最近一条）
+            const histRes = await fetch(`/api/funds/${f.id}/net-worth-history?days=14`);
+            if (histRes.ok) {
+              const history: { date: string; netWorth: number }[] = await histRes.json();
+              const prev = [...history]
+                .filter((h) => h.date < f.netWorthDate!)
+                .slice(-1)[0];
+              if (prev) {
+                map[f.id] = prev.netWorth;
+                return;
+              }
+            }
+
+            // 2. 本地无数据时回退外部 API
             if (!f.code) {
               map[f.id] = null;
               return;
             }
-            const res = await fetch(
-              `/api/fund-price-history?code=${f.code}&date=${yStr}`,
+            const base = new Date(f.netWorthDate + "T12:00:00Z");
+            base.setUTCDate(base.getUTCDate() - 1);
+            const prevDateStr = base.toISOString().slice(0, 10);
+            const extRes = await fetch(
+              `/api/fund-price-history?code=${f.code}&date=${prevDateStr}`,
             );
-            if (!res.ok) {
+            if (!extRes.ok) {
               map[f.id] = null;
               return;
             }
-            const data = await res.json();
+            const data = await extRes.json();
             map[f.id] = data?.netWorth ?? null;
-          } catch (error) {
+          } catch {
             map[f.id] = null;
           }
         }),

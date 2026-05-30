@@ -15,14 +15,28 @@ export async function PUT(
       return NextResponse.json({ error: '净值不能为空' }, { status: 400 });
     }
 
-    const fund = await prisma.fund.update({
-      where: { id: parseInt(id) },
-      data: {
-        latestNetWorth: parseFloat(netWorth),
-        netWorthDate: netWorthDate || null,
-        netWorthUpdateAt: new Date(),
-      },
-    });
+    const parsedNetWorth = parseFloat(netWorth);
+    const dateStr = netWorthDate || null;
+
+    const [fund] = await prisma.$transaction([
+      prisma.fund.update({
+        where: { id: parseInt(id) },
+        data: {
+          latestNetWorth: parsedNetWorth,
+          netWorthDate: dateStr,
+          netWorthUpdateAt: new Date(),
+        },
+      }),
+      ...(dateStr
+        ? [
+            prisma.fundNetWorthHistory.upsert({
+              where: { fundId_date: { fundId: parseInt(id), date: dateStr } },
+              create: { fundId: parseInt(id), date: dateStr, netWorth: parsedNetWorth },
+              update: { netWorth: parsedNetWorth },
+            }),
+          ]
+        : []),
+    ]);
 
     return NextResponse.json(fund);
   } catch (error: unknown) {

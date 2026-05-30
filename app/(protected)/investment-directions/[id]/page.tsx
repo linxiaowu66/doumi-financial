@@ -63,7 +63,7 @@ export default function DirectionDetailPage({
       cumulativeProfitRate: number;
     }>
   >([]);
-  const [chartDays, setChartDays] = useState<number>(30);
+  const [chartDays, setChartDays] = useState<number>(180);
   const [chartLoading, setChartLoading] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [categoryOptions, setCategoryOptions] = useState<

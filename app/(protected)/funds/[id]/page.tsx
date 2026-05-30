@@ -19,6 +19,7 @@ import TransactionList from "@/components/funds/TransactionList";
 import TransactionModal from "@/components/funds/TransactionModal";
 import PlannedPurchaseModal from "@/components/funds/PlannedPurchaseModal";
 import ExecutePlanModal from "@/components/funds/ExecutePlanModal";
+import NetWorthChart from "@/components/funds/NetWorthChart";
 
 export default function FundDetailPage({
   params,
@@ -734,6 +735,14 @@ export default function FundDetailPage({
           isMobile={isMobile}
           currentPrice={currentPrice}
         />
+
+        {fund && (
+          <NetWorthChart
+            fundId={fundId}
+            fundName={fund.name}
+            isMobile={isMobile}
+          />
+        )}
 
         <PlannedPurchaseList
           plannedPurchases={plannedPurchases}

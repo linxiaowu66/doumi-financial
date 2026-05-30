@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 
+const PRECISION_THRESHOLD = 0.03; // 与 funds/[id]/stats 保持一致
+
 // GET - 获取所有投资方向
 export async function GET() {
   try {
@@ -9,14 +11,10 @@ export async function GET() {
         createdAt: "desc",
       },
       include: {
-        _count: {
-          select: { funds: true },
-        },
         funds: {
           include: {
             transactions: {
-              orderBy: { date: "desc" },
-              take: 1, // 只取每个基金最新的一笔交易
+              orderBy: { date: "asc" },
             },
             pendingTransactions: {
               where: { status: "WAITING" },
@@ -26,7 +24,7 @@ export async function GET() {
       },
     });
 
-    // 为每个投资方向计算最新一笔交易信息和待确认交易数量
+    // 为每个投资方向计算最新一笔交易信息、待确认交易数量和未清仓基金数量
     const directionsWithLatestTransaction = directions.map((direction) => {
       // 计算待确认交易总数
       const pendingCount = direction.funds.reduce(
@@ -34,33 +32,46 @@ export async function GET() {
         0,
       );
 
-      // 找到所有基金的最新交易，然后取最新的一笔
-      const allLatestTransactions = direction.funds
-        .flatMap((fund) =>
-          fund.transactions.map((tx) => ({
-            date: tx.date,
-            type: tx.type,
-            fundName: fund.name,
-          })),
-        )
-        .sort((a, b) => b.date.getTime() - a.date.getTime());
+      let activeFundsCount = 0;
+      let latestTransaction: { date: Date; type: string; fundName: string } | null = null;
 
-      const latestTransaction =
-        allLatestTransactions.length > 0 ? allLatestTransactions[0] : null;
+      for (const fund of direction.funds) {
+        // 计算持仓份额，判断是否已清仓
+        let fundShares = 0;
+        for (const tx of fund.transactions) {
+          const shares = Number(tx.shares);
+          if (tx.type === "BUY") {
+            fundShares += shares;
+          } else if (tx.type === "SELL") {
+            fundShares -= Math.abs(shares);
+          } else if (tx.type === "DIVIDEND" && tx.dividendReinvest) {
+            fundShares += shares;
+          }
+        }
+        if (Math.abs(fundShares) < PRECISION_THRESHOLD) {
+          fundShares = 0;
+        }
+        if (fundShares > 0) {
+          activeFundsCount++;
+        }
+
+        // 找该基金的最新交易（transactions 已按 asc 排序，取最后一条）
+        if (fund.transactions.length > 0) {
+          const lastTx = fund.transactions[fund.transactions.length - 1];
+          if (!latestTransaction || lastTx.date.getTime() > latestTransaction.date.getTime()) {
+            latestTransaction = { date: lastTx.date, type: lastTx.type, fundName: fund.name };
+          }
+        }
+      }
 
       // 移除 funds 数据，只保留需要的统计信息
-      const { funds, ...directionWithoutFunds } = direction;
+      const { funds: _funds, ...directionWithoutFunds } = direction;
 
       return {
         ...directionWithoutFunds,
+        _count: { funds: activeFundsCount },
         pendingCount,
-        latestTransaction: latestTransaction
-          ? {
-              date: latestTransaction.date,
-              type: latestTransaction.type,
-              fundName: latestTransaction.fundName,
-            }
-          : null,
+        latestTransaction,
       };
     });
 

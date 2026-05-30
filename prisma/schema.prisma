@@ -75,6 +75,7 @@ model Fund {
   transactions        Transaction[] // 交易记录
   plannedPurchases    PlannedPurchase[] // 计划买入
   pendingTransactions PendingTransaction[] // 待确认交易
+  netWorthHistory     FundNetWorthHistory[] // 净值历史
 }
 
 // 交易记录（买入、卖出、分红）
@@ -177,6 +178,21 @@ model AnnualProfitTarget {
 }
 
 // 添加在 schema.prisma 最后面
+
+// 基金净值历史记录
+model FundNetWorthHistory {
+  id        Int      @id @default(autoincrement())
+  fundId    Int // 所属基金
+  fund      Fund     @relation(fields: [fundId], references: [id], onDelete: Cascade)
+  date      String // 净值日期 YYYY-MM-DD
+  netWorth  Decimal  @db.Decimal(10, 4) // 净值
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([fundId, date])
+  @@index([fundId])
+  @@index([date])
+}
 
 // 系统设置（用于存储费率等）
 model SystemSetting {
