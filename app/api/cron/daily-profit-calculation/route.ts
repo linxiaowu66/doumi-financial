@@ -1,8 +1,5 @@
 import { NextResponse } from "next/server";
-import {
-  saveAllDirectionsDailyProfit,
-  saveDirectionDailyProfitRange,
-} from "@/lib/direction-daily-profit";
+import { saveDirectionDailyProfitRange } from "@/lib/direction-daily-profit";
 import { updateActualAmountByFundId } from "@/lib/investment-direction";
 import prisma from "@/lib/prisma";
 import { isStockCode } from "@/lib/fund-price";
@@ -137,14 +134,26 @@ export async function POST(request: Request) {
         const result = await fetchFundNetWorth(fund.code);
 
         if (result.success) {
-          await prisma.fund.update({
-            where: { id: fund.id },
-            data: {
-              latestNetWorth: result.netWorth,
-              netWorthDate: result.netWorthDate,
-              netWorthUpdateAt: new Date(),
-            },
-          });
+          const dateStr = result.netWorthDate || null;
+          await prisma.$transaction([
+            prisma.fund.update({
+              where: { id: fund.id },
+              data: {
+                latestNetWorth: result.netWorth,
+                netWorthDate: dateStr,
+                netWorthUpdateAt: new Date(),
+              },
+            }),
+            ...(dateStr
+              ? [
+                  prisma.fundNetWorthHistory.upsert({
+                    where: { fundId_date: { fundId: fund.id, date: dateStr } },
+                    create: { fundId: fund.id, date: dateStr, netWorth: result.netWorth },
+                    update: { netWorth: result.netWorth },
+                  }),
+                ]
+              : []),
+          ]);
           results.netWorthUpdate.success++;
         } else {
           results.netWorthUpdate.failed++;
