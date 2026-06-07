@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { saveDirectionDailyProfitRange } from "@/lib/direction-daily-profit";
+import { saveFundDailyProfitToday } from "@/lib/fund-daily-profit";
 import { updateActualAmountByFundId } from "@/lib/investment-direction";
 import prisma from "@/lib/prisma";
 import { isStockCode } from "@/lib/fund-price";
@@ -223,6 +224,20 @@ export async function POST(request: Request) {
           }`,
         );
       }
+    }
+
+    // 4. 计算每只基金今日盈亏快照
+    try {
+      const allFunds = await prisma.fund.findMany({ select: { id: true } });
+      for (const fund of allFunds) {
+        try {
+          await saveFundDailyProfitToday(fund.id);
+        } catch (err) {
+          console.error(`基金 ${fund.id} 今日盈亏计算失败:`, err);
+        }
+      }
+    } catch (err) {
+      console.error("批量计算基金每日盈亏失败:", err);
     }
 
     const duration = Date.now() - startTime;

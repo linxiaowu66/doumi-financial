@@ -21,6 +21,7 @@ import {
   ClockCircleOutlined,
   ExclamationCircleOutlined,
   FundOutlined,
+  SwapOutlined,
 } from "@ant-design/icons";
 import { useRouter } from "next/navigation";
 import {
@@ -47,6 +48,7 @@ interface FundListProps {
   isMobile: boolean;
   onOpenModal: (fund?: Fund) => void;
   onDelete: (id: number) => void;
+  onTransfer: (fund: Fund) => void;
   onOpenTargetModal: (
     categoryName: string,
     currentTargetPercent?: number,
@@ -65,6 +67,7 @@ export default function FundList({
   isMobile,
   onOpenModal,
   onDelete,
+  onTransfer,
   onOpenTargetModal,
   isFundLiquidated,
 }: FundListProps) {
@@ -416,7 +419,7 @@ export default function FundList({
       title: "操作",
       key: "action",
       align: "center" as const,
-      width: 110,
+      width: 140,
       fixed: "right" as const,
       render: (_: unknown, record: Fund) => (
         <Space>
@@ -438,6 +441,13 @@ export default function FundList({
             onClick={() => onOpenModal(record)}
             size="small"
             title="编辑"
+          />
+          <Button
+            type="link"
+            icon={<SwapOutlined />}
+            onClick={() => onTransfer(record)}
+            size="small"
+            title="转移"
           />
           <Popconfirm
             title="确定要删除吗？"
@@ -520,6 +530,15 @@ export default function FundList({
                 onClick={(e) => {
                   e.stopPropagation();
                   onOpenModal(fund);
+                }}
+              />
+              <Button
+                type="text"
+                size="small"
+                icon={<SwapOutlined />}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onTransfer(fund);
                 }}
               />
               <Popconfirm

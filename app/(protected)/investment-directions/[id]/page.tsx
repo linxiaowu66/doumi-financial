@@ -24,6 +24,7 @@ import IncomeSummary from "@/components/investment-direction-detail/IncomeSummar
 import FundList from "@/components/investment-direction-detail/FundList";
 import FundModal from "@/components/investment-direction-detail/FundModal";
 import TargetModal from "@/components/investment-direction-detail/TargetModal";
+import TransferModal from "@/components/investment-direction-detail/TransferModal";
 
 export default function DirectionDetailPage({
   params,
@@ -44,6 +45,8 @@ export default function DirectionDetailPage({
   const [loading, setLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [targetModalOpen, setTargetModalOpen] = useState(false);
+  const [transferModalOpen, setTransferModalOpen] = useState(false);
+  const [transferringFund, setTransferringFund] = useState<Fund | null>(null);
   const [analysisModalOpen, setAnalysisModalOpen] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [analysisResult, setAnalysisResult] = useState<string>("");
@@ -693,6 +696,12 @@ export default function DirectionDetailPage({
     }
   };
 
+  // 打开转移基金弹窗
+  const handleOpenTransferModal = (fund: Fund) => {
+    setTransferringFund(fund);
+    setTransferModalOpen(true);
+  };
+
   // 打开设置分类目标弹窗
   const handleOpenTargetModal = (
     categoryName: string,
@@ -793,6 +802,7 @@ export default function DirectionDetailPage({
           isMobile={isMobile}
           onOpenModal={handleOpenModal}
           onDelete={handleDelete}
+          onTransfer={handleOpenTransferModal}
           onOpenTargetModal={handleOpenTargetModal}
           isFundLiquidated={isFundLiquidated}
         />
@@ -871,6 +881,21 @@ export default function DirectionDetailPage({
           }}
           onFinish={handleSaveTarget}
           form={targetForm}
+        />
+
+        <TransferModal
+          open={transferModalOpen}
+          fund={transferringFund}
+          currentDirectionId={directionId}
+          onCancel={() => {
+            setTransferModalOpen(false);
+            setTransferringFund(null);
+          }}
+          onSuccess={() => {
+            setTransferModalOpen(false);
+            setTransferringFund(null);
+            loadFunds();
+          }}
         />
 
         <Modal

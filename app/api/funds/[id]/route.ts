@@ -44,14 +44,15 @@ export async function PUT(
   try {
     const { id } = await params;
     const body = await request.json();
-    const { 
-      code, 
-      name, 
-      category, 
+    const {
+      code,
+      name,
+      category,
       remark,
       confirmDays,
       defaultBuyFee,
-      defaultSellFee
+      defaultSellFee,
+      directionId,
     } = body;
 
     const fund = await prisma.fund.update({
@@ -64,6 +65,7 @@ export async function PUT(
         confirmDays: confirmDays ? parseInt(confirmDays) : undefined,
         defaultBuyFee,
         defaultSellFee,
+        ...(directionId !== undefined && { directionId: parseInt(directionId) }),
       },
     });
 

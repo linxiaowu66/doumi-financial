@@ -76,6 +76,7 @@ model Fund {
   plannedPurchases    PlannedPurchase[] // 计划买入
   pendingTransactions PendingTransaction[] // 待确认交易
   netWorthHistory     FundNetWorthHistory[] // 净值历史
+  dailyProfits        FundDailyProfit[] // 每日盈亏记录
 }
 
 // 交易记录（买入、卖出、分红）
@@ -188,6 +189,29 @@ model FundNetWorthHistory {
   netWorth  Decimal  @db.Decimal(10, 4) // 净值
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@unique([fundId, date])
+  @@index([fundId])
+  @@index([date])
+}
+
+// 基金每日盈亏记录
+model FundDailyProfit {
+  id                   Int      @id @default(autoincrement())
+  fundId               Int
+  fund                 Fund     @relation(fields: [fundId], references: [id], onDelete: Cascade)
+  date                 String   // 净值日期 YYYY-MM-DD
+  holdingShares        Decimal  @db.Decimal(18, 6)
+  holdingCost          Decimal  @db.Decimal(15, 4)
+  holdingValue         Decimal  @db.Decimal(15, 4)
+  dailyProfit          Decimal  @db.Decimal(15, 4)
+  cumulativeProfit     Decimal  @db.Decimal(15, 4)
+  cumulativeProfitRate Decimal  @db.Decimal(10, 6)
+  totalInvested        Decimal  @db.Decimal(15, 4)
+  isNewHigh            Boolean  @default(false)
+  isNewLow             Boolean  @default(false)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 
   @@unique([fundId, date])
   @@index([fundId])
