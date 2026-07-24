@@ -4,6 +4,8 @@ import { saveFundDailyProfitToday } from "@/lib/fund-daily-profit";
 import { updateActualAmountByFundId } from "@/lib/investment-direction";
 import prisma from "@/lib/prisma";
 import { isStockCode } from "@/lib/fund-price";
+import { isWorkday } from "@/lib/workday";
+import dayjs from "dayjs";
 
 // 延迟函数，用于避免限流
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -206,8 +208,25 @@ export async function POST(request: Request) {
 
     for (const direction of directions) {
       try {
-        // 回填最近1天（即今天），会自动获取历史净值
-        const result = await saveDirectionDailyProfitRange(direction.id, 1);
+        let targetDate = dayjs().subtract(1, "day");
+        while (!(await isWorkday(targetDate.toDate()))) {
+          targetDate = targetDate.subtract(1, "day");
+        }
+        const today = dayjs().startOf("day");
+        await prisma.directionDailyProfit.deleteMany({
+          where: {
+            directionId: direction.id,
+            date: {
+              gte: today.toDate(),
+              lt: today.add(1, "day").toDate(),
+            },
+          },
+        });
+        const result = await saveDirectionDailyProfitRange(
+          direction.id,
+          1,
+          targetDate.toDate(),
+        );
         if (result.success > 0) {
           results.dailyProfit.success++;
         } else {

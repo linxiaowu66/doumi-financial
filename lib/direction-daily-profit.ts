@@ -305,6 +305,7 @@ export async function saveAllDirectionsDailyProfit(
 export async function saveDirectionDailyProfitRange(
   directionId: number,
   days: number,
+  endDate: Date = new Date(),
 ): Promise<{ success: number; failed: number; errors: string[] }> {
   // 获取该方向的基金列表
   const funds = await prisma.fund.findMany({
@@ -337,7 +338,7 @@ export async function saveDirectionDailyProfitRange(
   const errors: string[] = [];
 
   for (let i = days - 1; i >= 0; i--) {
-    const targetDate = dayjs().subtract(i, "day").toDate();
+    const targetDate = dayjs(endDate).subtract(i, "day").toDate();
     try {
       await saveDirectionDailyProfit(directionId, targetDate, netWorthMap);
       success++;
