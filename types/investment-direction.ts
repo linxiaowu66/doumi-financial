@@ -27,6 +27,7 @@ export interface FundAlert {
   alertType:
     | "price_drop"
     | "price_rise"
+    | "take_profit"
     | "category_overdue"
     | "category_overweight"
     | "pending_transaction";

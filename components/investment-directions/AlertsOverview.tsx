@@ -3,6 +3,7 @@ import {
   WarningOutlined,
   FallOutlined,
   RiseOutlined,
+  DollarOutlined,
   ClockCircleOutlined,
   SyncOutlined,
 } from '@ant-design/icons';
@@ -23,6 +24,7 @@ export default function AlertsOverview({ alerts, loading }: AlertsOverviewProps)
   const alertsByType = {
     price_drop: alerts.filter((a) => a.alertType === 'price_drop'),
     price_rise: alerts.filter((a) => a.alertType === 'price_rise'),
+    take_profit: alerts.filter((a) => a.alertType === 'take_profit'),
     category_overdue: alerts.filter((a) => a.alertType === 'category_overdue'),
     category_overweight: alerts.filter((a) => a.alertType === 'category_overweight'),
     pending_transaction: alerts.filter((a) => a.alertType === 'pending_transaction'),
@@ -110,6 +112,29 @@ export default function AlertsOverview({ alerts, loading }: AlertsOverviewProps)
                   {alertsByType.price_rise.map((alert) => (
                     <Link key={alert.fundId} href={`/funds/${alert.fundId}`}>
                       <Tag color="green" style={{ cursor: 'pointer' }}>
+                        {alert.fundName} ({alert.directionName})
+                        <br />
+                        {alert.alertReason}
+                      </Tag>
+                    </Link>
+                  ))}
+                </Space>
+              </Space>
+            }
+          />
+        )}
+
+        {alertsByType.take_profit.length > 0 && (
+          <Alert
+            type="warning"
+            icon={<DollarOutlined />}
+            message={
+              <Space direction="vertical" size="small" style={{ width: '100%' }}>
+                <Text strong>止盈策略提醒 ({alertsByType.take_profit.length})</Text>
+                <Space wrap>
+                  {alertsByType.take_profit.map((alert) => (
+                    <Link key={alert.fundId} href={`/funds/${alert.fundId}`}>
+                      <Tag color="gold" style={{ cursor: 'pointer' }}>
                         {alert.fundName} ({alert.directionName})
                         <br />
                         {alert.alertReason}

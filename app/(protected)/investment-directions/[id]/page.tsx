@@ -25,6 +25,7 @@ import FundList from "@/components/investment-direction-detail/FundList";
 import FundModal from "@/components/investment-direction-detail/FundModal";
 import TargetModal from "@/components/investment-direction-detail/TargetModal";
 import TransferModal from "@/components/investment-direction-detail/TransferModal";
+import { analyzeWithAi, type AiProvider } from "@/lib/ai-client";
 
 export default function DirectionDetailPage({
   params,
@@ -604,13 +605,28 @@ export default function DirectionDetailPage({
     try {
       setAnalyzing(true);
       setViewingAnalysis(null);
-      const res = await fetch(
+      const dataRes = await fetch(
         `/api/investment-directions/${directionId}/analyze`,
       );
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "分析失败");
-      setViewingAnalysis(data.analysis || "未返回分析结果");
-      loadHistory();
+      const data = await dataRes.json();
+      if (!dataRes.ok) throw new Error(data.error || "获取资产数据失败");
+
+      const settingsRes = await fetch("/api/settings/system");
+      const settings = await settingsRes.json();
+      if (!settingsRes.ok) throw new Error(settings.error || "获取 AI 设置失败");
+
+      const provider = (settings.ai_provider || "gemini") as AiProvider;
+      const analysis = await analyzeWithAi(provider, settings, data.accountData);
+      if (typeof analysis !== "string" || !analysis.trim()) throw new Error("AI 未返回分析结果");
+
+      const saveRes = await fetch(`/api/investment-directions/${directionId}/analyses`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: analysis }),
+      });
+      if (!saveRes.ok) throw new Error("分析完成，但报告保存失败");
+      setViewingAnalysis(analysis);
+      await loadHistory();
     } catch (error) {
       console.error(error);
       message.error(error instanceof Error ? error.message : "AI 分析请求失败");
@@ -631,6 +647,10 @@ export default function DirectionDetailPage({
         confirmDays: fund.confirmDays || 1,
         defaultBuyFee: fund.defaultBuyFee || 0.15,
         defaultSellFee: fund.defaultSellFee || 0.5,
+        alertThreshold: fund.alertThreshold ?? 5,
+        takeProfitTrigger: fund.takeProfitTrigger ?? 8,
+        takeProfitDrawdown: fund.takeProfitDrawdown ?? 3,
+        takeProfitSellPercent: fund.takeProfitSellPercent ?? 50,
       });
     } else {
       setEditingFund(null);
@@ -639,6 +659,10 @@ export default function DirectionDetailPage({
         confirmDays: 1,
         defaultBuyFee: 0.15,
         defaultSellFee: 0.5,
+        alertThreshold: 5,
+        takeProfitTrigger: 8,
+        takeProfitDrawdown: 3,
+        takeProfitSellPercent: 50,
       });
     }
     setCategorySearchValue("");

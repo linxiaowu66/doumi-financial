@@ -48,21 +48,35 @@ export async function PUT(
     // 先获取交易记录以获取 fundId
     const oldTransaction = await prisma.transaction.findUnique({
       where: { id: parseInt(id) },
-      select: { fundId: true },
+      select: {
+        fundId: true,
+        fund: { select: { direction: { select: { type: true } } } },
+      },
     });
 
     if (!oldTransaction) {
       return NextResponse.json({ error: '交易记录不存在' }, { status: 404 });
     }
 
+    const finalAmount = parseFloat(amount);
+    const finalPrice = parseFloat(price);
+    const finalFee = fee ? parseFloat(fee) : 0;
+    if (!Number.isFinite(finalAmount) || !Number.isFinite(finalPrice) || finalPrice <= 0 || !Number.isFinite(finalFee)) {
+      return NextResponse.json({ error: '交易金额、净值和手续费必须是有效数字' }, { status: 400 });
+    }
+    const finalShares =
+      type === 'BUY' && oldTransaction.fund.direction.type !== 'STOCK'
+        ? (finalAmount - finalFee) / finalPrice
+        : parseFloat(shares);
+
     const transaction = await prisma.transaction.update({
       where: { id: parseInt(id) },
       data: {
         type,
-        amount: parseFloat(amount),
-        shares: parseFloat(shares),
-        price: parseFloat(price),
-        fee: fee ? parseFloat(fee) : 0,
+        amount: finalAmount,
+        shares: finalShares,
+        price: finalPrice,
+        fee: finalFee,
         date: new Date(date),
         dividendReinvest: dividendReinvest || false,
         remark,

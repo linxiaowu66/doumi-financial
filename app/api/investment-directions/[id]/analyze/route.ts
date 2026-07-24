@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-import { GeminiService } from '@/lib/ai';
 import { Decimal } from '@prisma/client/runtime/library';
 import dayjs from 'dayjs';
 
@@ -180,17 +179,8 @@ export async function GET(
       recentTransactions: recentTransactions,
     };
 
-    const analysisResult = await GeminiService.analyzeInvestmentDirection(accountData);
-
-    // 记录到数据库
-    await prisma.investmentDirectionAnalysis.create({
-      data: {
-        directionId,
-        content: analysisResult,
-      }
-    });
-
-    return NextResponse.json({ analysis: analysisResult });
+    // AI 调用放在浏览器，后端只返回脱敏前的资产汇总数据。
+    return NextResponse.json({ accountData });
   } catch (error: unknown) {
     console.error('获取AI分析失败:', error);
     const message = error instanceof Error ? error.message : '未知错误';

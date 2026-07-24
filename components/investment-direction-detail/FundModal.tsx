@@ -142,6 +142,39 @@ export default function FundModal({
               </Form.Item>
             </Col>
             <Col xs={24} sm={8}>
+              <Form.Item label="止盈启动收益率 (%)" name="takeProfitTrigger" initialValue={8}>
+                <InputNumber<number> min={0} max={100} precision={2} step={0.5} addonAfter="%" style={{ width: "100%" }} size="large" />
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={8}>
+              <Form.Item label="高点回撤比例 (%)" name="takeProfitDrawdown" initialValue={3} tooltip="达到止盈启动收益率后，从历史高点回撤达到该比例时提醒">
+                <InputNumber<number> min={0} max={100} precision={2} step={0.5} addonAfter="%" style={{ width: "100%" }} size="large" />
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={8}>
+              <Form.Item label="建议卖出仓位 (%)" name="takeProfitSellPercent" initialValue={50}>
+                <InputNumber<number> min={0} max={100} precision={2} step={5} addonAfter="%" style={{ width: "100%" }} size="large" />
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={8}>
+              <Form.Item
+                label="涨跌预警比例 (%)"
+                name="alertThreshold"
+                initialValue={5}
+                tooltip="当前净值相对最近一次买入净值达到该比例时提醒"
+              >
+                <InputNumber<number>
+                  min={0}
+                  max={100}
+                  precision={2}
+                  step={0.5}
+                  addonAfter="%"
+                  style={{ width: "100%" }}
+                  size="large"
+                />
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={8}>
               <Form.Item
                 label="买入费率 (%)"
                 name="defaultBuyFee"

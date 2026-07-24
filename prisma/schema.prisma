@@ -69,6 +69,10 @@ model Fund {
   confirmDays    Int     @default(1) // 确认天数：1(境内T+1), 2(QDII T+2)
   defaultBuyFee  Decimal @default(0.15) @db.Decimal(5, 4) // 默认买入费率 % (如0.15)
   defaultSellFee Decimal @default(0.50) @db.Decimal(5, 4) // 默认卖出费率 % (如0.50)
+  alertThreshold Decimal @default(5.00) @db.Decimal(5, 2) // 涨跌预警比例 %
+  takeProfitTrigger Decimal @default(8.00) @db.Decimal(5, 2) // 止盈观察收益率 %
+  takeProfitDrawdown Decimal @default(3.00) @db.Decimal(5, 2) // 高点回撤止盈比例 %
+  takeProfitSellPercent Decimal @default(50.00) @db.Decimal(5, 2) // 建议卖出仓位 %
 
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @updatedAt
@@ -165,6 +169,15 @@ model InvestmentDirectionAnalysis {
   createdAt   DateTime            @default(now())
 
   @@index([directionId])
+  @@index([createdAt])
+}
+
+// 全部投资组合的AI策略分析历史
+model PortfolioStrategyAnalysis {
+  id        Int      @id @default(autoincrement())
+  content   String   @db.LongText
+  createdAt DateTime @default(now())
+
   @@index([createdAt])
 }
 

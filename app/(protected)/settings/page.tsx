@@ -14,6 +14,8 @@ import {
   Modal,
   Form,
   InputNumber,
+  Input,
+  Select,
   Row,
   Col,
 } from "antd";
@@ -60,6 +62,16 @@ export default function SettingsPage() {
     fund_commission_rate: "0.1",
     transfer_fee_rate: "0.01",
     stamp_duty_rate: "0.5",
+    ai_provider: "gemini",
+    ai_chatgpt_key: "",
+    ai_chatgpt_base_url: "https://api.openai.com/v1",
+    ai_chatgpt_model: "gpt-4o-mini",
+    ai_claude_key: "",
+    ai_claude_base_url: "https://api.anthropic.com",
+    ai_claude_model: "claude-3-5-haiku-latest",
+    ai_gemini_key: "",
+    ai_gemini_base_url: "https://generativelanguage.googleapis.com",
+    ai_gemini_model: "gemini-2.0-flash",
   });
 
   // 加载节假日配置
@@ -220,7 +232,7 @@ export default function SettingsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(systemSettings),
       });
-      if (res.ok) message.success("费率设置已保存");
+      if (res.ok) message.success("系统设置已保存");
     } catch {
       message.error("保存失败");
     }
@@ -422,6 +434,57 @@ export default function SettingsPage() {
                     </Form.Item>
                   </Col>
                 </Row>
+              </Form>
+            </Card>
+
+            <Card
+              title={<><InfoCircleOutlined /> AI 分析设置</>}
+              extra={<Button type="primary" onClick={handleSaveSettings}>保存</Button>}
+              style={{ marginBottom: 16 }}
+            >
+              <Form layout="vertical">
+                <Form.Item label="默认 AI 厂商">
+                  <Select
+                    value={systemSettings.ai_provider}
+                    onChange={(value) => setSystemSettings((p) => ({ ...p, ai_provider: value }))}
+                    options={[
+                      { label: "ChatGPT", value: "chatgpt" },
+                      { label: "Claude", value: "claude" },
+                      { label: "Gemini", value: "gemini" },
+                    ]}
+                  />
+                </Form.Item>
+                {(["chatgpt", "claude", "gemini"] as const).map((provider) => (
+                  <Row gutter={16} key={provider}>
+                    <Col span={14}>
+                      <Form.Item label={`${provider === "chatgpt" ? "ChatGPT" : provider === "claude" ? "Claude" : "Gemini"} API Key`}>
+                        <Input.Password
+                          value={systemSettings[`ai_${provider}_key`]}
+                          placeholder="输入后保存"
+                          onChange={(e) => setSystemSettings((p) => ({ ...p, [`ai_${provider}_key`]: e.target.value }))}
+                        />
+                      </Form.Item>
+                    </Col>
+                    <Col span={5}>
+                      <Form.Item label="模型名">
+                        <Input
+                          value={systemSettings[`ai_${provider}_model`]}
+                          onChange={(e) => setSystemSettings((p) => ({ ...p, [`ai_${provider}_model`]: e.target.value }))}
+                        />
+                      </Form.Item>
+                    </Col>
+                    <Col span={5}>
+                      <Form.Item label="Base URL">
+                        <Input
+                          value={systemSettings[`ai_${provider}_base_url`]}
+                          placeholder="自定义接口地址"
+                          onChange={(e) => setSystemSettings((p) => ({ ...p, [`ai_${provider}_base_url`]: e.target.value }))}
+                        />
+                      </Form.Item>
+                    </Col>
+                  </Row>
+                ))}
+                <Text type="secondary">分析时由浏览器直接请求厂商接口，Key 会发送到浏览器。</Text>
               </Form>
             </Card>
 

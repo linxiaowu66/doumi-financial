@@ -10,6 +10,8 @@ import {
   Space,
   App,
   Modal,
+  List,
+  Spin,
 } from "antd";
 import {
   FundOutlined,
@@ -19,11 +21,16 @@ import {
   LineChartOutlined,
   PlusOutlined,
   SyncOutlined,
+  RobotOutlined,
 } from "@ant-design/icons";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import dayjs from "dayjs";
+import { analyzeStrategyWithAi, type AiProvider } from "@/lib/ai-client";
 
 interface DirectionSummary {
   id: number;
@@ -82,6 +89,10 @@ export default function HomePage() {
   const [updateResults, setUpdateResults] = useState<UpdateResult[]>([]);
   const [showResultModal, setShowResultModal] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [strategyModalOpen, setStrategyModalOpen] = useState(false);
+  const [analyzingStrategy, setAnalyzingStrategy] = useState(false);
+  const [strategyReport, setStrategyReport] = useState<string | null>(null);
+  const [strategyHistory, setStrategyHistory] = useState<Array<{ id: number; content: string; createdAt: string }>>([]);
 
   // 检测屏幕尺寸
   useEffect(() => {
@@ -180,6 +191,65 @@ export default function HomePage() {
     });
   };
 
+  const loadStrategyHistory = async () => {
+    const response = await fetch("/api/strategy-analyses");
+    if (!response.ok) throw new Error("获取策略分析历史失败");
+    setStrategyHistory(await response.json());
+  };
+
+  const handleOpenStrategyAnalysis = async () => {
+    setStrategyModalOpen(true);
+    setStrategyReport(null);
+    try {
+      await loadStrategyHistory();
+    } catch {
+      message.error("获取策略分析历史失败");
+    }
+  };
+
+  const handleStrategyAnalysis = async () => {
+    try {
+      setAnalyzingStrategy(true);
+      const [assetResults, alertsResponse, settingsResponse] = await Promise.all([
+        Promise.all(
+          directions.map(async (direction) => {
+            const response = await fetch(`/api/investment-directions/${direction.id}/analyze`);
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || "获取资产数据失败");
+            return data.accountData;
+          }),
+        ),
+        fetch("/api/investment-directions/alerts"),
+        fetch("/api/settings/system"),
+      ]);
+      const alerts = await alertsResponse.json();
+      const settings = await settingsResponse.json();
+      if (!alertsResponse.ok || !settingsResponse.ok) throw new Error("获取策略分析数据失败");
+
+      const provider = (settings.ai_provider || "gemini") as AiProvider;
+      const report = await analyzeStrategyWithAi(provider, settings, {
+        generatedAt: new Date().toISOString(),
+        directions: assetResults,
+        alerts,
+      });
+      if (typeof report !== "string" || !report.trim()) throw new Error("AI 未返回策略报告");
+
+      const saveResponse = await fetch("/api/strategy-analyses", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: report }),
+      });
+      if (!saveResponse.ok) throw new Error("策略报告生成成功，但保存失败");
+      setStrategyReport(report);
+      await loadStrategyHistory();
+      message.success("AI 策略分析完成");
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : "AI 策略分析失败");
+    } finally {
+      setAnalyzingStrategy(false);
+    }
+  };
+
   if (status === "loading" || loading) {
     return <div style={{ textAlign: "center", padding: 40 }}>加载中...</div>;
   }
@@ -203,15 +273,24 @@ export default function HomePage() {
               <DollarOutlined style={{ marginRight: 8 }} />
               投资概览
             </h1>
-            <Button
-              type="primary"
-              icon={<SyncOutlined spin={updating} />}
-              onClick={handleBatchUpdateNetWorth}
-              loading={updating}
-              block={isMobile}
-            >
-              {updating ? "更新中..." : "更新所有净值"}
-            </Button>
+            <Space wrap>
+              <Button
+                icon={<RobotOutlined />}
+                onClick={handleOpenStrategyAnalysis}
+                block={isMobile}
+              >
+                AI 策略分析
+              </Button>
+              <Button
+                type="primary"
+                icon={<SyncOutlined spin={updating} />}
+                onClick={handleBatchUpdateNetWorth}
+                loading={updating}
+                block={isMobile}
+              >
+                {updating ? "更新中..." : "更新所有净值"}
+              </Button>
+            </Space>
           </div>
           {!isMobile && (
             <p style={{ color: "#666", margin: 0 }}>
@@ -734,6 +813,37 @@ export default function HomePage() {
             </Col>
           </Row>
         </Card>
+
+        <Modal
+          title="AI 投资策略分析"
+          open={strategyModalOpen}
+          onCancel={() => setStrategyModalOpen(false)}
+          footer={null}
+          width={850}
+        >
+          <Button type="primary" icon={<RobotOutlined />} onClick={handleStrategyAnalysis} loading={analyzingStrategy}>
+            {analyzingStrategy ? "分析中..." : "生成今日策略分析"}
+          </Button>
+          <div style={{ maxHeight: "65vh", overflowY: "auto", marginTop: 20 }}>
+            {strategyReport ? (
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{strategyReport}</ReactMarkdown>
+            ) : analyzingStrategy ? (
+              <div style={{ textAlign: "center", padding: 32 }}><Spin tip="正在分析全部持仓和预警..." /></div>
+            ) : strategyHistory.length > 0 ? (
+              <List
+                header="历史策略报告"
+                dataSource={strategyHistory}
+                renderItem={(item) => (
+                  <List.Item>
+                    <Button type="link" onClick={() => setStrategyReport(item.content)}>
+                      {dayjs(item.createdAt).format("YYYY-MM-DD HH:mm:ss")}
+                    </Button>
+                  </List.Item>
+                )}
+              />
+            ) : <div style={{ color: "#999", marginTop: 20 }}>暂无策略分析报告</div>}
+          </div>
+        </Modal>
       </div>
 
       {/* 更新结果 Modal */}

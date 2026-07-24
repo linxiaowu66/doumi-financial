@@ -13,6 +13,7 @@ interface FundAlertItem {
   alertType:
     | "price_drop"
     | "price_rise"
+    | "take_profit"
     | "category_overdue"
     | "category_overweight"
     | "pending_transaction";
@@ -42,6 +43,10 @@ export async function GET() {
             },
             pendingTransactions: {
               where: { status: "WAITING" },
+            },
+            netWorthHistory: {
+              orderBy: { date: "asc" },
+              select: { netWorth: true },
             },
           },
         },
@@ -244,8 +249,61 @@ export async function GET() {
         const currentPrice = parseFloat(fund.latestNetWorth.toString());
         const priceChangePercent =
           ((currentPrice - latestBuyPrice) / latestBuyPrice) * 100;
+        const alertThreshold = Number(fund.alertThreshold ?? 5);
 
-        if (priceChangePercent <= -5) {
+        let holdingShares = new Decimal(0);
+        let holdingCost = new Decimal(0);
+        for (const tx of fund.transactions) {
+          const shares = new Decimal(tx.shares);
+          if (tx.type === "BUY") {
+            holdingShares = holdingShares.plus(shares);
+            holdingCost = holdingCost.plus(new Decimal(tx.amount));
+          } else if (tx.type === "SELL") {
+            const sellShares = shares.abs();
+            const avgCost = holdingShares.greaterThan(0)
+              ? holdingCost.dividedBy(holdingShares)
+              : new Decimal(0);
+            holdingShares = holdingShares.minus(sellShares);
+            holdingCost = holdingCost.minus(avgCost.times(sellShares));
+          } else if (tx.type === "DIVIDEND" && tx.dividendReinvest) {
+            holdingShares = holdingShares.plus(shares);
+          }
+        }
+
+        const currentProfitPercent = holdingCost.greaterThan(0)
+          ? (currentPrice * Number(holdingShares) / Number(holdingCost) - 1) * 100
+          : 0;
+        const highWaterMark = Math.max(
+          currentPrice,
+          ...fund.netWorthHistory.map((item) => Number(item.netWorth)),
+        );
+        const drawdownPercent = highWaterMark > 0
+          ? ((currentPrice - highWaterMark) / highWaterMark) * 100
+          : 0;
+        const takeProfitTrigger = Number(fund.takeProfitTrigger ?? 8);
+        const takeProfitDrawdown = Number(fund.takeProfitDrawdown ?? 3);
+        const takeProfitSellPercent = Number(fund.takeProfitSellPercent ?? 50);
+
+        if (currentProfitPercent >= takeProfitTrigger) {
+          const drawdownTriggered = Math.abs(drawdownPercent) >= takeProfitDrawdown;
+          alerts.push({
+            fundId: fund.id,
+            fundCode: fund.code,
+            fundName: fund.name,
+            directionId: direction.id,
+            directionName: direction.name,
+            category: fund.category,
+            alertType: "take_profit",
+            alertReason: drawdownTriggered
+              ? `收益率 ${currentProfitPercent.toFixed(1)}%，较高点回撤 ${Math.abs(drawdownPercent).toFixed(1)}%，建议止盈卖出 ${takeProfitSellPercent}% 仓位`
+              : `收益率 ${currentProfitPercent.toFixed(1)}%，已进入止盈观察区间，建议关注高点回撤 ${takeProfitDrawdown}%`,
+            latestBuyPrice,
+            currentPrice,
+            priceChangePercent: currentProfitPercent,
+          });
+        }
+
+        if (priceChangePercent <= -alertThreshold) {
           alerts.push({
             fundId: fund.id,
             fundCode: fund.code,
@@ -254,12 +312,12 @@ export async function GET() {
             directionName: direction.name,
             category: fund.category,
             alertType: "price_drop",
-            alertReason: `相比最新买入价格下跌 ${Math.abs(priceChangePercent).toFixed(1)}%`,
+            alertReason: `相比最新买入价格下跌 ${Math.abs(priceChangePercent).toFixed(1)}%（阈值 ${alertThreshold}%）`,
             latestBuyPrice,
             currentPrice,
             priceChangePercent,
           });
-        } else if (priceChangePercent >= 8) {
+        } else if (priceChangePercent >= alertThreshold) {
           alerts.push({
             fundId: fund.id,
             fundCode: fund.code,
@@ -268,7 +326,7 @@ export async function GET() {
             directionName: direction.name,
             category: fund.category,
             alertType: "price_rise",
-            alertReason: `相比最新买入价格上涨 ${priceChangePercent.toFixed(1)}%`,
+            alertReason: `相比最新买入价格上涨 ${priceChangePercent.toFixed(1)}%（阈值 ${alertThreshold}%）`,
             latestBuyPrice,
             currentPrice,
             priceChangePercent,

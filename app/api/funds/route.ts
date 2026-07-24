@@ -71,7 +71,11 @@ export async function POST(request: Request) {
       remark,
       confirmDays = 1,
       defaultBuyFee = 0.15,
-      defaultSellFee = 0.50
+      defaultSellFee = 0.50,
+      alertThreshold = 5,
+      takeProfitTrigger = 8,
+      takeProfitDrawdown = 3,
+      takeProfitSellPercent = 50,
     } = body;
 
     if (!directionId || !code || !name) {
@@ -79,6 +83,11 @@ export async function POST(request: Request) {
         { error: '投资方向、基金代码和名称不能为空' },
         { status: 400 }
       );
+    }
+
+    const takeProfitValues = [takeProfitTrigger, takeProfitDrawdown, takeProfitSellPercent];
+    if (![alertThreshold, ...takeProfitValues].every((value) => Number.isFinite(Number(value)) && Number(value) >= 0 && Number(value) <= 100)) {
+      return NextResponse.json({ error: '涨跌预警比例必须在 0 到 100 之间' }, { status: 400 });
     }
 
     const fund = await prisma.fund.create({
@@ -91,6 +100,10 @@ export async function POST(request: Request) {
         confirmDays: parseInt(confirmDays),
         defaultBuyFee,
         defaultSellFee,
+        alertThreshold: Number(alertThreshold),
+        takeProfitTrigger: Number(takeProfitTrigger),
+        takeProfitDrawdown: Number(takeProfitDrawdown),
+        takeProfitSellPercent: Number(takeProfitSellPercent),
       },
       include: {
         direction: true,

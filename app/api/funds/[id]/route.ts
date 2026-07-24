@@ -52,8 +52,17 @@ export async function PUT(
       confirmDays,
       defaultBuyFee,
       defaultSellFee,
+      alertThreshold,
+      takeProfitTrigger,
+      takeProfitDrawdown,
+      takeProfitSellPercent,
       directionId,
     } = body;
+
+    const optionalRules = { alertThreshold, takeProfitTrigger, takeProfitDrawdown, takeProfitSellPercent };
+    if (Object.values(optionalRules).some((value) => value !== undefined && (!Number.isFinite(Number(value)) || Number(value) < 0 || Number(value) > 100))) {
+      return NextResponse.json({ error: '涨跌预警比例必须在 0 到 100 之间' }, { status: 400 });
+    }
 
     const fund = await prisma.fund.update({
       where: { id: parseInt(id) },
@@ -65,6 +74,10 @@ export async function PUT(
         confirmDays: confirmDays ? parseInt(confirmDays) : undefined,
         defaultBuyFee,
         defaultSellFee,
+        alertThreshold: alertThreshold === undefined ? undefined : Number(alertThreshold),
+        takeProfitTrigger: takeProfitTrigger === undefined ? undefined : Number(takeProfitTrigger),
+        takeProfitDrawdown: takeProfitDrawdown === undefined ? undefined : Number(takeProfitDrawdown),
+        takeProfitSellPercent: takeProfitSellPercent === undefined ? undefined : Number(takeProfitSellPercent),
         ...(directionId !== undefined && { directionId: parseInt(directionId) }),
       },
     });

@@ -18,6 +18,10 @@ export interface Fund {
   confirmDays?: number;
   defaultBuyFee?: number;
   defaultSellFee?: number;
+  alertThreshold?: number;
+  takeProfitTrigger?: number;
+  takeProfitDrawdown?: number;
+  takeProfitSellPercent?: number;
   transactions?: Transaction[];
   _count?: {
     transactions: number;
