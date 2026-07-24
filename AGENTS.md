@@ -26,6 +26,17 @@ For non-trivial changes, define a concrete check and run it before handoff:
 3. Run `pnpm exec tsc --noEmit` and `git diff --check`.
 4. Run the relevant test, lint, or build command when practical; distinguish existing failures from regressions.
 
+## Responsive UI requirement
+
+Every new or changed page/component MUST include mobile verification before handoff.
+
+- Check at least a narrow viewport around 375px wide and a desktop viewport.
+- Use responsive Ant Design props (`xs`/`sm`/`md`) or responsive CSS instead of fixed desktop-only widths.
+- Check long Chinese names, amounts, tags, tables, modals, buttons, and form labels for wrapping or overflow.
+- Keep card heights and aligned values consistent within each responsive row.
+- Tables must become a usable card/list layout or provide an intentional horizontal scroll on mobile.
+- Visual UI work is not complete until the page has been inspected in the browser or with an equivalent screenshot check.
+
 ## Database changes
 
 - Update `prisma/schema.prisma` and add a timestamped migration under `prisma/migrations`.

@@ -12,6 +12,15 @@ import { FundAlert } from '@/types/investment-direction';
 
 const { Text } = Typography;
 
+const alertTagStyle = {
+  cursor: 'pointer',
+  display: 'inline-block',
+  maxWidth: '100%',
+  whiteSpace: 'normal' as const,
+  overflowWrap: 'anywhere' as const,
+  lineHeight: '20px',
+};
+
 interface AlertsOverviewProps {
   alerts: FundAlert[];
   loading: boolean;
@@ -63,7 +72,7 @@ export default function AlertsOverview({ alerts, loading }: AlertsOverviewProps)
                 <Space wrap>
                   {alertsByType.pending_transaction.map((alert) => (
                     <Link key={alert.fundId} href={`/funds/${alert.fundId}`}>
-                      <Tag color="processing" style={{ cursor: 'pointer' }}>
+                      <Tag color="processing" style={alertTagStyle}>
                         {alert.fundName} ({alert.directionName})
                         <br />
                         {alert.alertReason}
@@ -87,7 +96,7 @@ export default function AlertsOverview({ alerts, loading }: AlertsOverviewProps)
                 <Space wrap>
                   {alertsByType.price_drop.map((alert) => (
                     <Link key={alert.fundId} href={`/funds/${alert.fundId}`}>
-                      <Tag color="orange" style={{ cursor: 'pointer' }}>
+                      <Tag color="orange" style={alertTagStyle}>
                         {alert.fundName} ({alert.directionName})
                         <br />
                         {alert.alertReason}
@@ -111,7 +120,7 @@ export default function AlertsOverview({ alerts, loading }: AlertsOverviewProps)
                 <Space wrap>
                   {alertsByType.price_rise.map((alert) => (
                     <Link key={alert.fundId} href={`/funds/${alert.fundId}`}>
-                      <Tag color="green" style={{ cursor: 'pointer' }}>
+                      <Tag color="green" style={alertTagStyle}>
                         {alert.fundName} ({alert.directionName})
                         <br />
                         {alert.alertReason}
@@ -134,7 +143,7 @@ export default function AlertsOverview({ alerts, loading }: AlertsOverviewProps)
                 <Space wrap>
                   {alertsByType.take_profit.map((alert) => (
                     <Link key={alert.fundId} href={`/funds/${alert.fundId}`}>
-                      <Tag color="gold" style={{ cursor: 'pointer' }}>
+                      <Tag color="gold" style={alertTagStyle}>
                         {alert.fundName} ({alert.directionName})
                         <br />
                         {alert.alertReason}
@@ -161,7 +170,7 @@ export default function AlertsOverview({ alerts, loading }: AlertsOverviewProps)
                       key={`${alert.directionId}-${alert.category}`}
                       href={`/investment-directions/${alert.directionId}#category-${encodeURIComponent(alert.category || '')}`}
                     >
-                      <Tag color="blue" style={{ cursor: 'pointer' }}>
+                      <Tag color="blue" style={alertTagStyle}>
                         {alert.directionName} - {alert.category}
                         <br />
                         {alert.alertReason}
@@ -188,7 +197,7 @@ export default function AlertsOverview({ alerts, loading }: AlertsOverviewProps)
                       key={`${alert.directionId}-${alert.category}`}
                       href={`/investment-directions/${alert.directionId}#category-${encodeURIComponent(alert.category || '')}`}
                     >
-                      <Tag color="red" style={{ cursor: 'pointer' }}>
+                      <Tag color="red" style={alertTagStyle}>
                         {alert.directionName} - {alert.category}
                         <br />
                         {alert.alertReason}

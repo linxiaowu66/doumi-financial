@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Card,
   Space,
@@ -22,6 +22,8 @@ import {
   ExclamationCircleOutlined,
   FundOutlined,
   SwapOutlined,
+  DownOutlined,
+  RightOutlined,
 } from "@ant-design/icons";
 import { useRouter } from "next/navigation";
 import {
@@ -77,6 +79,10 @@ export default function FundList({
   const [yesterdayNetMap, setYesterdayNetMap] = useState<
     Record<number, number | null>
   >({});
+  const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(
+    new Set(),
+  );
+  const initializedCategories = useRef(new Set<string>());
 
   useEffect(() => {
     // 昨日收益 = holdingShares * (latestNetWorth - prevTradingDayNetWorth)
@@ -148,6 +154,21 @@ export default function FundList({
     },
     {} as Record<string, Fund[]>,
   );
+
+  useEffect(() => {
+    if (!fundsStats.size) return;
+    setCollapsedCategories((current) => {
+      const next = new Set(current);
+      Object.entries(groupedFunds).forEach(([category, categoryFunds]) => {
+        if (initializedCategories.current.has(category)) return;
+        initializedCategories.current.add(category);
+        if (categoryFunds.every((fund) => isFundLiquidated(fundsStats.get(fund.id)))) {
+          next.add(category);
+        }
+      });
+      return next;
+    });
+  }, [funds, fundsStats, isFundLiquidated]);
 
   // 先计算整个投资方向的总市值（所有基金的当前市值之和）
   const totalDirectionValue = funds.reduce((sum, fund) => {
@@ -740,6 +761,7 @@ export default function FundList({
             totalDirectionValue > 0
               ? (categoryCurrentValue / totalDirectionValue) * 100
               : 0;
+          const isCollapsed = collapsedCategories.has(category);
 
           return (
             <Card
@@ -757,6 +779,21 @@ export default function FundList({
                     <Text type="secondary">
                       {categoryFunds.length} 只{config.assetLabel}
                     </Text>
+                    <Button
+                      type="text"
+                      size="small"
+                      icon={isCollapsed ? <RightOutlined /> : <DownOutlined />}
+                      aria-label={isCollapsed ? "展开分类" : "折叠分类"}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setCollapsedCategories((current) => {
+                          const next = new Set(current);
+                          if (next.has(category)) next.delete(category);
+                          else next.add(category);
+                          return next;
+                        });
+                      }}
+                    />
                     {categoryAlerts.has(category) && (
                       <Tooltip
                         title={
@@ -954,7 +991,7 @@ export default function FundList({
               }}
               style={{ marginBottom: isMobile ? 12 : 16 }}
             >
-              {isMobile ? (
+              {!isCollapsed && (isMobile ? (
                 // 移动端：卡片列表
                 <div>
                   {categoryFunds.map((fund) => renderMobileFundCard(fund))}
@@ -970,7 +1007,7 @@ export default function FundList({
                   scroll={{ x: 886 }}
                   size="small"
                 />
-              )}
+              ))}
             </Card>
           );
         })}

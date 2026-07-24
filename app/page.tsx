@@ -11,6 +11,10 @@ import {
   PlusOutlined,
   DollarOutlined,
   FundOutlined,
+  RobotOutlined,
+  WarningOutlined,
+  FallOutlined,
+  ClockCircleOutlined,
 } from "@ant-design/icons";
 
 // 模拟仪表盘组件 - 仿照实际 Dashboard UI
@@ -38,13 +42,16 @@ const MockDashboard = () => {
           <h1 className="text-xl font-medium text-black dark:text-white flex items-center gap-2 m-0">
             <DollarOutlined /> 投资概览
           </h1>
-          <Button
-            type="primary"
-            size="small"
-            icon={<ArrowUpOutlined rotate={45} />}
-          >
-            更新所有净值
-          </Button>
+            <Space size="small">
+              <Button size="small" icon={<RobotOutlined />}>AI 策略分析</Button>
+              <Button
+                type="primary"
+                size="small"
+                icon={<ArrowUpOutlined rotate={45} />}
+              >
+                更新所有净值
+              </Button>
+            </Space>
         </div>
 
         {/* Stats Row 1 */}
@@ -306,6 +313,83 @@ const MockFundCard = () => (
   </div>
 );
 
+const MockAlertsCard = () => (
+  <div className="bg-white dark:bg-[#1f1f1f] rounded-lg shadow-xl border border-gray-200 dark:border-gray-800 p-6 w-full max-w-xl mx-auto transform rotate-[-1deg] hover:rotate-0 transition-transform duration-300 font-sans text-left">
+    <div className="flex items-center justify-between mb-5">
+      <h3 className="text-base font-medium text-gray-900 dark:text-gray-100 flex items-center gap-2 m-0">
+        <WarningOutlined className="text-amber-500" /> 资产预警概要
+      </h3>
+      <span className="text-xs text-gray-400">今日监控</span>
+    </div>
+    <div className="space-y-3">
+      <div className="rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-800 px-4 py-3">
+        <div className="flex items-center gap-2 text-amber-700 dark:text-amber-300 font-medium text-sm">
+          <FallOutlined /> 价格下跌预警
+        </div>
+        <div className="mt-2 text-xs text-gray-600 dark:text-gray-300">
+          纳斯达克100ETF 相比最近买入价格下跌 3.2%（阈值 3%）
+        </div>
+      </div>
+      <div className="rounded-lg border border-yellow-200 bg-yellow-50 dark:bg-yellow-900/20 dark:border-yellow-800 px-4 py-3">
+        <div className="flex items-center gap-2 text-yellow-700 dark:text-yellow-300 font-medium text-sm">
+          <RobotOutlined /> 止盈策略提醒
+        </div>
+        <div className="mt-2 text-xs text-gray-600 dark:text-gray-300">
+          半导体主题基金收益率 12.6%，较高点回撤 3.4%，建议关注分批止盈
+        </div>
+      </div>
+      <div className="rounded-lg border border-blue-200 bg-blue-50 dark:bg-blue-900/20 dark:border-blue-800 px-4 py-3">
+        <div className="flex items-center gap-2 text-blue-700 dark:text-blue-300 font-medium text-sm">
+          <ClockCircleOutlined /> 分类长期未买入
+        </div>
+        <div className="mt-2 text-xs text-gray-600 dark:text-gray-300">
+          养老金账户 · 黄金分类已 35 天未买入
+        </div>
+      </div>
+    </div>
+  </div>
+);
+
+const MockStrategyReport = () => (
+  <div className="bg-white dark:bg-[#1f1f1f] rounded-lg shadow-xl border border-gray-200 dark:border-gray-800 p-6 w-full max-w-xl mx-auto transform rotate-[1deg] hover:rotate-0 transition-transform duration-300 font-sans text-left">
+    <div className="flex items-center justify-between border-b border-gray-100 dark:border-gray-700 pb-4 mb-4">
+      <div className="flex items-center gap-2 font-medium text-gray-900 dark:text-gray-100">
+        <RobotOutlined className="text-purple-500" /> 今日 AI 策略分析
+      </div>
+      <span className="text-xs text-gray-400">基于当前持仓与预警</span>
+    </div>
+    <div className="space-y-4 text-sm">
+      <div>
+        <div className="text-xs text-gray-400 mb-1">组合结论</div>
+        <div className="text-gray-700 dark:text-gray-200 leading-6">
+          当前组合整体收益良好，但科技主题仓位集中。建议优先处理已触发回撤止盈规则的资产，保留部分仓位参与后续行情。
+        </div>
+      </div>
+      <div className="grid grid-cols-3 gap-2">
+        <div className="rounded bg-green-50 dark:bg-green-900/20 p-3 text-center">
+          <div className="text-xs text-gray-500">继续持有</div>
+          <div className="text-green-600 font-medium mt-1">4 只</div>
+        </div>
+        <div className="rounded bg-amber-50 dark:bg-amber-900/20 p-3 text-center">
+          <div className="text-xs text-gray-500">分批止盈</div>
+          <div className="text-amber-600 font-medium mt-1">2 只</div>
+        </div>
+        <div className="rounded bg-blue-50 dark:bg-blue-900/20 p-3 text-center">
+          <div className="text-xs text-gray-500">暂缓加仓</div>
+          <div className="text-blue-600 font-medium mt-1">1 只</div>
+        </div>
+      </div>
+      <div className="rounded-lg bg-purple-50 dark:bg-purple-900/20 px-4 py-3 text-gray-700 dark:text-gray-200 leading-6">
+        <span className="font-medium text-purple-700 dark:text-purple-300">行动建议：</span>
+        半导体基金建议先落袋 50% 仓位；宽基继续持有并观察；债券基金不因短期波动频繁交易。
+      </div>
+      <div className="text-xs text-gray-400 border-t border-gray-100 dark:border-gray-700 pt-3">
+        仅供投资决策参考 · AI 根据系统资产数据和规则预警生成，不预测最高点
+      </div>
+    </div>
+  </div>
+);
+
 export default function LandingPage() {
   return (
     <Layout className="min-h-screen bg-transparent">
@@ -404,7 +488,7 @@ export default function LandingPage() {
 
           {/* Features Grid */}
           <Row gutter={[32, 32]} className="mb-24 mt-32">
-            <Col xs={24} md={8}>
+            <Col xs={24} md={6}>
               <div className="group p-8 bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 hover:shadow-2xl hover:shadow-blue-500/10 transition-all duration-300 hover:-translate-y-1 h-full">
                 <div className="h-14 w-14 bg-blue-50 dark:bg-blue-900/20 rounded-2xl flex items-center justify-center mb-6 text-blue-600 dark:text-blue-400 text-2xl group-hover:scale-110 transition-transform">
                   <LineChartOutlined />
@@ -417,7 +501,7 @@ export default function LandingPage() {
                 </Typography.Text>
               </div>
             </Col>
-            <Col xs={24} md={8}>
+            <Col xs={24} md={6}>
               <div className="group p-8 bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 hover:shadow-2xl hover:shadow-purple-500/10 transition-all duration-300 hover:-translate-y-1 h-full">
                 <div className="h-14 w-14 bg-purple-50 dark:bg-purple-900/20 rounded-2xl flex items-center justify-center mb-6 text-purple-600 dark:text-purple-400 text-2xl group-hover:scale-110 transition-transform">
                   <RocketOutlined />
@@ -430,7 +514,7 @@ export default function LandingPage() {
                 </Typography.Text>
               </div>
             </Col>
-            <Col xs={24} md={8}>
+            <Col xs={24} md={6}>
               <div className="group p-8 bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 hover:shadow-2xl hover:shadow-cyan-500/10 transition-all duration-300 hover:-translate-y-1 h-full">
                 <div className="h-14 w-14 bg-cyan-50 dark:bg-cyan-900/20 rounded-2xl flex items-center justify-center mb-6 text-cyan-600 dark:text-cyan-400 text-2xl group-hover:scale-110 transition-transform">
                   <SafetyCertificateOutlined />
@@ -441,6 +525,19 @@ export default function LandingPage() {
                 <Typography.Text className="text-gray-500 dark:text-gray-400 block leading-7">
                   数据本地化部署，完全掌控自己的财务数据。基于 Next.js 与 Prisma
                   构建，安全可靠，不仅好用，更放心。
+                </Typography.Text>
+              </div>
+            </Col>
+            <Col xs={24} md={6}>
+              <div className="group p-8 bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 hover:shadow-2xl hover:shadow-amber-500/10 transition-all duration-300 hover:-translate-y-1 h-full">
+                <div className="h-14 w-14 bg-amber-50 dark:bg-amber-900/20 rounded-2xl flex items-center justify-center mb-6 text-amber-600 dark:text-amber-400 text-2xl group-hover:scale-110 transition-transform">
+                  <RobotOutlined />
+                </div>
+                <Typography.Title level={4} className="!mb-4">
+                  AI 策略分析
+                </Typography.Title>
+                <Typography.Text className="text-gray-500 dark:text-gray-400 block leading-7">
+                  结合持仓、收益和止盈预警生成策略报告。支持 ChatGPT、Claude、Gemini 及自定义 Base URL，分析在浏览器中完成。
                 </Typography.Text>
               </div>
             </Col>
@@ -502,17 +599,89 @@ export default function LandingPage() {
                   </li>
                   <li className="flex items-center gap-3">
                     <div className="w-2 h-2 rounded-full bg-red-500" />
-                    <span>自动化的止盈与止损监控</span>
+                    <span>按基金配置的止盈与涨跌预警</span>
                   </li>
                   <li className="flex items-center gap-3">
                     <div className="w-2 h-2 rounded-full bg-yellow-500" />
                     <span>完整的交易历史复盘</span>
+                  </li>
+                  <li className="flex items-center gap-3">
+                    <div className="w-2 h-2 rounded-full bg-amber-500" />
+                    <span>AI 辅助生成每日策略建议</span>
                   </li>
                 </ul>
               </div>
               <div className="w-full md:w-1/2 relative">
                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[120%] h-[120%] bg-green-500/10 rounded-full blur-3xl -z-10"></div>
                 <MockFundCard />
+              </div>
+            </div>
+
+            {/* Feature 3: Alerts */}
+            <div className="flex flex-col md:flex-row items-center gap-12 md:gap-24">
+              <div className="w-full md:w-1/2 order-2 md:order-1 relative">
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[120%] h-[120%] bg-amber-500/10 rounded-full blur-3xl -z-10"></div>
+                <MockAlertsCard />
+              </div>
+              <div className="w-full md:w-1/2 order-1 md:order-2">
+                <div className="inline-block px-3 py-1 mb-4 text-xs font-semibold tracking-wider text-amber-600 uppercase bg-amber-50 rounded-full dark:bg-amber-900/30 dark:text-amber-400">
+                  风险提醒
+                </div>
+                <Typography.Title level={2} className="!mb-6">
+                  及时发现关键变化 <br />
+                  <span className="text-amber-600">把止盈计划落到实处</span>
+                </Typography.Title>
+                <Typography.Paragraph className="text-lg text-gray-500 dark:text-gray-400 leading-relaxed mb-6">
+                  资产预警概要集中展示价格变化、止盈回撤、分类仓位和待确认交易。每只基金都可以独立设置阈值，帮助您减少情绪化操作。
+                </Typography.Paragraph>
+                <ul className="space-y-3 text-gray-600 dark:text-gray-400">
+                  <li className="flex items-center gap-3">
+                    <div className="w-2 h-2 rounded-full bg-amber-500" />
+                    <span>基金级别自定义预警比例</span>
+                  </li>
+                  <li className="flex items-center gap-3">
+                    <div className="w-2 h-2 rounded-full bg-yellow-500" />
+                    <span>收益达到目标后跟踪高点回撤</span>
+                  </li>
+                  <li className="flex items-center gap-3">
+                    <div className="w-2 h-2 rounded-full bg-blue-500" />
+                    <span>所有提醒集中在投资概览查看</span>
+                  </li>
+                </ul>
+              </div>
+            </div>
+
+            {/* Feature 4: AI Strategy */}
+            <div className="flex flex-col md:flex-row items-center gap-12 md:gap-24">
+              <div className="w-full md:w-1/2">
+                <div className="inline-block px-3 py-1 mb-4 text-xs font-semibold tracking-wider text-purple-600 uppercase bg-purple-50 rounded-full dark:bg-purple-900/30 dark:text-purple-400">
+                  AI 决策辅助
+                </div>
+                <Typography.Title level={2} className="!mb-6">
+                  从单只资产分析 <br />
+                  <span className="text-purple-600">升级到组合策略建议</span>
+                </Typography.Title>
+                <Typography.Paragraph className="text-lg text-gray-500 dark:text-gray-400 leading-relaxed mb-6">
+                  AI 不只告诉您某只基金涨跌了多少，还会把全部投资方向、仓位分布、收益表现和规则预警放在一起分析，给出有优先级的行动建议。
+                </Typography.Paragraph>
+                <ul className="space-y-3 text-gray-600 dark:text-gray-400">
+                  <li className="flex items-center gap-3">
+                    <div className="w-2 h-2 rounded-full bg-purple-500" />
+                    <span>组合级别识别集中度和止盈机会</span>
+                  </li>
+                  <li className="flex items-center gap-3">
+                    <div className="w-2 h-2 rounded-full bg-indigo-500" />
+                    <span>按继续持有、观察、止盈、暂缓加仓分类</span>
+                  </li>
+                  <li className="flex items-center gap-3">
+                    <div className="w-2 h-2 rounded-full bg-pink-500" />
+                    <span>支持 ChatGPT、Claude、Gemini 和自定义模型网关</span>
+                  </li>
+                </ul>
+              </div>
+              <div className="w-full md:w-1/2 relative">
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[120%] h-[120%] bg-purple-500/10 rounded-full blur-3xl -z-10"></div>
+                <MockStrategyReport />
               </div>
             </div>
           </div>

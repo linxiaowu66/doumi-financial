@@ -1,6 +1,6 @@
 # 豆米理财 - 个人投资管理系统
 
-基于 Next.js 16 + Prisma 6 + Ant Design 6 + MySQL 构建的现代化个人投资管理系统，支持基金投资管理、交易记录、收益统计等功能。
+基于 Next.js 16 + Prisma 6 + Ant Design 6 + MySQL 构建的现代化个人投资管理系统，支持基金投资管理、交易记录、收益统计、规则预警和浏览器端 AI 策略分析。
 
 > 详细介绍文章：https://blog.5udou.cn/blog/detail/1772155159309
 
@@ -14,6 +14,9 @@
 - 📊 **收益统计** - 实时计算持仓成本、持仓收益、累计收益等
 - 💹 **净值更新** - 自动获取基金最新净值（天天基金 API）
 - 🔄 **批量更新** - 一键更新所有基金净值，防止 API 限流
+- 🚦 **个性化预警** - 每只基金可配置涨跌预警、止盈启动收益率、高点回撤比例和建议卖出仓位
+- 🤖 **AI 策略分析** - 汇总全部持仓和预警生成策略报告，支持 ChatGPT、Claude、Gemini 及自定义 Base URL
+- 💾 **报告历史** - 基金分析和组合策略报告均保存到数据库，支持历史查看
 - 👤 **用户认证** - 基于 NextAuth.js 的用户登录和注册
 - 📱 **响应式设计** - 完美支持桌面端和移动端访问
 
@@ -30,6 +33,8 @@
 - **MySQL** - 关系型数据库（使用 mysql2 驱动）
 - **dayjs** - 日期处理库
 - **bcryptjs** - 密码加密
+
+> AI 请求由用户浏览器直接发送到所选模型厂商，API Key 保存在系统设置中。AI 输出仅供投资决策参考，不构成投资建议。
 
 ## 📦 项目结构
 
@@ -171,6 +176,10 @@ pnpm dev
 - `latestNetWorth` - 最新净值
 - `netWorthDate` - 净值日期
 - `netWorthUpdateAt` - 净值更新时间
+- `alertThreshold` - 涨跌预警比例（默认 5%）
+- `takeProfitTrigger` - 止盈观察收益率（默认 8%）
+- `takeProfitDrawdown` - 高点回撤止盈比例（默认 3%）
+- `takeProfitSellPercent` - 建议卖出仓位比例（默认 50%）
 - `transactions` - 交易记录列表
 - `plannedPurchases` - 计划买入列表
 
@@ -292,6 +301,26 @@ pnpm dev
 
 **路由：** `/investment-directions/[id]`
 
+### 8. 规则预警与 AI 策略分析
+
+- 每只基金独立配置涨跌预警和止盈参数
+- 达到止盈收益率后进入观察区间
+- 从历史高点回撤达到阈值后，提示分批止盈
+- 在仪表盘执行 AI 策略分析，汇总全部投资方向、持仓和预警
+- 支持 ChatGPT、Claude、Gemini、模型名和自定义 Base URL
+- 报告自动保存到数据库并支持历史查看
+
+**相关页面：**
+
+- 系统设置：`/settings`
+- AI 组合策略分析：`/dashboard`
+
+**相关 API：**
+
+- `GET /api/investment-directions/alerts` - 获取规则预警
+- `GET /api/strategy-analyses` - 获取组合策略分析历史
+- `POST /api/strategy-analyses` - 保存组合策略分析报告
+
 ## 📱 响应式设计
 
 系统完美支持移动端访问：
@@ -346,6 +375,7 @@ pnpm prisma db push         # 推送 schema 到数据库（不创建迁移）
   - 显示投资概览统计
   - 投资方向列表
   - 批量更新净值按钮
+  - AI 策略分析入口和历史报告
 - `/investment-directions` - 投资方向列表
 - `/investment-directions/[id]` - 投资方向详情
   - 基金列表（按分类分组）
@@ -355,6 +385,7 @@ pnpm prisma db push         # 推送 schema 到数据库（不创建迁移）
   - 持仓统计
   - 交易记录
   - 计划买入列表
+- `/settings` - 系统设置、交易费率和 AI 厂商配置
 
 ## 🔐 认证和授权
 

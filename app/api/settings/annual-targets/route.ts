@@ -1,12 +1,26 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
+import dayjs from "dayjs";
 
 export async function GET() {
   try {
     const targets = await prisma.annualProfitTarget.findMany({
       orderBy: { year: "desc" },
     });
-    return NextResponse.json(targets);
+    const targetsWithActual = await Promise.all(targets.map(async (target) => {
+      if (target.actualAmount !== null) return target;
+      const records = await prisma.directionDailyProfit.aggregate({
+        where: {
+          date: {
+            gte: dayjs(`${target.year}-01-01`).startOf("day").toDate(),
+            lt: dayjs(`${target.year + 1}-01-01`).startOf("day").toDate(),
+          },
+        },
+        _sum: { dailyProfit: true },
+      });
+      return { ...target, actualAmount: records._sum.dailyProfit || 0 };
+    }));
+    return NextResponse.json(targetsWithActual);
   } catch (error) {
     console.error("Failed to fetch annual targets:", error);
     return NextResponse.json({ error: "Failed to fetch annual targets" }, { status: 500 });

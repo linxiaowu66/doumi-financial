@@ -48,6 +48,7 @@ interface AnnualProfitTarget {
 export default function SettingsPage() {
   const [holidays, setHolidays] = useState<Map<string, Holiday>>(new Map());
   const [currentYear, setCurrentYear] = useState(dayjs().year());
+  const [isMobile, setIsMobile] = useState(false);
 
   // Annual Targets State
   const [annualTargets, setAnnualTargets] = useState<AnnualProfitTarget[]>([]);
@@ -117,6 +118,13 @@ export default function SettingsPage() {
       message.error("加载年度目标失败");
     }
   };
+
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
 
   useEffect(() => {
     loadHolidays(currentYear);
@@ -456,7 +464,7 @@ export default function SettingsPage() {
                 </Form.Item>
                 {(["chatgpt", "claude", "gemini"] as const).map((provider) => (
                   <Row gutter={16} key={provider}>
-                    <Col span={14}>
+                    <Col xs={24} sm={14}>
                       <Form.Item label={`${provider === "chatgpt" ? "ChatGPT" : provider === "claude" ? "Claude" : "Gemini"} API Key`}>
                         <Input.Password
                           value={systemSettings[`ai_${provider}_key`]}
@@ -465,7 +473,7 @@ export default function SettingsPage() {
                         />
                       </Form.Item>
                     </Col>
-                    <Col span={5}>
+                    <Col xs={24} sm={5}>
                       <Form.Item label="模型名">
                         <Input
                           value={systemSettings[`ai_${provider}_model`]}
@@ -473,7 +481,7 @@ export default function SettingsPage() {
                         />
                       </Form.Item>
                     </Col>
-                    <Col span={5}>
+                    <Col xs={24} sm={5}>
                       <Form.Item label="Base URL">
                         <Input
                           value={systemSettings[`ai_${provider}_base_url`]}
@@ -504,12 +512,48 @@ export default function SettingsPage() {
                 </Button>
               }
             >
-              <Table
-                dataSource={annualTargets}
-                columns={targetColumns}
-                rowKey="id"
-                pagination={false}
-              />
+              {isMobile ? (
+                <Space direction="vertical" style={{ width: "100%" }}>
+                  {annualTargets.map((target) => (
+                    <Card key={target.id} size="small">
+                      <Row gutter={[12, 12]} align="middle">
+                        <Col span={24}>
+                          <Text type="secondary">年份</Text>
+                          <div><Tag color="blue">{target.year}年</Tag></div>
+                        </Col>
+                        <Col span={12}>
+                          <Text type="secondary">目标盈利</Text>
+                          <div>
+                            <Text strong style={{ whiteSpace: "nowrap" }}>¥{Number(target.targetAmount).toLocaleString(undefined, { maximumFractionDigits: 2 })}</Text>
+                          </div>
+                        </Col>
+                        <Col span={12}>
+                          <Text type="secondary">实际盈利</Text>
+                          <div>
+                            <Text type={target.actualAmount !== null && Number(target.actualAmount) < 0 ? "danger" : "success"} strong style={{ whiteSpace: "nowrap" }}>
+                              {target.actualAmount !== null
+                                ? `¥${Number(target.actualAmount).toLocaleString(undefined, { maximumFractionDigits: 2 })}`
+                                : "-"}
+                            </Text>
+                          </div>
+                        </Col>
+                        <Col span={24} style={{ textAlign: "right" }}>
+                          <Button type="link" icon={<EditOutlined />} onClick={() => showModal(target)}>
+                            编辑
+                          </Button>
+                        </Col>
+                      </Row>
+                    </Card>
+                  ))}
+                </Space>
+              ) : (
+                <Table
+                  dataSource={annualTargets}
+                  columns={targetColumns}
+                  rowKey="id"
+                  pagination={false}
+                />
+              )}
             </Card>
           </Col>
         </Row>

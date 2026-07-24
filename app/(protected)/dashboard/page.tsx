@@ -93,6 +93,7 @@ export default function HomePage() {
   const [analyzingStrategy, setAnalyzingStrategy] = useState(false);
   const [strategyReport, setStrategyReport] = useState<string | null>(null);
   const [strategyHistory, setStrategyHistory] = useState<Array<{ id: number; content: string; createdAt: string }>>([]);
+  const displayLastTradeDate = summary?.lastTradeDate || "";
 
   // 检测屏幕尺寸
   useEffect(() => {
@@ -368,14 +369,17 @@ export default function HomePage() {
         {summary && (
           <Row gutter={[16, 16]} style={{ marginBottom: isMobile ? 16 : 24 }}>
             <Col xs={12} sm={12} lg={6}>
-              <Card>
+              <Card style={{ height: "100%" }}>
                 <Statistic
                   title={
                     <div
                       style={{
                         display: "flex",
                         justifyContent: "space-between",
-                        alignItems: "center",
+                        alignItems: isMobile ? "flex-start" : "center",
+                        flexDirection: isMobile ? "column" : "row",
+                        gap: isMobile ? 2 : 0,
+                        height: isMobile ? 34 : undefined,
                       }}
                     >
                       <span>昨日盈亏</span>
@@ -384,9 +388,10 @@ export default function HomePage() {
                           fontSize: 11,
                           color: "#999",
                           fontWeight: "normal",
+                          whiteSpace: "nowrap",
                         }}
                       >
-                        {summary.lastTradeDate}
+                        {displayLastTradeDate}
                       </span>
                     </div>
                   }
@@ -424,9 +429,14 @@ export default function HomePage() {
               </Card>
             </Col>
             <Col xs={12} sm={12} lg={6}>
-              <Card>
+              <Card style={{ height: "100%" }}>
                 <Statistic
-                  title="本月盈亏"
+                  title={
+                    <div style={{ height: isMobile ? 34 : undefined }}>
+                      <div>本月盈亏</div>
+                      {isMobile && <div style={{ height: 16 }} />}
+                    </div>
+                  }
                   value={Math.abs(parseFloat(summary.monthProfit))}
                   precision={2}
                   prefix={
@@ -461,14 +471,17 @@ export default function HomePage() {
               </Card>
             </Col>
             <Col xs={12} sm={12} lg={6}>
-              <Card>
+              <Card style={{ height: "100%" }}>
                 <Statistic
                   title={
                     <div
                       style={{
                         display: "flex",
                         justifyContent: "space-between",
-                        alignItems: "center",
+                        alignItems: isMobile ? "flex-start" : "center",
+                        flexDirection: isMobile ? "column" : "row",
+                        gap: isMobile ? 2 : 0,
+                        height: isMobile ? 34 : undefined,
                       }}
                     >
                       <span>今年盈亏</span>
@@ -479,6 +492,9 @@ export default function HomePage() {
                               fontSize: 11,
                               color: "#999",
                               fontWeight: "normal",
+                              display: isMobile ? "block" : "inline",
+                              whiteSpace: isMobile ? "nowrap" : undefined,
+                              lineHeight: isMobile ? "16px" : undefined,
                             }}
                           >
                             目标: ¥
@@ -490,6 +506,7 @@ export default function HomePage() {
                             <span
                               style={{
                                 marginLeft: 4,
+                                ...(isMobile ? { marginLeft: 0 } : {}),
                                 color:
                                   parseFloat(summary.yearProfit) >=
                                   parseFloat(summary.annualTargetAmount)
@@ -543,9 +560,14 @@ export default function HomePage() {
               </Card>
             </Col>
             <Col xs={12} sm={12} lg={6}>
-              <Card>
+              <Card style={{ height: "100%" }}>
                 <Statistic
-                  title="累计盈亏"
+                  title={
+                    <div style={{ height: isMobile ? 34 : undefined }}>
+                      <div>累计盈亏</div>
+                      {isMobile && <div style={{ height: 16 }} />}
+                    </div>
+                  }
                   value={Math.abs(parseFloat(summary.totalProfit))}
                   precision={2}
                   prefix={
@@ -630,36 +652,44 @@ export default function HomePage() {
                           size="middle"
                         >
                           <div>
-                            <h3 style={{ margin: 0, fontSize: 18 }}>
+                            <h3
+                              style={{
+                                margin: 0,
+                                fontSize: isMobile ? 16 : 18,
+                                lineHeight: 1.4,
+                                overflowWrap: "anywhere",
+                              }}
+                            >
                               <FundOutlined style={{ marginRight: 8 }} />
                               {direction.name}
                             </h3>
                           </div>
-                          <Row gutter={8}>
-                            <Col span={6}>
+                          <Row gutter={[8, 12]}>
+                            <Col xs={12} sm={6}>
                               <Statistic
                                 title={
-                                  <span style={{ fontSize: 12 }}>持仓收益</span>
+                                  <span style={{ fontSize: 12, whiteSpace: "nowrap" }}>持仓收益</span>
                                 }
                                 value={
                                   stats ? parseFloat(stats.holdingProfit) : 0
                                 }
                                 precision={2}
-                                valueStyle={{
+                                  valueStyle={{
                                   color:
                                     stats &&
                                     parseFloat(stats.holdingProfit) >= 0
                                       ? "#cf1322"
                                       : "#3f8600",
-                                  fontSize: 15,
+                                  fontSize: isMobile ? 14 : 15,
                                   fontWeight: 500,
+                                  overflowWrap: "anywhere",
                                 }}
                               />
                             </Col>
-                            <Col span={6}>
+                            <Col xs={12} sm={6}>
                               <Statistic
                                 title={
-                                  <span style={{ fontSize: 12 }}>
+                                  <span style={{ fontSize: 12, whiteSpace: "nowrap" }}>
                                     累计收益率
                                   </span>
                                 }
@@ -674,15 +704,16 @@ export default function HomePage() {
                                     parseFloat(stats.totalProfitRate) >= 0
                                       ? "#cf1322"
                                       : "#3f8600",
-                                  fontSize: 15,
+                                  fontSize: isMobile ? 14 : 15,
                                   fontWeight: 500,
+                                  overflowWrap: "anywhere",
                                 }}
                               />
                             </Col>
-                            <Col span={6}>
+                            <Col xs={12} sm={6}>
                               <Statistic
                                 title={
-                                  <span style={{ fontSize: 12 }}>本月盈亏</span>
+                                  <span style={{ fontSize: 12, whiteSpace: "nowrap" }}>本月盈亏</span>
                                 }
                                 value={
                                   stats ? parseFloat(stats.monthProfit) : 0
@@ -693,15 +724,16 @@ export default function HomePage() {
                                     stats && parseFloat(stats.monthProfit) >= 0
                                       ? "#cf1322"
                                       : "#3f8600",
-                                  fontSize: 15,
+                                  fontSize: isMobile ? 14 : 15,
                                   fontWeight: 500,
+                                  overflowWrap: "anywhere",
                                 }}
                               />
                             </Col>
-                            <Col span={6}>
+                            <Col xs={12} sm={6}>
                               <Statistic
                                 title={
-                                  <span style={{ fontSize: 12 }}>昨日盈亏</span>
+                                  <span style={{ fontSize: 12, whiteSpace: "nowrap" }}>昨日盈亏</span>
                                 }
                                 value={
                                   stats && stats.yesterdayProfit
@@ -716,8 +748,9 @@ export default function HomePage() {
                                       0
                                       ? "#cf1322"
                                       : "#3f8600",
-                                  fontSize: 15,
+                                  fontSize: isMobile ? 14 : 15,
                                   fontWeight: 500,
+                                  overflowWrap: "anywhere",
                                 }}
                               />
                             </Col>
