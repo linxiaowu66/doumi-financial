@@ -1,4 +1,4 @@
-import { Card, Space, Alert, Typography, Tag } from 'antd';
+import { Card, Space, Alert, Typography, Tag, Row, Col } from 'antd';
 import {
   WarningOutlined,
   FallOutlined,
@@ -18,7 +18,18 @@ const alertTagStyle = {
   maxWidth: '100%',
   whiteSpace: 'normal' as const,
   overflowWrap: 'anywhere' as const,
+  fontSize: 12,
   lineHeight: '20px',
+};
+
+const alertTitleStyle = { fontSize: 15 };
+
+const highlightAlertReason = (reason: string) => {
+  const important = /(买入|卖出|回补|补仓|止盈|上涨|下跌|回撤|仓位超标|\d+(?:\.\d+)?%)/g;
+  const isImportant = /^(?:买入|卖出|回补|补仓|止盈|上涨|下跌|回撤|仓位超标|\d+(?:\.\d+)?%)$/;
+  return reason.split(important).map((part, index) =>
+    isImportant.test(part) ? <strong key={index}>{part}</strong> : part,
+  );
 };
 
 interface AlertsOverviewProps {
@@ -55,7 +66,34 @@ export default function AlertsOverview({ alerts, loading }: AlertsOverviewProps)
         `${alert.directionId}-${alert.category}`,
         alert,
       ])
-    ).values()
+  ).values()
+  );
+
+  const dropAfterSell = alertsByType.price_drop.filter((alert) =>
+    alert.alertReason.includes("最近卖出"),
+  );
+  const dropAfterBuy = alertsByType.price_drop.filter((alert) =>
+    alert.alertReason.includes("最近买入"),
+  );
+  const riseAfterSell = alertsByType.price_rise.filter((alert) =>
+    alert.alertReason.includes("最近卖出"),
+  );
+  const riseAfterBuy = alertsByType.price_rise.filter((alert) =>
+    alert.alertReason.includes("最近买入"),
+  );
+
+  const renderAlertTags = (items: FundAlert[], color: string) => (
+    <Space wrap style={{ width: '100%' }}>
+      {items.map((alert) => (
+        <Link key={alert.fundId} href={`/funds/${alert.fundId}`}>
+          <Tag color={color} style={alertTagStyle}>
+            {alert.fundName}
+            <br />
+            {highlightAlertReason(alert.alertReason)}
+          </Tag>
+        </Link>
+      ))}
+    </Space>
   );
 
   return (
@@ -68,14 +106,14 @@ export default function AlertsOverview({ alerts, loading }: AlertsOverviewProps)
             icon={<SyncOutlined spin />}
             message={
               <Space direction="vertical" size="small" style={{ width: '100%' }}>
-                <Text strong>待确认交易 ({alertsByType.pending_transaction.length})</Text>
+                <Text strong style={alertTitleStyle}>待确认交易 ({alertsByType.pending_transaction.length})</Text>
                 <Space wrap>
                   {alertsByType.pending_transaction.map((alert) => (
                     <Link key={alert.fundId} href={`/funds/${alert.fundId}`}>
                       <Tag color="processing" style={alertTagStyle}>
-                        {alert.fundName} ({alert.directionName})
+                        {alert.fundName}
                         <br />
-                        {alert.alertReason}
+                        {highlightAlertReason(alert.alertReason)}
                       </Tag>
                     </Link>
                   ))}
@@ -85,49 +123,61 @@ export default function AlertsOverview({ alerts, loading }: AlertsOverviewProps)
           />
         )}
 
-        {/* 价格下跌预警 */}
         {alertsByType.price_drop.length > 0 && (
           <Alert
             type="warning"
             icon={<FallOutlined />}
             message={
-              <Space direction="vertical" size="small" style={{ width: '100%' }}>
-                <Text strong>价格下跌预警 ({alertsByType.price_drop.length})</Text>
-                <Space wrap>
-                  {alertsByType.price_drop.map((alert) => (
-                    <Link key={alert.fundId} href={`/funds/${alert.fundId}`}>
-                      <Tag color="orange" style={alertTagStyle}>
-                        {alert.fundName} ({alert.directionName})
-                        <br />
-                        {alert.alertReason}
-                      </Tag>
-                    </Link>
-                  ))}
-                </Space>
+              <Space direction="vertical" size="small" style={{ width: "100%" }}>
+                <Text strong style={alertTitleStyle}>价格下跌预警 ({alertsByType.price_drop.length})</Text>
+                <Row gutter={[16, 12]}>
+                  {dropAfterSell.length > 0 && (
+                    <Col xs={24} lg={12}>
+                      <Space direction="vertical" size={4} style={{ width: '100%' }}>
+                        <Text strong style={{ fontSize: 13 }}>卖出后网格回补 ({dropAfterSell.length})</Text>
+                        {renderAlertTags(dropAfterSell, "orange")}
+                      </Space>
+                    </Col>
+                  )}
+                  {dropAfterBuy.length > 0 && (
+                    <Col xs={24} lg={12}>
+                      <Space direction="vertical" size={4} style={{ width: '100%' }}>
+                        <Text strong style={{ fontSize: 13 }}>买入后补仓摊平 ({dropAfterBuy.length})</Text>
+                        {renderAlertTags(dropAfterBuy, "gold")}
+                      </Space>
+                    </Col>
+                  )}
+                </Row>
               </Space>
             }
           />
         )}
 
-        {/* 价格上涨预警 */}
         {alertsByType.price_rise.length > 0 && (
           <Alert
             type="success"
             icon={<RiseOutlined />}
             message={
-              <Space direction="vertical" size="small" style={{ width: '100%' }}>
-                <Text strong>价格上涨提醒 ({alertsByType.price_rise.length})</Text>
-                <Space wrap>
-                  {alertsByType.price_rise.map((alert) => (
-                    <Link key={alert.fundId} href={`/funds/${alert.fundId}`}>
-                      <Tag color="green" style={alertTagStyle}>
-                        {alert.fundName} ({alert.directionName})
-                        <br />
-                        {alert.alertReason}
-                      </Tag>
-                    </Link>
-                  ))}
-                </Space>
+              <Space direction="vertical" size="small" style={{ width: "100%" }}>
+                <Text strong style={alertTitleStyle}>价格上涨提醒 ({alertsByType.price_rise.length})</Text>
+                <Row gutter={[16, 12]}>
+                  {riseAfterSell.length > 0 && (
+                    <Col xs={24} lg={12}>
+                      <Space direction="vertical" size={4} style={{ width: '100%' }}>
+                        <Text strong style={{ fontSize: 13 }}>卖出后上涨提醒 ({riseAfterSell.length})</Text>
+                        {renderAlertTags(riseAfterSell, "green")}
+                      </Space>
+                    </Col>
+                  )}
+                  {riseAfterBuy.length > 0 && (
+                    <Col xs={24} lg={12}>
+                      <Space direction="vertical" size={4} style={{ width: '100%' }}>
+                        <Text strong style={{ fontSize: 13 }}>买入后上涨提醒 ({riseAfterBuy.length})</Text>
+                        {renderAlertTags(riseAfterBuy, "green")}
+                      </Space>
+                    </Col>
+                  )}
+                </Row>
               </Space>
             }
           />
@@ -139,14 +189,14 @@ export default function AlertsOverview({ alerts, loading }: AlertsOverviewProps)
             icon={<DollarOutlined />}
             message={
               <Space direction="vertical" size="small" style={{ width: '100%' }}>
-                <Text strong>止盈策略提醒 ({alertsByType.take_profit.length})</Text>
+                <Text strong style={alertTitleStyle}>止盈策略提醒 ({alertsByType.take_profit.length})</Text>
                 <Space wrap>
                   {alertsByType.take_profit.map((alert) => (
                     <Link key={alert.fundId} href={`/funds/${alert.fundId}`}>
                       <Tag color="gold" style={alertTagStyle}>
-                        {alert.fundName} ({alert.directionName})
+                        {alert.fundName}
                         <br />
-                        {alert.alertReason}
+                        {highlightAlertReason(alert.alertReason)}
                       </Tag>
                     </Link>
                   ))}
@@ -163,7 +213,7 @@ export default function AlertsOverview({ alerts, loading }: AlertsOverviewProps)
             icon={<ClockCircleOutlined />}
             message={
               <Space direction="vertical" size="small" style={{ width: '100%' }}>
-                <Text strong>分类长期未买入 ({uniqueCategoryOverdue.length})</Text>
+                <Text strong style={alertTitleStyle}>分类长期未买入 ({uniqueCategoryOverdue.length})</Text>
                 <Space wrap>
                   {uniqueCategoryOverdue.map((alert) => (
                     <Link
@@ -171,9 +221,9 @@ export default function AlertsOverview({ alerts, loading }: AlertsOverviewProps)
                       href={`/investment-directions/${alert.directionId}#category-${encodeURIComponent(alert.category || '')}`}
                     >
                       <Tag color="blue" style={alertTagStyle}>
-                        {alert.directionName} - {alert.category}
+                        {alert.category}
                         <br />
-                        {alert.alertReason}
+                        {highlightAlertReason(alert.alertReason)}
                       </Tag>
                     </Link>
                   ))}
@@ -190,7 +240,7 @@ export default function AlertsOverview({ alerts, loading }: AlertsOverviewProps)
             icon={<WarningOutlined />}
             message={
               <Space direction="vertical" size="small" style={{ width: '100%' }}>
-                <Text strong>分类仓位超标 ({uniqueCategoryOverweight.length})</Text>
+                <Text strong style={alertTitleStyle}>分类仓位超标 ({uniqueCategoryOverweight.length})</Text>
                 <Space wrap>
                   {uniqueCategoryOverweight.map((alert) => (
                     <Link
@@ -198,9 +248,9 @@ export default function AlertsOverview({ alerts, loading }: AlertsOverviewProps)
                       href={`/investment-directions/${alert.directionId}#category-${encodeURIComponent(alert.category || '')}`}
                     >
                       <Tag color="red" style={alertTagStyle}>
-                        {alert.directionName} - {alert.category}
+                        {alert.category}
                         <br />
-                        {alert.alertReason}
+                        {highlightAlertReason(alert.alertReason)}
                       </Tag>
                     </Link>
                   ))}

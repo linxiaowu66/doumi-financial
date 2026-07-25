@@ -20,6 +20,7 @@ import {
   LogoutOutlined,
   MenuOutlined,
   SettingOutlined,
+  WarningOutlined,
 } from "@ant-design/icons";
 import type { MenuProps } from "antd";
 import Link from "next/link";
@@ -100,6 +101,14 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
       },
     },
     {
+      key: "/alerts",
+      icon: <WarningOutlined />,
+      label: <Link href="/alerts">资产预警</Link>,
+      onClick: () => {
+        if (isMobile) setDrawerVisible(false);
+      },
+    },
+    {
       key: "/settings",
       icon: <SettingOutlined />,
       label: <Link href="/settings">系统设置</Link>,
@@ -114,6 +123,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
     if (pathname === "/dashboard" || pathname === "/") return "/dashboard";
     if (pathname.startsWith("/investment-directions"))
       return "/investment-directions";
+    if (pathname.startsWith("/alerts")) return "/alerts";
     if (pathname.startsWith("/settings")) return "/settings";
     return "/dashboard";
   };

@@ -39,7 +39,7 @@ export async function GET() {
         funds: {
           include: {
             transactions: {
-              orderBy: { date: "asc" },
+              orderBy: [{ date: "asc" }, { id: "asc" }],
             },
             pendingTransactions: {
               where: { status: "WAITING" },
@@ -236,19 +236,19 @@ export async function GET() {
             totalShares = totalShares.plus(tx.shares);
         });
 
-        if (normalizeZero(parseFloat(totalShares.toString())) === 0) continue;
-
         const buyTransactions = fund.transactions.filter(
           (tx) => tx.type === "BUY",
         );
-        if (buyTransactions.length === 0 || !fund.latestNetWorth) continue;
-
-        const latestBuyPrice = parseFloat(
-          buyTransactions[buyTransactions.length - 1].price.toString(),
+        const tradeTransactions = fund.transactions.filter(
+          (tx) => tx.type === "BUY" || tx.type === "SELL",
         );
+        if (tradeTransactions.length === 0 || !fund.latestNetWorth) continue;
+
+        const latestTrade = tradeTransactions[tradeTransactions.length - 1];
+        const latestTradePrice = parseFloat(latestTrade.price.toString());
         const currentPrice = parseFloat(fund.latestNetWorth.toString());
         const priceChangePercent =
-          ((currentPrice - latestBuyPrice) / latestBuyPrice) * 100;
+          ((currentPrice - latestTradePrice) / latestTradePrice) * 100;
         const alertThreshold = Number(fund.alertThreshold ?? 5);
 
         let holdingShares = new Decimal(0);
@@ -284,7 +284,10 @@ export async function GET() {
         const takeProfitDrawdown = Number(fund.takeProfitDrawdown ?? 3);
         const takeProfitSellPercent = Number(fund.takeProfitSellPercent ?? 50);
 
-        if (currentProfitPercent >= takeProfitTrigger) {
+        if (
+          normalizeZero(parseFloat(totalShares.toString())) > 0 &&
+          currentProfitPercent >= takeProfitTrigger
+        ) {
           const drawdownTriggered = Math.abs(drawdownPercent) >= takeProfitDrawdown;
           alerts.push({
             fundId: fund.id,
@@ -297,7 +300,9 @@ export async function GET() {
             alertReason: drawdownTriggered
               ? `收益率 ${currentProfitPercent.toFixed(1)}%，较高点回撤 ${Math.abs(drawdownPercent).toFixed(1)}%，建议止盈卖出 ${takeProfitSellPercent}% 仓位`
               : `收益率 ${currentProfitPercent.toFixed(1)}%，已进入止盈观察区间，建议关注高点回撤 ${takeProfitDrawdown}%`,
-            latestBuyPrice,
+            latestBuyPrice: buyTransactions.length
+              ? Number(buyTransactions[buyTransactions.length - 1].price)
+              : latestTradePrice,
             currentPrice,
             priceChangePercent: currentProfitPercent,
           });
@@ -312,8 +317,11 @@ export async function GET() {
             directionName: direction.name,
             category: fund.category,
             alertType: "price_drop",
-            alertReason: `相比最新买入价格下跌 ${Math.abs(priceChangePercent).toFixed(1)}%（阈值 ${alertThreshold}%）`,
-            latestBuyPrice,
+            alertReason:
+              latestTrade.type === "SELL"
+                ? `相比最近卖出价格回落 ${Math.abs(priceChangePercent).toFixed(1)}%，可关注网格回补（阈值 ${alertThreshold}%）`
+                : `相比最近买入价格下跌 ${Math.abs(priceChangePercent).toFixed(1)}%，可关注补仓摊平成本（阈值 ${alertThreshold}%）`,
+            latestBuyPrice: latestTradePrice,
             currentPrice,
             priceChangePercent,
           });
@@ -326,8 +334,8 @@ export async function GET() {
             directionName: direction.name,
             category: fund.category,
             alertType: "price_rise",
-            alertReason: `相比最新买入价格上涨 ${priceChangePercent.toFixed(1)}%（阈值 ${alertThreshold}%）`,
-            latestBuyPrice,
+            alertReason: `相比最近${latestTrade.type === "SELL" ? "卖出" : "买入"}价格上涨 ${priceChangePercent.toFixed(1)}%（阈值 ${alertThreshold}%）`,
+            latestBuyPrice: latestTradePrice,
             currentPrice,
             priceChangePercent,
           });

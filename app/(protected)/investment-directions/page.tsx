@@ -2,9 +2,9 @@
 
 import { useState, useEffect } from "react";
 import { Card, Button, Form, message, Flex, Typography } from "antd";
-import { PlusOutlined, FundOutlined } from "@ant-design/icons";
+import { PlusOutlined, FundOutlined, WarningOutlined } from "@ant-design/icons";
+import Link from "next/link";
 import { InvestmentDirection, FundAlert } from "@/types/investment-direction";
-import AlertsOverview from "@/components/investment-directions/AlertsOverview";
 import StatsCard from "@/components/investment-directions/StatsCard";
 import DirectionList from "@/components/investment-directions/DirectionList";
 import DirectionModal from "@/components/investment-directions/DirectionModal";
@@ -165,7 +165,15 @@ export default function InvestmentDirectionsPage() {
           </Flex>
         </Card>
 
-        <AlertsOverview alerts={alerts} loading={alertsLoading} />
+        <Card
+          className="mb-4 md:mb-6"
+          title={<><WarningOutlined className="mr-2" />资产预警概要</>}
+          extra={<Link href="/alerts">查看全部预警</Link>}
+        >
+          <Text type="secondary">
+            {alertsLoading ? "正在加载预警..." : `当前有 ${alerts.length} 条预警，按投资方向和类型分类查看`}
+          </Text>
+        </Card>
 
         <StatsCard directions={directions} />
 
