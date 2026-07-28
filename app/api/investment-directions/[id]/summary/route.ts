@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { calculateDirectionDailyProfit } from "@/lib/direction-daily-profit";
 import { Decimal } from "@prisma/client/runtime/library";
 
 // GET - 获取投资方向汇总统计
@@ -29,6 +28,12 @@ export async function GET(
     if (!direction) {
       return NextResponse.json({ error: "投资方向不存在" }, { status: 404 });
     }
+
+    const latestDailyProfit = await prisma.directionDailyProfit.findFirst({
+      where: { directionId },
+      orderBy: { date: "desc" },
+      select: { dailyProfit: true },
+    });
 
     // 初始化统计数据
     // 总投入：历史上所有买入交易的金额总和（包括已清仓的基金），用于计算累计收益率
@@ -147,18 +152,7 @@ export async function GET(
       totalCurrentValue: normalizeZero(totalCurrentValue), // 当前总市值
       totalCost: normalizeZero(totalCost), // 持仓总成本
       holdingProfit: normalizeZero(holdingProfit), // 持仓收益
-      // 计算并返回昨日盈亏（基于已保存的 direction_daily_profit 或即时计算）
-      yesterdayProfit: await (async () => {
-        try {
-          const res = await calculateDirectionDailyProfit(
-            directionId,
-            new Date(),
-          );
-          return res.dailyProfit.toFixed(2);
-        } catch (err) {
-          return "0.00";
-        }
-      })(),
+      yesterdayProfit: latestDailyProfit?.dailyProfit.toFixed(2) ?? "0.00",
       // 计算年化收益（CAGR），基于累计收益率和最早一次买入时间
       annualYield: ((): string => {
         try {

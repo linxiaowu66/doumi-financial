@@ -857,7 +857,7 @@ export default function HomePage() {
           <Button type="primary" icon={<RobotOutlined />} onClick={handleStrategyAnalysis} loading={analyzingStrategy}>
             {analyzingStrategy ? "分析中..." : "生成今日策略分析"}
           </Button>
-          <div style={{ maxHeight: "65vh", overflowY: "auto", marginTop: 20 }}>
+          <div className="markdown-body" style={{ maxHeight: "65vh", overflowY: "auto", marginTop: 20 }}>
             {strategyReport ? (
               <ReactMarkdown remarkPlugins={[remarkGfm]}>{strategyReport}</ReactMarkdown>
             ) : analyzingStrategy ? (

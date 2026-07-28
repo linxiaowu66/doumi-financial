@@ -197,15 +197,11 @@ export async function calculateDirectionDailyProfit(
     ? new Decimal(0)
     : totalProfit.dividedBy(totalInvested).times(100); // 累计收益率
 
-  // 计算每日盈亏（相对于前一天）
-  const previousDay = dayjs(targetDate).subtract(1, "day");
+  // 计算每日盈亏（相对于最近一个已有交易日）
   const previousRecord = await prisma.directionDailyProfit.findFirst({
     where: {
       directionId,
-      date: {
-        gte: previousDay.startOf("day").toDate(),
-        lte: previousDay.endOf("day").toDate(),
-      },
+      date: { lt: dayjs(targetDate).startOf("day").toDate() },
     },
     orderBy: { date: "desc" },
   });

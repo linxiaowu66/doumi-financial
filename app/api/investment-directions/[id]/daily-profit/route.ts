@@ -54,11 +54,9 @@ export async function GET(
       },
     });
 
-    // 转换为前端需要的格式
-    // 注意：数据库中的 date 是计算日期（如 12.13 表示这是 12.13 零点计算的数据）
-    // 但实际计算的是前一天的盈亏（12.12），所以在展示时需要将日期减1天
+    // 数据库中的 date 已是对应的交易日，直接返回。
     const mappedData = dailyProfits.map((record) => ({
-      date: dayjs(record.date).subtract(1, 'day').format('YYYY-MM-DD'),
+      date: dayjs(record.date).format('YYYY-MM-DD'),
       dailyProfit: parseFloat(record.dailyProfit.toString()),
       cumulativeProfit: parseFloat(record.cumulativeProfit.toString()),
       cumulativeProfitRate: parseFloat(record.cumulativeProfitRate.toString()),
