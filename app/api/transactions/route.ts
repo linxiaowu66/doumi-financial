@@ -16,6 +16,7 @@ export async function POST(request: Request) {
       date,
       dividendReinvest,
       remark,
+      pendingTransactionId,
     } = body;
 
     if (!fundId || !type || !date) {
@@ -56,25 +57,46 @@ export async function POST(request: Request) {
       }
     }
 
-    const transaction = await prisma.transaction.create({
-      data: {
-        fundId: parseInt(fundId),
-        type,
-        amount: parseFloat(amount),
-        shares: parseFloat(shares),
-        price: finalPrice,
-        fee: fee ? parseFloat(fee) : 0,
-        date: new Date(date),
-        dividendReinvest: dividendReinvest || false,
-        remark,
-      },
-      include: {
-        fund: true,
-      },
-    });
+    const parsedFundId = parseInt(fundId);
+    const transactionData = {
+      fundId: parsedFundId,
+      type,
+      amount: parseFloat(amount),
+      shares: parseFloat(shares),
+      price: finalPrice,
+      fee: fee ? parseFloat(fee) : 0,
+      date: new Date(date),
+      dividendReinvest: dividendReinvest || false,
+      remark,
+    };
+    const pendingId = pendingTransactionId ? parseInt(pendingTransactionId) : null;
+
+    if (pendingId) {
+      const pending = await prisma.pendingTransaction.findFirst({
+        where: { id: pendingId, fundId: parsedFundId, type: "DIVIDEND", status: "WAITING" },
+        select: { id: true },
+      });
+      if (!pending || type !== "DIVIDEND") {
+        return NextResponse.json({ error: "待确认分红不存在或已处理" }, { status: 400 });
+      }
+    }
+
+    const transaction = pendingId
+      ? await prisma.$transaction(async (tx) => {
+          const claimed = await tx.pendingTransaction.updateMany({
+            where: { id: pendingId, status: "WAITING" },
+            data: { status: "CONFIRMED" },
+          });
+          if (claimed.count !== 1) throw new Error("待确认分红已处理");
+          return tx.transaction.create({ data: transactionData, include: { fund: true } });
+        })
+      : await prisma.transaction.create({
+          data: transactionData,
+          include: { fund: true },
+        });
 
     // 更新投资方向的实际投入金额
-    await updateActualAmountByFundId(parseInt(fundId));
+    await updateActualAmountByFundId(parsedFundId);
 
     return NextResponse.json(transaction);
   } catch (error) {

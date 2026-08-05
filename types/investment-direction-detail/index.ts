@@ -18,6 +18,7 @@ export interface Fund {
   confirmDays?: number;
   defaultBuyFee?: number;
   defaultSellFee?: number;
+  dividendReinvest?: boolean;
   alertThreshold?: number;
   takeProfitTrigger?: number;
   takeProfitDrawdown?: number;

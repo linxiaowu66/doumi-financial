@@ -54,6 +54,9 @@ export default function FundDetailPage({
   const [editingTransactionId, setEditingTransactionId] = useState<
     number | null
   >(null);
+  const [confirmingPendingId, setConfirmingPendingId] = useState<number | null>(
+    null,
+  );
   const [transactionType, setTransactionType] = useState<string>("BUY");
   const [currentPrice, setCurrentPrice] = useState<number>(0); // 当前净值
   const [fetchingPrice, setFetchingPrice] = useState(false); // 正在获取净值
@@ -344,6 +347,7 @@ export default function FundDetailPage({
   const handleOpenModal = (type: string) => {
     setTransactionType(type);
     setEditingTransactionId(null); // 清除编辑状态
+    setConfirmingPendingId(null);
     form.resetFields();
     form.setFieldsValue({
       type,
@@ -356,6 +360,7 @@ export default function FundDetailPage({
   const handleEditTransaction = (transaction: Transaction) => {
     setTransactionType(transaction.type);
     setEditingTransactionId(transaction.id);
+    setConfirmingPendingId(null);
     form.resetFields();
 
     // 填充表单
@@ -383,6 +388,21 @@ export default function FundDetailPage({
     }
 
     form.setFieldsValue(values);
+    setModalOpen(true);
+  };
+
+  const handleConfirmDividend = (pending: PendingTransaction) => {
+    setTransactionType("DIVIDEND");
+    setEditingTransactionId(null);
+    setConfirmingPendingId(pending.id);
+    form.resetFields();
+    form.setFieldsValue({
+      type: "DIVIDEND",
+      date: dayjs(pending.applyDate),
+      amount: Number(pending.applyAmount || 0),
+      dividendReinvest: pending.dividendReinvest || false,
+      remark: pending.remark,
+    });
     setModalOpen(true);
   };
 
@@ -504,6 +524,7 @@ export default function FundDetailPage({
         date: values.date.toISOString(),
         dividendReinvest: values.dividendReinvest || false,
         remark: values.remark,
+        pendingTransactionId: confirmingPendingId || undefined,
       };
 
       let response;
@@ -529,6 +550,8 @@ export default function FundDetailPage({
         );
         setModalOpen(false);
         setEditingTransactionId(null);
+        if (confirmingPendingId) loadFund();
+        setConfirmingPendingId(null);
         form.resetFields();
         loadTransactions();
       } else {
@@ -767,6 +790,7 @@ export default function FundDetailPage({
           isMobile={isMobile}
           confirmLoading={confirmLoading}
           onBatchConfirm={handleBatchConfirm}
+          onConfirmDividend={handleConfirmDividend}
           onDeletePending={handleDeletePending}
         />
 
@@ -785,6 +809,7 @@ export default function FundDetailPage({
           onCancel={() => {
             setModalOpen(false);
             setEditingTransactionId(null);
+            setConfirmingPendingId(null);
             form.resetFields();
           }}
           onFinish={handleSubmit}

@@ -66,16 +66,17 @@ model Fund {
   netWorthUpdateAt DateTime? // 净值更新时间
 
   // 交易配置
-  confirmDays    Int     @default(1) // 确认天数：1(境内T+1), 2(QDII T+2)
-  defaultBuyFee  Decimal @default(0.15) @db.Decimal(5, 4) // 默认买入费率 % (如0.15)
-  defaultSellFee Decimal @default(0.50) @db.Decimal(5, 4) // 默认卖出费率 % (如0.50)
-  alertThreshold Decimal @default(5.00) @db.Decimal(5, 2) // 涨跌预警比例 %
-  takeProfitTrigger Decimal @default(8.00) @db.Decimal(5, 2) // 止盈观察收益率 %
-  takeProfitDrawdown Decimal @default(3.00) @db.Decimal(5, 2) // 高点回撤止盈比例 %
+  confirmDays           Int     @default(1) // 确认天数：1(境内T+1), 2(QDII T+2)
+  defaultBuyFee         Decimal @default(0.15) @db.Decimal(5, 4) // 默认买入费率 % (如0.15)
+  defaultSellFee        Decimal @default(0.50) @db.Decimal(5, 4) // 默认卖出费率 % (如0.50)
+  dividendReinvest      Boolean @default(false) // 分红方式：false(现金分红)、true(红利再投资)
+  alertThreshold        Decimal @default(5.00) @db.Decimal(5, 2) // 涨跌预警比例 %
+  takeProfitTrigger     Decimal @default(8.00) @db.Decimal(5, 2) // 止盈观察收益率 %
+  takeProfitDrawdown    Decimal @default(3.00) @db.Decimal(5, 2) // 高点回撤止盈比例 %
   takeProfitSellPercent Decimal @default(50.00) @db.Decimal(5, 2) // 建议卖出仓位 %
 
-  createdAt           DateTime             @default(now())
-  updatedAt           DateTime             @updatedAt
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
   transactions        Transaction[] // 交易记录
   plannedPurchases    PlannedPurchase[] // 计划买入
   pendingTransactions PendingTransaction[] // 待确认交易
@@ -104,16 +105,21 @@ model Transaction {
 
 // 待确认交易（在支付宝已操作，等待净值确认）
 model PendingTransaction {
-  id          Int      @id @default(autoincrement())
-  fundId      Int // 所属基金
-  fund        Fund     @relation(fields: [fundId], references: [id], onDelete: Cascade)
-  type        String // 交易类型：BUY(买入)、SELL(卖出)
-  applyDate   DateTime // 申请日期（用户操作日期）
-  applyAmount Decimal? @db.Decimal(15, 2) // 申请金额（买入时填）
-  applyShares Decimal? @db.Decimal(15, 4) // 申请份额（卖出时填）
-  status      String   @default("WAITING") // 状态：WAITING(等待确认)、CONFIRMED(已确认转正)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id                 Int       @id @default(autoincrement())
+  fundId             Int // 所属基金
+  fund               Fund      @relation(fields: [fundId], references: [id], onDelete: Cascade)
+  type               String // 交易类型：BUY(买入)、SELL(卖出)、DIVIDEND(分红)
+  applyDate          DateTime // 申请日期；分红时为发放日
+  applyAmount        Decimal?  @db.Decimal(15, 2) // 申请/预计金额
+  applyShares        Decimal?  @db.Decimal(15, 4) // 申请份额（卖出时填）
+  dividendReinvest   Boolean   @default(false) // 分红是否再投资
+  dividendRecordDate DateTime? // 分红权益登记日
+  dividendPerShare   Decimal?  @db.Decimal(10, 6) // 每份分红
+  sourceKey          String?   @unique // 自动识别来源唯一键，防止重复
+  remark             String?   @db.Text
+  status             String    @default("WAITING") // 状态：WAITING(等待确认)、CONFIRMED(已确认转正)
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
   @@index([fundId])
   @@index([status])
@@ -213,7 +219,7 @@ model FundDailyProfit {
   id                   Int      @id @default(autoincrement())
   fundId               Int
   fund                 Fund     @relation(fields: [fundId], references: [id], onDelete: Cascade)
-  date                 String   // 净值日期 YYYY-MM-DD
+  date                 String // 净值日期 YYYY-MM-DD
   holdingShares        Decimal  @db.Decimal(18, 6)
   holdingCost          Decimal  @db.Decimal(15, 4)
   holdingValue         Decimal  @db.Decimal(15, 4)

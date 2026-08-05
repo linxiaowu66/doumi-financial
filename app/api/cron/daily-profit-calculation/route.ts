@@ -5,6 +5,7 @@ import { updateActualAmountByFundId } from "@/lib/investment-direction";
 import prisma from "@/lib/prisma";
 import { isStockCode } from "@/lib/fund-price";
 import { isWorkday } from "@/lib/workday";
+import { detectYesterdayFundDividends } from "@/lib/fund-dividend";
 import dayjs from "dayjs";
 
 // 延迟函数，用于避免限流
@@ -117,9 +118,25 @@ export async function POST(request: Request) {
 
     const startTime = Date.now();
     const results = {
+      dividendDetection: {
+        paymentDate: "",
+        scanned: 0,
+        created: 0,
+        duplicates: 0,
+        errors: [] as string[],
+      },
       netWorthUpdate: { success: 0, failed: 0, errors: [] as string[] },
       dailyProfit: { success: 0, failed: 0, errors: [] as string[] },
     };
+
+    // 凌晨任务检查上海时区前一日到账的基金分红，只生成待确认记录
+    try {
+      results.dividendDetection = await detectYesterdayFundDividends();
+    } catch (error) {
+      results.dividendDetection.errors.push(
+        error instanceof Error ? error.message : "分红检测失败",
+      );
+    }
 
     // 1. 更新所有基金的净值
     try {

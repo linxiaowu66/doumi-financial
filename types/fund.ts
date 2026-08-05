@@ -5,6 +5,10 @@ export interface PendingTransaction {
   applyDate: string;
   applyAmount?: number;
   applyShares?: number;
+  dividendReinvest?: boolean;
+  dividendRecordDate?: string;
+  dividendPerShare?: number;
+  remark?: string | null;
   status: string;
   createdAt: string;
 }
@@ -21,6 +25,7 @@ export interface Fund {
   confirmDays?: number;
   defaultBuyFee?: number;
   defaultSellFee?: number;
+  dividendReinvest?: boolean;
   alertThreshold?: number;
   takeProfitTrigger?: number;
   takeProfitDrawdown?: number;

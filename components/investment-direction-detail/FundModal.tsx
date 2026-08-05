@@ -6,6 +6,7 @@ import {
   Select,
   Button,
   Flex,
+  Radio,
   Row,
   Col,
 } from "antd";
@@ -220,6 +221,35 @@ export default function FundModal({
                 />
               </Form.Item>
             </Col>
+            {!isStock && (
+              <Col xs={24} sm={16}>
+                <Form.Item
+                  label="分红方式"
+                  name="dividendReinvest"
+                  initialValue={false}
+                  tooltip="自动识别分红后按此方式生成待确认记录"
+                >
+                  <Radio.Group
+                    optionType="button"
+                    buttonStyle="solid"
+                    style={{ display: "flex", width: "100%" }}
+                  >
+                    <Radio.Button
+                      value={false}
+                      style={{ flex: 1, textAlign: "center" }}
+                    >
+                      现金分红
+                    </Radio.Button>
+                    <Radio.Button
+                      value={true}
+                      style={{ flex: 1, textAlign: "center" }}
+                    >
+                      红利再投
+                    </Radio.Button>
+                  </Radio.Group>
+                </Form.Item>
+              </Col>
+            )}
           </Row>
         )}
 

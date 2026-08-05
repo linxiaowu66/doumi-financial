@@ -10,7 +10,7 @@ export async function POST(request: Request) {
   try {
     // 1. 获取所有状态为 WAITING 的待确认交易
     const pendingTransactions = await prisma.pendingTransaction.findMany({
-      where: { status: 'WAITING' },
+      where: { status: 'WAITING', type: { in: ['BUY', 'SELL'] } },
       include: { fund: true },
     });
 
