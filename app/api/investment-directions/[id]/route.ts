@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { auth } from '@/auth';
 import prisma from '@/lib/prisma';
 
 // GET - 获取单个投资方向
@@ -11,6 +12,7 @@ export async function GET(
     const direction = await prisma.investmentDirection.findUnique({
       where: { id: parseInt(id) },
       include: {
+        householdMember: true,
         funds: {
           include: {
             _count: {
@@ -46,13 +48,26 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const session = await auth();
+    const userId = Number(session?.user?.id);
+    if (!Number.isInteger(userId)) return NextResponse.json({ error: '未登录' }, { status: 401 });
     const { id } = await params;
     const body = await request.json();
-    const { name, expectedAmount } = body;
+    const { name, expectedAmount, householdMemberId: rawMemberId } = body;
+    const householdMemberId = rawMemberId ? Number(rawMemberId) : null;
+    const existing = await prisma.investmentDirection.findUnique({ where: { id: parseInt(id) }, select: { userId: true } });
+    if (!existing || (existing.userId !== null && existing.userId !== userId)) {
+      return NextResponse.json({ error: '投资方向不存在' }, { status: 404 });
+    }
+    if (householdMemberId !== null && !await prisma.householdMember.findFirst({ where: { id: householdMemberId, userId } })) {
+      return NextResponse.json({ error: '家庭成员不存在' }, { status: 400 });
+    }
 
     const direction = await prisma.investmentDirection.update({
       where: { id: parseInt(id) },
       data: {
+        userId,
+        householdMemberId,
         name,
         expectedAmount: parseFloat(expectedAmount),
       },

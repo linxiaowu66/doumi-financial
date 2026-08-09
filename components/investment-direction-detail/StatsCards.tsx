@@ -63,7 +63,7 @@ export default function StatsCards({
             title={
               <Space>
                 实际投入
-                <Tooltip title={`当前持仓的成本总和（买入金额 - 卖出金额 + 分红再投资）。反映当前实际还留在投资中的资金，不包括已清仓的${assetLabel}。用于计算投入进度（实际投入 ÷ 预期投入）。`}>
+                <Tooltip title={`当前持仓成本总和，卖出时按平均成本扣减，不包括已清仓的${assetLabel}。用于计算投入进度（实际投入 ÷ 预期投入）。`}>
                   <QuestionCircleOutlined
                     style={{
                       color: "#1890ff",
@@ -101,7 +101,7 @@ export default function StatsCards({
               </Space>
             }
             value={
-              direction?.expectedAmount
+              Number(direction?.expectedAmount) > 0
                 ? (totalHoldingCost / Number(direction.expectedAmount)) * 100
                 : 0
             }

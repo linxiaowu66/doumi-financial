@@ -17,6 +17,99 @@ model User {
   createdAt            DateTime              @default(now())
   updatedAt            DateTime              @updatedAt
   investmentDirections InvestmentDirection[] // 用户的投资方向
+  householdMembers     HouseholdMember[]
+  householdAssets      HouseholdAsset[]
+  insurancePolicies    InsurancePolicy[]
+}
+
+// 家庭成员
+model HouseholdMember {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  relation  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  assets            HouseholdAsset[]
+  insurancePolicies InsurancePolicy[] @relation("InsuredMember")
+  investmentDirections InvestmentDirection[]
+
+  @@index([userId])
+}
+
+// 手动维护的家庭资产账户
+model HouseholdAsset {
+  id        Int              @id @default(autoincrement())
+  userId    Int
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  memberId  Int?
+  member    HouseholdMember? @relation(fields: [memberId], references: [id], onDelete: SetNull)
+  name      String
+  platform  String
+  balance   Decimal          @default(0) @db.Decimal(15, 2)
+  asOfDate  DateTime
+  remark    String?          @db.Text
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+  histories HouseholdAssetHistory[]
+
+  @@index([userId])
+  @@index([memberId])
+}
+
+// 家庭资产余额更新历史
+model HouseholdAssetHistory {
+  id        Int            @id @default(autoincrement())
+  assetId   Int
+  asset     HouseholdAsset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  balance   Decimal        @db.Decimal(15, 2)
+  asOfDate  DateTime
+  createdAt DateTime       @default(now())
+
+  @@index([assetId])
+  @@index([asOfDate])
+}
+
+// 家庭保险保单
+model InsurancePolicy {
+  id                  Int              @id @default(autoincrement())
+  userId              Int
+  user                User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  insuredMemberId     Int?
+  insuredMember       HouseholdMember? @relation("InsuredMember", fields: [insuredMemberId], references: [id], onDelete: SetNull)
+  name                String
+  provider            String?
+  type                String
+  coverageAmount      Decimal          @default(0) @db.Decimal(15, 2)
+  annualPremium       Decimal          @default(0) @db.Decimal(15, 2)
+  startDate           DateTime?
+  maturityDate        DateTime?
+  refundableAmount    Decimal          @default(0) @db.Decimal(15, 2)
+  active              Boolean          @default(true)
+  remark              String?          @db.Text
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+  premiumPayments     InsurancePremiumPayment[]
+
+  @@index([userId])
+  @@index([insuredMemberId])
+}
+
+// 年度保费缴纳记录
+model InsurancePremiumPayment {
+  id        Int             @id @default(autoincrement())
+  policyId  Int
+  policy    InsurancePolicy @relation(fields: [policyId], references: [id], onDelete: Cascade)
+  year      Int
+  amount    Decimal         @db.Decimal(15, 2)
+  paidAt    DateTime
+  remark    String?         @db.Text
+  createdAt DateTime        @default(now())
+
+  @@unique([policyId, year])
+  @@index([policyId])
 }
 
 // 投资方向（海外长钱、稳钱账户、长钱账户等）
@@ -24,6 +117,8 @@ model InvestmentDirection {
   id              Int                           @id @default(autoincrement())
   userId          Int? // 所属用户（临时可选）
   user            User?                         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  householdMemberId Int?
+  householdMember   HouseholdMember?            @relation(fields: [householdMemberId], references: [id], onDelete: SetNull)
   name            String // 投资方向名称
   type            String                        @default("FUND") // 方向类型：FUND(基金), STOCK(股票)
   expectedAmount  Decimal                       @db.Decimal(15, 2) // 预期投入金额
@@ -34,8 +129,26 @@ model InvestmentDirection {
   categoryTargets CategoryTarget[] // 该方向下的分类目标
   dailyProfits    DirectionDailyProfit[] // 每日盈亏记录
   analyses        InvestmentDirectionAnalysis[] // AI分析历史记录
+  householdSnapshots HouseholdDirectionSnapshot[]
 
   @@index([userId])
+  @@index([householdMemberId])
+}
+
+// 投资方向在家庭资产中的月度市值快照
+model HouseholdDirectionSnapshot {
+  id          Int                 @id @default(autoincrement())
+  directionId Int
+  direction   InvestmentDirection @relation(fields: [directionId], references: [id], onDelete: Cascade)
+  month       String              @db.VarChar(7)
+  value       Decimal             @db.Decimal(15, 2)
+  asOfDate    DateTime
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  @@unique([directionId, month])
+  @@index([directionId])
+  @@index([asOfDate])
 }
 
 // 基金分类目标仓位（标普、纳指等每个分类的投入上限）

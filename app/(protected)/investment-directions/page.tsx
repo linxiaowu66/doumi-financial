@@ -12,6 +12,7 @@ import DirectionModal from "@/components/investment-directions/DirectionModal";
 const { Title, Text } = Typography;
 
 export default function InvestmentDirectionsPage() {
+  const [members, setMembers] = useState<Array<{ id: number; name: string }>>([]);
   const [directions, setDirections] = useState<InvestmentDirection[]>([]);
   const [alerts, setAlerts] = useState<FundAlert[]>([]);
   const [loading, setLoading] = useState(false);
@@ -65,6 +66,10 @@ export default function InvestmentDirectionsPage() {
   useEffect(() => {
     loadDirections();
     loadAlerts();
+    fetch("/api/household-assets?membersOnly=1")
+      .then((response) => response.json())
+      .then((data) => setMembers(Array.isArray(data.members) ? data.members : []))
+      .catch(() => undefined);
   }, []);
 
   // 打开新建/编辑弹窗
@@ -75,6 +80,7 @@ export default function InvestmentDirectionsPage() {
         name: direction.name,
         type: direction.type,
         expectedAmount: direction.expectedAmount,
+        householdMemberId: direction.householdMemberId || undefined,
       });
     } else {
       setEditingDirection(null);
@@ -89,6 +95,7 @@ export default function InvestmentDirectionsPage() {
     name: string;
     type: "FUND" | "STOCK";
     expectedAmount: number;
+    householdMemberId?: number;
   }) => {
     try {
       const url = editingDirection
@@ -194,6 +201,7 @@ export default function InvestmentDirectionsPage() {
           }}
           onFinish={handleSubmit}
           form={form}
+          members={members}
         />
       </div>
     </div>

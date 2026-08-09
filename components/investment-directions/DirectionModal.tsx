@@ -1,4 +1,4 @@
-import { Modal, Form, Input, InputNumber, Button, Flex, Radio } from "antd";
+import { Modal, Form, Input, InputNumber, Button, Flex, Radio, Select } from "antd";
 import { FormInstance } from "antd/es/form";
 import { InvestmentDirection } from "@/types/investment-direction";
 
@@ -10,8 +10,10 @@ interface DirectionModalProps {
     name: string;
     type: "FUND" | "STOCK";
     expectedAmount: number;
+    householdMemberId?: number;
   }) => void;
   form: FormInstance;
+  members: Array<{ id: number; name: string }>;
 }
 
 export default function DirectionModal({
@@ -20,6 +22,7 @@ export default function DirectionModal({
   onCancel,
   onFinish,
   form,
+  members,
 }: DirectionModalProps) {
   return (
     <Modal
@@ -28,6 +31,7 @@ export default function DirectionModal({
       onCancel={onCancel}
       footer={null}
       width={500}
+      forceRender
     >
       <Form
         form={form}
@@ -68,6 +72,14 @@ export default function DirectionModal({
             formatter={(value) =>
               `¥ ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
             }
+          />
+        </Form.Item>
+
+        <Form.Item label="归属家庭成员" name="householdMemberId">
+          <Select
+            allowClear
+            placeholder="家庭共有 / 暂不指定"
+            options={members.map((member) => ({ value: member.id, label: member.name }))}
           />
         </Form.Item>
 

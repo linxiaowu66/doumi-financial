@@ -1,6 +1,6 @@
 'use client';
 
-import { ConfigProvider } from 'antd';
+import { App, ConfigProvider } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
 import { SessionProvider } from 'next-auth/react';
 import { ReactNode } from 'react';
@@ -16,7 +16,7 @@ export function AntdProvider({ children }: { children: ReactNode }) {
           },
         }}
       >
-        {children}
+        <App>{children}</App>
       </ConfigProvider>
     </SessionProvider>
   );

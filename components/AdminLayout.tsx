@@ -21,11 +21,13 @@ import {
   MenuOutlined,
   SettingOutlined,
   WarningOutlined,
+  BankOutlined,
 } from "@ant-design/icons";
 import type { MenuProps } from "antd";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut, useSession } from "next-auth/react";
+import { isHouseholdAssetUpdateDue } from "@/lib/household-assets";
 
 const { Header, Sider, Content } = Layout;
 
@@ -37,6 +39,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [householdUpdateDue, setHouseholdUpdateDue] = useState(false);
   const pathname = usePathname();
   const { data: session } = useSession();
   const {
@@ -54,6 +57,23 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
 
     return () => window.removeEventListener("resize", checkMobile);
   }, []);
+
+  useEffect(() => {
+    if (!session) return;
+    const loadReminder = () => {
+      fetch("/api/household-assets")
+        .then((response) => response.json())
+        .then((data) => setHouseholdUpdateDue(
+          Array.isArray(data.maintenanceDates)
+            ? isHouseholdAssetUpdateDue(data.maintenanceDates)
+            : false,
+        ))
+        .catch(() => setHouseholdUpdateDue(false));
+    };
+    loadReminder();
+    window.addEventListener("household-assets-updated", loadReminder);
+    return () => window.removeEventListener("household-assets-updated", loadReminder);
+  }, [session]);
 
   // 用户菜单
   const userMenuItems: MenuProps["items"] = [
@@ -109,6 +129,18 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
       },
     },
     {
+      key: "/household-assets",
+      icon: <BankOutlined />,
+      label: (
+        <Link href="/household-assets">
+          家庭资产{householdUpdateDue ? " ·" : ""}
+        </Link>
+      ),
+      onClick: () => {
+        if (isMobile) setDrawerVisible(false);
+      },
+    },
+    {
       key: "/settings",
       icon: <SettingOutlined />,
       label: <Link href="/settings">系统设置</Link>,
@@ -124,6 +156,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
     if (pathname.startsWith("/investment-directions"))
       return "/investment-directions";
     if (pathname.startsWith("/alerts")) return "/alerts";
+    if (pathname.startsWith("/household-assets")) return "/household-assets";
     if (pathname.startsWith("/settings")) return "/settings";
     return "/dashboard";
   };
@@ -166,7 +199,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
           onClose={() => setDrawerVisible(false)}
           open={drawerVisible}
           styles={{ body: { padding: 0 } }}
-          width={250}
+          size={250}
         >
           {sidebarContent}
         </Drawer>

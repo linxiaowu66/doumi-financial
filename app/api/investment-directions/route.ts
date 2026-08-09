@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { auth } from "@/auth";
 import prisma from "@/lib/prisma";
 
 const PRECISION_THRESHOLD = 0.03; // 与 funds/[id]/stats 保持一致
@@ -11,6 +12,7 @@ export async function GET() {
         createdAt: "desc",
       },
       include: {
+        householdMember: true,
         funds: {
           include: {
             transactions: {
@@ -64,11 +66,9 @@ export async function GET() {
         }
       }
 
-      // 移除 funds 数据，只保留需要的统计信息
-      const { funds: _funds, ...directionWithoutFunds } = direction;
-
       return {
-        ...directionWithoutFunds,
+        ...direction,
+        funds: undefined,
         _count: { funds: activeFundsCount },
         pendingCount,
         latestTransaction,
@@ -85,18 +85,27 @@ export async function GET() {
 // POST - 创建新的投资方向
 export async function POST(request: Request) {
   try {
+    const session = await auth();
+    const userId = Number(session?.user?.id);
+    if (!Number.isInteger(userId)) return NextResponse.json({ error: "未登录" }, { status: 401 });
     const body = await request.json();
-    const { name, type = "FUND", expectedAmount } = body;
+    const { name, type = "FUND", expectedAmount, householdMemberId: rawMemberId } = body;
+    const householdMemberId = rawMemberId ? Number(rawMemberId) : null;
 
-    if (!name || !expectedAmount) {
+    if (!name || expectedAmount === undefined || !Number.isFinite(Number(expectedAmount))) {
       return NextResponse.json(
         { error: "名称和预期金额不能为空" },
         { status: 400 },
       );
     }
+    if (householdMemberId !== null && !await prisma.householdMember.findFirst({ where: { id: householdMemberId, userId } })) {
+      return NextResponse.json({ error: "家庭成员不存在" }, { status: 400 });
+    }
 
     const direction = await prisma.investmentDirection.create({
       data: {
+        userId,
+        householdMemberId,
         name,
         type,
         expectedAmount: parseFloat(expectedAmount),

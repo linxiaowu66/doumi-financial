@@ -3,11 +3,7 @@ import { Decimal } from '@prisma/client/runtime/library';
 
 /**
  * 计算并更新投资方向的实际投入金额
- * 实际投入 = 买入金额 - 卖出金额 + 分红再投资金额
- * - 买入：增加投入
- * - 卖出：减少投入（资金收回）
- * - 分红再投资：增加投入（收益再投入）
- * - 现金分红：不影响投入（只是收益提取）
+ * 实际投入 = 当前持仓成本，不包括已清仓基金
  */
 export async function updateInvestmentDirectionActualAmount(
   directionId: number
@@ -30,34 +26,47 @@ export async function updateInvestmentDirectionActualAmount(
       return;
     }
 
-    // 计算实际投入金额
-    // 实际投入 = 买入金额 - 卖出金额 + 分红再投资金额
-    let totalInvested = new Decimal(0);
+    let totalCost = new Decimal(0);
+    const precisionThreshold = new Decimal("0.03");
 
     for (const fund of direction.funds) {
+      let fundShares = new Decimal(0);
+      let fundCost = new Decimal(0);
+
       for (const tx of fund.transactions) {
         const amount = new Decimal(tx.amount.toString());
+        const shares = new Decimal(tx.shares.toString());
         
         if (tx.type === 'BUY') {
-          // 买入：增加投入
-          totalInvested = totalInvested.plus(amount);
+          fundShares = fundShares.plus(shares);
+          fundCost = fundCost.plus(amount);
         } else if (tx.type === 'SELL') {
-          // 卖出：减少投入（资金收回）
-          // 卖出金额 = 份额 * 净值 - 手续费，这里amount已经是扣除手续费后的金额
-          totalInvested = totalInvested.minus(amount);
+          const sellShares = shares.abs();
+          const averageCost = fundShares.isZero()
+            ? new Decimal(0)
+            : fundCost.dividedBy(fundShares);
+          fundShares = fundShares.minus(sellShares);
+          fundCost = fundCost.minus(averageCost.times(sellShares));
         } else if (tx.type === 'DIVIDEND' && tx.dividendReinvest) {
-          // 分红再投资：增加投入（收益再投入）
-          totalInvested = totalInvested.plus(amount);
+          fundShares = fundShares.plus(shares);
         }
-        // 现金分红不影响实际投入
       }
+
+      if (fundShares.abs().lessThan(precisionThreshold)) {
+        fundCost = new Decimal(0);
+      }
+      totalCost = totalCost.plus(fundCost);
+    }
+
+    if (totalCost.abs().lessThan(precisionThreshold)) {
+      totalCost = new Decimal(0);
     }
 
     // 更新投资方向的实际投入金额
     await prisma.investmentDirection.update({
       where: { id: directionId },
       data: {
-        actualAmount: totalInvested,
+        actualAmount: totalCost,
       },
     });
   } catch (error) {

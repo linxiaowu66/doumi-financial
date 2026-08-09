@@ -4,6 +4,8 @@ export interface InvestmentDirection {
   type: "FUND" | "STOCK";
   expectedAmount: number;
   actualAmount: number;
+  householdMemberId?: number | null;
+  householdMember?: { id: number; name: string; relation: string | null } | null;
   createdAt: string;
   updatedAt: string;
   pendingCount?: number;

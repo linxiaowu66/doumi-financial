@@ -46,20 +46,25 @@ export default function DirectionList({
       dataIndex: 'name',
       key: 'name',
       render: (text: string, record: InvestmentDirection) => (
-        <Space>
-          <Link href={`/investment-directions/${record.id}`}>
-            <Text strong style={{ color: '#1890ff', cursor: 'pointer' }}>
+        <div style={{ minWidth: 0 }}>
+          <Link href={`/investment-directions/${record.id}`} style={{ display: 'inline-block', maxWidth: '100%' }}>
+            <Text strong style={{ color: '#1890ff', cursor: 'pointer', overflowWrap: 'anywhere' }}>
               {text}
             </Text>
           </Link>
-          {record.pendingCount && record.pendingCount > 0 ? (
-            <Tooltip title={`有 ${record.pendingCount} 笔待确认交易`}>
-              <Badge count={record.pendingCount} size="small" offset={[5, 0]}>
-                <ClockCircleOutlined style={{ color: '#faad14', fontSize: 16 }} />
-              </Badge>
-            </Tooltip>
-          ) : null}
-        </Space>
+          {(record.householdMember || record.pendingCount) && (
+            <Flex gap={8} align="center" wrap style={{ marginTop: 4 }}>
+              {record.householdMember && <Text type="secondary" style={{ fontSize: 12, overflowWrap: 'anywhere' }}>归属：{record.householdMember.name}</Text>}
+              {record.pendingCount && record.pendingCount > 0 ? (
+                <Tooltip title={`有 ${record.pendingCount} 笔待确认交易`}>
+                  <Badge count={record.pendingCount} size="small" offset={[5, 0]}>
+                    <ClockCircleOutlined style={{ color: '#faad14', fontSize: 16 }} />
+                  </Badge>
+                </Tooltip>
+              ) : null}
+            </Flex>
+          )}
+        </div>
       ),
     },
     {
@@ -82,7 +87,7 @@ export default function DirectionList({
       title: (
         <Space>
           实际投入 (元)
-          <Tooltip title="实际投入 = 买入金额 - 卖出金额 + 分红再投资金额。卖出会减少投入（资金收回），分红再投资会增加投入（收益再投入），现金分红不影响投入">
+          <Tooltip title="实际投入为当前持仓成本，卖出时按平均成本扣减，不包括已清仓资产">
             <QuestionCircleOutlined
               style={{ color: '#1890ff', cursor: 'help' }}
             />
@@ -200,10 +205,13 @@ export default function DirectionList({
 
           return (
             <Card key={record.id} size="small">
-              <Flex justify="space-between" align="center" style={{ marginBottom: 12 }}>
-                <Link href={`/investment-directions/${record.id}`}>
-                  <Text strong style={{ fontSize: 16, color: '#1890ff' }}>{record.name}</Text>
-                </Link>
+              <Flex justify="space-between" align="flex-start" gap={12} style={{ marginBottom: 12 }}>
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <Link href={`/investment-directions/${record.id}`}>
+                    <Text strong style={{ fontSize: 16, color: '#1890ff', overflowWrap: 'anywhere' }}>{record.name}</Text>
+                  </Link>
+                  {record.householdMember && <div><Text type="secondary" style={{ fontSize: 12, overflowWrap: 'anywhere' }}>归属：{record.householdMember.name}</Text></div>}
+                </div>
                 {record.pendingCount && record.pendingCount > 0 && (
                   <Badge count={record.pendingCount} size="small">
                     <ClockCircleOutlined style={{ color: '#faad14' }} />

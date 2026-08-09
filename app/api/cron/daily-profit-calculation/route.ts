@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { saveDirectionDailyProfitRange } from "@/lib/direction-daily-profit";
 import { saveFundDailyProfitToday } from "@/lib/fund-daily-profit";
-import { updateActualAmountByFundId } from "@/lib/investment-direction";
+import { updateInvestmentDirectionActualAmount } from "@/lib/investment-direction";
 import prisma from "@/lib/prisma";
 import { isStockCode } from "@/lib/fund-price";
 import { isWorkday } from "@/lib/workday";
@@ -199,16 +199,7 @@ export async function POST(request: Request) {
 
       for (const direction of directions) {
         try {
-          // 获取该方向下的所有基金
-          const funds = await prisma.fund.findMany({
-            where: { directionId: direction.id },
-            select: { id: true },
-          });
-
-          // 更新实际投入（通过更新第一个基金来触发）
-          if (funds.length > 0) {
-            await updateActualAmountByFundId(funds[0].id);
-          }
+          await updateInvestmentDirectionActualAmount(direction.id);
         } catch (error) {
           console.error(`更新投资方向 ${direction.id} 实际投入失败:`, error);
         }

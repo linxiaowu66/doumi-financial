@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
+import { updateInvestmentDirectionActualAmount } from '@/lib/investment-direction';
 
 // GET - 获取基金详情
 export async function GET(
@@ -43,6 +44,7 @@ export async function PUT(
 ) {
   try {
     const { id } = await params;
+    const fundId = parseInt(id);
     const body = await request.json();
     const {
       code,
@@ -65,8 +67,17 @@ export async function PUT(
       return NextResponse.json({ error: '涨跌预警比例必须在 0 到 100 之间' }, { status: 400 });
     }
 
+    const oldFund = await prisma.fund.findUnique({
+      where: { id: fundId },
+      select: { directionId: true },
+    });
+
+    if (!oldFund) {
+      return NextResponse.json({ error: '基金不存在' }, { status: 404 });
+    }
+
     const fund = await prisma.fund.update({
-      where: { id: parseInt(id) },
+      where: { id: fundId },
       data: {
         code,
         name,
@@ -84,6 +95,13 @@ export async function PUT(
       },
     });
 
+    if (oldFund.directionId !== fund.directionId) {
+      await Promise.all([
+        updateInvestmentDirectionActualAmount(oldFund.directionId),
+        updateInvestmentDirectionActualAmount(fund.directionId),
+      ]);
+    }
+
     return NextResponse.json(fund);
   } catch (error) {
     console.error('更新基金失败:', error);
@@ -98,10 +116,22 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
+    const fundId = parseInt(id);
+
+    const fund = await prisma.fund.findUnique({
+      where: { id: fundId },
+      select: { directionId: true },
+    });
+
+    if (!fund) {
+      return NextResponse.json({ error: '基金不存在' }, { status: 404 });
+    }
 
     await prisma.fund.delete({
-      where: { id: parseInt(id) },
+      where: { id: fundId },
     });
+
+    await updateInvestmentDirectionActualAmount(fund.directionId);
 
     return NextResponse.json({ success: true });
   } catch (error) {

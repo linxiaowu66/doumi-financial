@@ -80,6 +80,19 @@ export function calcFundSnapshot(
   return { holdingShares, holdingCost, holdingValue, totalInvested, cumulativeProfit };
 }
 
+export function calculateDirectionMarketValue(funds: Array<{
+  latestNetWorth: Decimal | null;
+  transactions: Parameters<typeof calcFundSnapshot>[0];
+}>): number {
+  return funds.reduce(
+    (total, fund) => total.plus(calcFundSnapshot(
+      fund.transactions,
+      fund.latestNetWorth === null ? null : Number(fund.latestNetWorth),
+    ).holdingValue),
+    new Decimal(0),
+  ).toDecimalPlaces(2).toNumber();
+}
+
 /**
  * 回填单只基金的全部历史盈亏记录
  * 以 FundNetWorthHistory 中已有的日期为驱动，逐日计算并 upsert
