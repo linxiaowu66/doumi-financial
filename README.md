@@ -1,12 +1,18 @@
 # 豆米理财 - 个人投资管理系统
 
-基于 Next.js 16 + Prisma 6 + Ant Design 6 + MySQL 构建的现代化个人投资管理系统，支持基金投资管理、交易记录、收益统计、规则预警和浏览器端 AI 策略分析。
+基于 Next.js 16、React 19、Prisma 6、Ant Design 6 和 MySQL 构建的家庭投资管理系统，支持基金投资、家庭资产月度快照、保险维护、收益统计、规则预警和浏览器端 AI 策略分析。
 
 > 详细介绍文章：https://blog.5udou.cn/blog/detail/1772155159309
 
 ## ✨ 功能特性
 
-- 📊 **投资方向管理** - 管理多个投资账户（如海外长钱、稳钱账户等）
+- 📊 **投资方向管理** - 管理多个投资账户，可设置目标金额和归属家庭成员
+- 🏠 **家庭资产总览** - 汇总且慢、余额宝、华泰证券、个人养老金及其他手动账户
+- 📈 **月度资产历史** - 更新余额时保留历史记录，通过曲线查看家庭资产变化
+- 🔄 **投资方向月度同步** - 月底手动生成市值快照；同月重复同步覆盖当月，不改动历史月份
+- 👨‍👩‍👧‍👦 **成员维度查看** - 资产、保单和投资方向支持成员归属与筛选
+- 🛡️ **保险与缴费记录** - 维护意外险、重疾险、寿险、医疗险、护理险和年度保费
+- 🔔 **月底更新提醒** - 月末提醒补充本月资产余额和投资方向快照
 - 💰 **基金管理** - 添加、编辑、删除基金，支持分类管理
 - 📈 **交易记录** - 记录买入、卖出、分红（现金/再投资）交易
 - 📅 **计划买入** - 设置计划买入金额，待时机合适时执行
@@ -33,6 +39,7 @@
 - **Tailwind CSS** 4.x - 实用优先的 CSS 框架
 - **MySQL** - 关系型数据库（使用 mysql2 驱动）
 - **dayjs** - 日期处理库
+- **Recharts** - 家庭资产月度走势
 - **bcryptjs** - 密码加密
 
 > AI 请求由用户浏览器直接发送到所选模型厂商，API Key 保存在系统设置中。AI 输出仅供投资决策参考，不构成投资建议。
@@ -44,6 +51,7 @@ doumi-financial/
 ├── app/
 │   ├── (protected)/              # 受保护的路由组
 │   │   ├── dashboard/           # 首页/仪表盘
+│   │   ├── household-assets/    # 家庭资产、成员、保险与月度走势
 │   │   ├── investment-directions/  # 投资方向管理
 │   │   │   ├── [id]/           # 投资方向详情页
 │   │   │   └── page.tsx        # 投资方向列表页
@@ -59,6 +67,7 @@ doumi-financial/
 │   │   │   └── [id]/
 │   │   │       ├── stats/      # 基金统计
 │   │   │       └── net-worth/  # 净值更新
+│   │   ├── household-assets/   # 家庭资产、快照和保险 API
 │   │   ├── investment-directions/  # 投资方向 API
 │   │   │   └── [id]/
 │   │   │       └── summary/    # 收益汇总
@@ -74,10 +83,14 @@ doumi-financial/
 ├── components/
 │   └── AdminLayout.tsx         # 后台管理布局（侧边栏+头部）
 ├── lib/
+│   ├── household-assets.ts     # 月底提醒和历史曲线汇总
+│   ├── investment-direction.ts # 投资方向持仓成本计算
 │   └── prisma.ts               # Prisma Client 实例
 ├── prisma/
+│   ├── migrations/             # 已审查的数据库迁移
 │   ├── schema.prisma           # 数据库模型
 │   └── seed.ts                 # 种子数据（可选）
+├── openspec/                   # 功能变更规格与任务记录
 ├── auth.ts                     # NextAuth 配置
 ├── .env                        # 环境变量
 └── package.json                # 依赖配置
@@ -122,11 +135,11 @@ NEXTAUTH_SECRET="your-secret-key-change-this-in-production"
 ### 4. 初始化数据库
 
 ```bash
-# 推送 schema 到数据库（创建表结构）
-pnpm prisma db push
-
 # 生成 Prisma Client
 pnpm prisma generate
+
+# 应用仓库内的数据库迁移
+pnpm prisma migrate deploy
 ```
 
 ### 5. 启动开发服务器
@@ -155,16 +168,46 @@ pnpm dev
 - `name` - 姓名（可选）
 - `password` - 加密后的密码
 - `investmentDirections` - 用户的投资方向列表
+- `householdMembers` - 家庭成员列表
+- `householdAssets` - 手动维护的家庭资产账户
+- `insurancePolicies` - 家庭保单列表
 
 ### InvestmentDirection（投资方向）
 
 - `id` - 投资方向 ID
 - `userId` - 所属用户 ID
+- `householdMemberId` - 归属家庭成员 ID（可选）
 - `name` - 投资方向名称（如：海外长钱、稳钱账户）
+- `type` - 方向类型：FUND（基金）或 STOCK（股票）
 - `expectedAmount` - 预期投入金额
-- `actualAmount` - 实际投入金额
+- `actualAmount` - 当前持仓成本；清仓或转出后相应扣减
 - `funds` - 该方向下的基金列表
 - `categoryTargets` - 分类目标列表
+- `householdSnapshots` - 家庭资产中的月度市值快照
+
+### HouseholdMember（家庭成员）
+
+- `userId` - 所属用户 ID
+- `name` - 成员姓名
+- `relation` - 与当前用户的关系（可选）
+- 可关联家庭资产、保单和投资方向
+
+### HouseholdAsset / HouseholdAssetHistory（家庭资产及历史）
+
+- 家庭资产记录平台、账户名称、归属成员、当前余额和数据日期
+- 支持且慢、余额宝、华泰证券、个人养老金和其他平台
+- 每次余额或数据日期变化时新增历史记录，旧数值不会被覆盖
+
+### InsurancePolicy / InsurancePremiumPayment（保单及缴费）
+
+- 记录险种、保险公司、被保人、保额、年保费、生效/到期日期及到期可退金额
+- 每个缴费年度保留一条实缴记录，同年再次保存会更新该年度记录
+
+### HouseholdDirectionSnapshot（投资方向月度快照）
+
+- 记录投资方向在指定月份的持仓市值
+- 由家庭资产页手动同步，不跟随每日收益任务自动变化
+- 同一投资方向每月只有一条快照，同月重复同步会更新当月值
 
 ### Fund（基金）
 
@@ -211,7 +254,7 @@ pnpm dev
 - `id` - 目标 ID
 - `directionId` - 所属投资方向 ID
 - `categoryName` - 分类名称（如：标普、纳指）
-- `targetAmount` - 目标投入金额
+- `targetPercent` - 目标仓位百分比
 
 ## 🎯 核心功能
 
@@ -219,8 +262,10 @@ pnpm dev
 
 - 创建、编辑、删除投资方向
 - 设置预期投入金额
-- 查看实际投入金额和投入进度
+- 设置归属家庭成员
+- 查看当前持仓成本和投入进度
 - 查看该方向下的所有基金
+- 基金转移到其他投资方向后，来源和目标方向的实际投入会重新计算
 
 **路由：** `/investment-directions`
 
@@ -322,9 +367,21 @@ pnpm dev
 - `GET /api/strategy-analyses` - 获取组合策略分析历史
 - `POST /api/strategy-analyses` - 保存组合策略分析报告
 
+### 9. 家庭资产、成员与保险
+
+- 手动维护且慢、余额宝、华泰证券、个人养老金及其他账户余额
+- 余额更新会生成历史记录，并按月份汇总为资产走势曲线
+- 将已有投资方向纳入家庭总资产；月底点击“同步本月投资方向”生成当月市值快照
+- 同月重复同步仅更新当月快照，历史月份不变；投资方向不会每日同步到家庭资产
+- 按家庭成员筛选资产、投资方向和保单
+- 维护意外险、重疾险、寿险、医疗险、护理险等保单及年度缴费记录
+- 月末最后五天提醒更新尚未维护的资产和投资方向
+
+**路由：** `/household-assets`
+
 ## 📱 响应式设计
 
-系统完美支持移动端访问：
+系统为桌面端和移动端分别提供表格、卡片和响应式表单布局：
 
 - **断点：** 768px
 - **移动端特性：**
@@ -357,10 +414,10 @@ pnpm lint
 
 # Prisma 相关
 pnpm prisma studio          # 打开 Prisma Studio（数据库可视化工具）
-pnpm prisma migrate dev     # 创建并应用迁移
+pnpm prisma migrate dev     # 本地创建并应用迁移
+pnpm prisma migrate deploy  # 应用已提交的迁移（部署环境）
 pnpm prisma generate        # 生成 Prisma Client
 pnpm prisma db seed         # 运行种子脚本
-pnpm prisma db push         # 推送 schema 到数据库（不创建迁移）
 ```
 
 ## 📄 页面路由
@@ -378,6 +435,7 @@ pnpm prisma db push         # 推送 schema 到数据库（不创建迁移）
   - 批量更新净值按钮
   - AI 策略分析入口和历史报告
 - `/investment-directions` - 投资方向列表
+- `/household-assets` - 家庭资产、月度走势、成员、保单和缴费记录
 - `/alerts` - 资产预警中心，按投资方向筛选并按预警类型查看
 - `/investment-directions/[id]` - 投资方向详情
   - 基金列表（按分类分组）
@@ -425,6 +483,14 @@ pnpm prisma db push         # 推送 schema 到数据库（不创建迁移）
 - `PUT /api/investment-directions/[id]` - 更新投资方向
 - `DELETE /api/investment-directions/[id]` - 删除投资方向
 - `GET /api/investment-directions/[id]/summary` - 获取收益汇总
+
+### 家庭资产
+
+- `GET /api/household-assets` - 获取成员、资产、保单、投资方向快照和月度历史
+- `GET /api/household-assets?memberId=成员ID` - 按成员筛选家庭资产数据
+- `POST /api/household-assets` - 创建成员、资产、保单、缴费记录，或同步本月投资方向
+- `PUT /api/household-assets` - 更新成员、资产或保单；资产余额变化会保留历史
+- `DELETE /api/household-assets?resource=类型&id=记录ID` - 删除成员、资产或保单
 
 ### 基金
 
