@@ -29,14 +29,18 @@ import {
 } from "antd";
 import {
   BankOutlined,
+  CopyOutlined,
   DeleteOutlined,
   EditOutlined,
   PlusOutlined,
   SafetyCertificateOutlined,
+  SwapOutlined,
   TeamOutlined,
 } from "@ant-design/icons";
 import dayjs, { Dayjs } from "dayjs";
 import {
+  Bar,
+  BarChart,
   CartesianGrid,
   Legend,
   Line,
@@ -46,7 +50,16 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { HouseholdHistoryPoint, isHouseholdAssetUpdateDue } from "@/lib/household-assets";
+import {
+  HouseholdHistoryPoint,
+  cumulativeInsurancePremium,
+  hasAnnualPolicyGap,
+  insurancePremiumsByYear,
+  isAnnualPolicyRenewalDue,
+  isHouseholdAssetUpdateDue,
+  nextAnnualPolicyPeriod,
+  previousAnnualPolicyPeriod,
+} from "@/lib/household-assets";
 
 const { Title, Text } = Typography;
 
@@ -103,10 +116,12 @@ interface Payment {
 
 interface Policy {
   id: number;
+  planId: number;
   insuredMemberId: number | null;
   insuredMember: Member | null;
   name: string;
   provider: string | null;
+  policyNumber: string | null;
   type: string;
   coverageAmount: string;
   annualPremium: string;
@@ -116,6 +131,15 @@ interface Policy {
   active: boolean;
   remark: string | null;
   premiumPayments: Payment[];
+}
+
+interface InsurancePlan {
+  id: number;
+  insuredMemberId: number | null;
+  insuredMember: Member | null;
+  type: string;
+  mode: "ANNUAL" | "LONG_TERM";
+  policies: Policy[];
 }
 
 interface AssetFormValues {
@@ -132,6 +156,8 @@ interface PolicyFormValues {
   provider?: string;
   type: string;
   insuredMemberId?: number;
+  coverageMode: "ANNUAL" | "LONG_TERM";
+  policyNumber?: string;
   coverageAmount: number;
   annualPremium: number;
   startDate?: Dayjs;
@@ -149,7 +175,7 @@ export default function HouseholdAssetsPage() {
   const [loading, setLoading] = useState(true);
   const [members, setMembers] = useState<Member[]>([]);
   const [assets, setAssets] = useState<Asset[]>([]);
-  const [policies, setPolicies] = useState<Policy[]>([]);
+  const [insurancePlans, setInsurancePlans] = useState<InsurancePlan[]>([]);
   const [directions, setDirections] = useState<Direction[]>([]);
   const [history, setHistory] = useState<HouseholdHistoryPoint[]>([]);
   const [maintenanceDates, setMaintenanceDates] = useState<Array<string | Date>>([]);
@@ -161,12 +187,18 @@ export default function HouseholdAssetsPage() {
   const [editingMember, setEditingMember] = useState<Member | null>(null);
   const [editingAsset, setEditingAsset] = useState<Asset | null>(null);
   const [editingPolicy, setEditingPolicy] = useState<Policy | null>(null);
+  const [policyPlan, setPolicyPlan] = useState<InsurancePlan | null>(null);
+  const [policyCopyMode, setPolicyCopyMode] = useState<"renew" | "replace" | "backfill" | "copy" | null>(null);
+  const [historyPlanId, setHistoryPlanId] = useState<number | null>(null);
+  const [directCopyPlan, setDirectCopyPlan] = useState<InsurancePlan | null>(null);
+  const [copyTargetMemberId, setCopyTargetMemberId] = useState<number>();
   const [paymentPolicy, setPaymentPolicy] = useState<Policy | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [memberForm] = Form.useForm();
   const [assetForm] = Form.useForm<AssetFormValues>();
   const [policyForm] = Form.useForm<PolicyFormValues>();
   const [paymentForm] = Form.useForm();
+  const policyCoverageMode = Form.useWatch("coverageMode", policyForm);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -176,7 +208,7 @@ export default function HouseholdAssetsPage() {
       if (!response.ok) throw new Error(data.error);
       setMembers(data.members);
       setAssets(data.assets);
-      setPolicies(data.policies);
+      setInsurancePlans(data.insurancePlans);
       setDirections(data.directions);
       setHistory(data.history);
       setMaintenanceDates(data.maintenanceDates);
@@ -204,17 +236,51 @@ export default function HouseholdAssetsPage() {
       investments: sum(["QIEMAN", "HUATAI"]) + directions.reduce((total, direction) => total + Number(direction.snapshotValue || 0), 0),
       cash: sum(["YUEBAO"]),
       pension: sum(["PERSONAL_PENSION"]),
-      refundable: policies.reduce((total, policy) => total + Number(policy.refundableAmount), 0),
+      refundable: insurancePlans.reduce((total, plan) => total + Number(plan.policies[0]?.refundableAmount || 0), 0),
     };
-  }, [assets, directions, policies]);
+  }, [assets, directions, insurancePlans]);
 
   const updateDue = isHouseholdAssetUpdateDue(maintenanceDates);
   const currentYear = dayjs().year();
-  const unpaidPolicies = policies.filter(
+  const unpaidPolicies = insurancePlans.flatMap((plan) => plan.mode === "LONG_TERM" ? plan.policies : []).filter(
     (policy) => policy.active
       && Number(policy.annualPremium) > 0
       && !policy.premiumPayments.some((payment) => payment.year === currentYear),
   );
+  const renewalDuePlans = insurancePlans.filter((plan) => plan.mode === "ANNUAL" && isAnnualPolicyRenewalDue(plan.policies[0]?.maturityDate || null));
+  const gapPlans = insurancePlans.filter((plan) => plan.mode === "ANNUAL" && hasAnnualPolicyGap(plan.policies, plan.type === "ACCIDENT" ? 7 : 0, new Date()));
+  const insuranceGroups = useMemo(() => {
+    const groups = new Map<string, { name: string; plans: InsurancePlan[] }>();
+    for (const plan of insurancePlans) {
+      const key = String(plan.insuredMemberId ?? "unassigned");
+      const group = groups.get(key) || { name: plan.insuredMember?.name || "未指定成员", plans: [] };
+      group.plans.push(plan);
+      groups.set(key, group);
+    }
+    return [...groups.entries()].map(([key, group]) => ({ key, ...group }));
+  }, [insurancePlans]);
+  const premiumDashboard = useMemo(() => {
+    const yearly = new Map<number, number>();
+    const memberTotals = insuranceGroups.map((group) => {
+      let total = 0;
+      let current = 0;
+      for (const plan of group.plans) {
+        for (const item of insurancePremiumsByYear(plan.mode, plan.policies)) {
+          total += item.amount;
+          if (item.year === currentYear) current += item.amount;
+          yearly.set(item.year, (yearly.get(item.year) || 0) + item.amount);
+        }
+      }
+      return { ...group, total, current };
+    });
+    const byYear = [...yearly].map(([year, total]) => ({ year: String(year), total })).sort((a, b) => a.year.localeCompare(b.year));
+    return {
+      byYear,
+      memberTotals,
+      total: byYear.reduce((sum, item) => sum + item.total, 0),
+      current: yearly.get(currentYear) || 0,
+    };
+  }, [currentYear, insuranceGroups]);
 
   const save = async (method: "POST" | "PUT", body: Record<string, unknown>, successMessage = "保存成功") => {
     setSubmitting(true);
@@ -258,6 +324,18 @@ export default function HouseholdAssetsPage() {
     await save("POST", { resource: "syncDirections" }, "已更新本月投资方向快照");
   };
 
+  const copyAnnualPlan = async () => {
+    if (!directCopyPlan || !copyTargetMemberId) return;
+    if (await save("POST", {
+      resource: "copyPlan",
+      planId: directCopyPlan.id,
+      insuredMemberId: copyTargetMemberId,
+    }, "保障已复制")) {
+      setDirectCopyPlan(null);
+      setCopyTargetMemberId(undefined);
+    }
+  };
+
   const openMember = (member?: Member) => {
     setEditingMember(member || null);
     memberForm.setFieldsValue(member ? { name: member.name, relation: member.relation } : { name: "", relation: "" });
@@ -282,13 +360,18 @@ export default function HouseholdAssetsPage() {
     setAssetOpen(true);
   };
 
-  const openPolicy = (policy?: Policy) => {
+  const openPolicy = (policy?: Policy, plan?: InsurancePlan) => {
     setEditingPolicy(policy || null);
+    setPolicyPlan(plan || null);
+    setPolicyCopyMode(null);
+    policyForm.resetFields();
     policyForm.setFieldsValue(policy ? {
       name: policy.name,
       provider: policy.provider || undefined,
-      type: policy.type,
-      insuredMemberId: policy.insuredMemberId || undefined,
+      policyNumber: policy.policyNumber || undefined,
+      type: plan?.type || policy.type,
+      insuredMemberId: plan?.insuredMemberId || policy.insuredMemberId || undefined,
+      coverageMode: plan?.mode || "LONG_TERM",
       coverageAmount: Number(policy.coverageAmount),
       annualPremium: Number(policy.annualPremium),
       startDate: policy.startDate ? dayjs(policy.startDate) : undefined,
@@ -299,12 +382,75 @@ export default function HouseholdAssetsPage() {
     } : {
       name: "",
       type: "ACCIDENT",
+      coverageMode: "ANNUAL",
       coverageAmount: 0,
       annualPremium: 0,
       refundableAmount: 0,
       active: true,
     });
     setPolicyOpen(true);
+  };
+
+  const openAnnualPolicy = (plan: InsurancePlan, mode: "renew" | "replace" | "backfill") => {
+    const previous = mode === "backfill" ? plan.policies.at(-1) : plan.policies[0];
+    if (!previous) return;
+    const replaceProduct = mode === "replace";
+    const period = mode === "backfill"
+      ? previousAnnualPolicyPeriod(previous.startDate!, previous.maturityDate!)
+      : nextAnnualPolicyPeriod(previous.maturityDate);
+    setEditingPolicy(null);
+    setPolicyPlan(plan);
+    setPolicyCopyMode(mode);
+    policyForm.resetFields();
+    policyForm.setFieldsValue({
+      name: replaceProduct ? "" : previous.name,
+      provider: replaceProduct ? undefined : previous.provider || undefined,
+      policyNumber: undefined,
+      type: plan.type,
+      insuredMemberId: plan.insuredMemberId || undefined,
+      coverageMode: plan.mode,
+      coverageAmount: replaceProduct ? 0 : Number(previous.coverageAmount),
+      annualPremium: 0,
+      startDate: dayjs(period.startDate),
+      maturityDate: dayjs(period.maturityDate),
+      refundableAmount: replaceProduct ? 0 : Number(previous.refundableAmount),
+      active: true,
+      remark: replaceProduct ? undefined : previous.remark || undefined,
+    });
+    setPolicyOpen(true);
+  };
+
+  const openCopiedPlan = (plan: InsurancePlan) => {
+    const source = plan.policies[0];
+    if (!source) return;
+    setEditingPolicy(null);
+    setPolicyPlan(null);
+    setPolicyCopyMode("copy");
+    policyForm.resetFields();
+    policyForm.setFieldsValue({
+      name: source.name,
+      provider: source.provider || undefined,
+      policyNumber: undefined,
+      type: plan.type,
+      insuredMemberId: undefined,
+      coverageMode: plan.mode,
+      coverageAmount: Number(source.coverageAmount),
+      annualPremium: Number(source.annualPremium),
+      startDate: source.startDate ? dayjs(source.startDate) : undefined,
+      maturityDate: source.maturityDate ? dayjs(source.maturityDate) : undefined,
+      refundableAmount: Number(source.refundableAmount),
+      active: true,
+      remark: source.remark || undefined,
+    });
+    setPolicyOpen(true);
+  };
+
+  const closePolicy = () => {
+    setPolicyOpen(false);
+    setEditingPolicy(null);
+    setPolicyPlan(null);
+    setPolicyCopyMode(null);
+    policyForm.resetFields();
   };
 
   const openPayment = (policy: Policy) => {
@@ -375,55 +521,145 @@ export default function HouseholdAssetsPage() {
     </Row>
   ) : <Empty description="还没有家庭资产账户" />;
 
-  const policyCards = policies.length ? (
-    <Row gutter={[16, 16]}>
-      {policies.map((policy) => {
-        const paid = policy.premiumPayments.find((payment) => payment.year === currentYear);
-        return (
-          <Col xs={24} lg={12} key={policy.id}>
+  const renderPlanCard = (plan: InsurancePlan) => {
+        const latestPolicy = plan.policies[0];
+        const visiblePolicies = plan.mode === "ANNUAL" ? plan.policies.slice(0, 1) : plan.policies;
+        const historicalPolicies = plan.mode === "ANNUAL" ? plan.policies.slice(1) : [];
+        const renderPolicyCard = (policy: Policy, stretch = false) => {
+          const paid = policy.premiumPayments.find((payment) => payment.year === currentYear);
+          const expired = policy.maturityDate ? dayjs(policy.maturityDate).isBefore(dayjs(), "day") : false;
+          const future = policy.startDate ? dayjs(policy.startDate).isAfter(dayjs(), "day") : false;
+          const status = !policy.active ? "已停效" : expired ? "已到期" : future ? "待生效" : "保障中";
+          return (
             <Card
-              title={<Flex gap={8} wrap align="center"><span style={{ overflowWrap: "anywhere" }}>{policy.name}</span><Tag color={policy.active ? "blue" : "default"}>{policy.active ? policyType(policy.type) : "已停效"}</Tag></Flex>}
+              key={policy.id}
+              type="inner"
+              size="small"
+              style={{ display: "flex", flex: stretch ? 1 : undefined, flexDirection: "column" }}
+              styles={{ body: { display: "flex", flex: 1, flexDirection: "column" } }}
+              title={<Flex gap={8} wrap align="center"><span style={{ overflowWrap: "anywhere" }}>{policy.name}</span><Tag color={status === "保障中" ? "success" : status === "待生效" ? "processing" : "default"}>{status}</Tag></Flex>}
               extra={<Space size={4}>
-                <Button type="text" icon={<EditOutlined />} onClick={() => openPolicy(policy)} aria-label={`编辑${policy.name}`} />
-                <Popconfirm title="删除这张保单及缴费记录？" onConfirm={() => remove("policy", policy.id)}>
+                <Button type="text" icon={<EditOutlined />} onClick={() => { setHistoryPlanId(null); openPolicy(policy, plan); }} aria-label={`编辑${policy.name}`} />
+                <Popconfirm title="删除这张实际保单及缴费记录？" onConfirm={() => remove("policy", policy.id)}>
                   <Button type="text" danger icon={<DeleteOutlined />} aria-label={`删除${policy.name}`} />
                 </Popconfirm>
               </Space>}
-              style={{ height: "100%" }}
             >
-              <Row gutter={[12, 12]}>
-                <Col xs={12}><Statistic title="保额" value={Number(policy.coverageAmount)} precision={0} prefix="¥" valueStyle={{ fontSize: 18 }} /></Col>
-                <Col xs={12}><Statistic title="年保费" value={Number(policy.annualPremium)} precision={2} prefix="¥" valueStyle={{ fontSize: 18 }} /></Col>
-              </Row>
-              <Descriptions size="small" column={1} style={{ marginTop: 12 }}>
-                <Descriptions.Item label="被保人">{policy.insuredMember?.name || "未指定"}</Descriptions.Item>
-                <Descriptions.Item label="保险公司">{policy.provider || "未填写"}</Descriptions.Item>
-                {policy.maturityDate && <Descriptions.Item label="到期日">{dayjs(policy.maturityDate).format("YYYY-MM-DD")}</Descriptions.Item>}
-                {Number(policy.refundableAmount) > 0 && <Descriptions.Item label="到期可退"><Text strong>{money(policy.refundableAmount)}</Text></Descriptions.Item>}
-                <Descriptions.Item label={`${currentYear} 年保费`}>
-                  {paid ? <Tag color="success">已缴 {money(paid.amount)}</Tag> : <Tag color="warning">未记录</Tag>}
-                </Descriptions.Item>
-                {policy.premiumPayments.length > 0 && (
-                  <Descriptions.Item label="缴费记录">
-                    <Flex gap={4} wrap>
-                      {policy.premiumPayments.map((payment) => (
-                        <Tag key={payment.id}>{payment.year} · {money(payment.amount)}</Tag>
-                      ))}
-                    </Flex>
-                  </Descriptions.Item>
+              <Flex vertical gap={12} style={{ height: "100%" }}>
+                <Row gutter={[12, 12]}>
+                  <Col xs={12}><Statistic title="保额" value={Number(policy.coverageAmount)} precision={0} prefix="¥" valueStyle={{ fontSize: 18 }} /></Col>
+                  <Col xs={12}><Statistic title={plan.mode === "ANNUAL" ? "当期保费" : "年保费"} value={Number(policy.annualPremium)} precision={2} prefix="¥" valueStyle={{ fontSize: 18 }} /></Col>
+                </Row>
+                <Descriptions size="small" column={1}>
+                  <Descriptions.Item label="保险公司">{policy.provider || "未填写"}</Descriptions.Item>
+                  {policy.policyNumber && <Descriptions.Item label="保单号"><Text copyable style={{ overflowWrap: "anywhere" }}>{policy.policyNumber}</Text></Descriptions.Item>}
+                  {(policy.startDate || policy.maturityDate) && <Descriptions.Item label="保障期间">{policy.startDate ? dayjs(policy.startDate).format("YYYY-MM-DD") : "未填写"} 至 {policy.maturityDate ? dayjs(policy.maturityDate).format("YYYY-MM-DD") : "未填写"}</Descriptions.Item>}
+                  {Number(policy.refundableAmount) > 0 && <Descriptions.Item label="到期可退"><Text strong>{money(policy.refundableAmount)}</Text></Descriptions.Item>}
+                  {plan.mode === "LONG_TERM" && (
+                    <Descriptions.Item label={`${currentYear} 年保费`}>
+                      {paid ? <Tag color="success">已缴 {money(paid.amount)}</Tag> : <Tag color="warning">未记录</Tag>}
+                    </Descriptions.Item>
+                  )}
+                  {plan.mode === "LONG_TERM" && policy.premiumPayments.length > 0 && (
+                    <Descriptions.Item label="缴费记录">
+                      <Flex gap={4} wrap>{policy.premiumPayments.map((payment) => <Tag key={payment.id}>{payment.year} · {money(payment.amount)}</Tag>)}</Flex>
+                    </Descriptions.Item>
+                  )}
+                </Descriptions>
+              </Flex>
+            </Card>
+          );
+        };
+        return (
+          <Col xs={24} xl={12} key={plan.id} style={{ display: "flex" }}>
+            <Card
+              title={<Flex gap={8} wrap align="center"><span style={{ overflowWrap: "anywhere" }}>{plan.insuredMember?.name || "未指定成员"} · {policyType(plan.type)}</span><Tag color={plan.mode === "ANNUAL" ? "cyan" : "blue"}>{plan.mode === "ANNUAL" ? "一年期" : "长期缴费"}</Tag></Flex>}
+              style={{ width: "100%", display: "flex", flexDirection: "column" }}
+              styles={{ body: { display: "flex", flex: 1, flexDirection: "column" } }}
+            >
+              <Flex vertical gap={12} style={{ flex: 1 }}>
+                <div>
+                  <Statistic title="累计缴费" value={cumulativeInsurancePremium(plan.mode, plan.policies)} precision={2} prefix="¥" valueStyle={{ fontSize: 20 }} />
+                  <Text type="secondary" style={{ fontSize: 12 }}>{plan.mode === "LONG_TERM" ? "未单独记录的年度按年保费自动估算" : "按各期实际保费汇总"}</Text>
+                </div>
+                {visiblePolicies.map((policy) => renderPolicyCard(policy, visiblePolicies.length === 1))}
+                {historicalPolicies.length > 0 && (
+                  <>
+                    <Button block onClick={() => setHistoryPlanId(plan.id)}>查看历年保单（{historicalPolicies.length}）</Button>
+                    <Modal
+                      title={`历年保单 · ${plan.insuredMember?.name || "未指定成员"} · ${policyType(plan.type)}`}
+                      open={historyPlanId === plan.id}
+                      onCancel={() => setHistoryPlanId(null)}
+                      footer={null}
+                      width={800}
+                      styles={{ body: { maxHeight: "70vh", overflowY: "auto" } }}
+                    >
+                      <Flex vertical gap={12}>{historicalPolicies.map((policy) => renderPolicyCard(policy))}</Flex>
+                    </Modal>
+                  </>
                 )}
-              </Descriptions>
-              {policy.active && Number(policy.annualPremium) > 0 && (
-                <Button block onClick={() => openPayment(policy)} style={{ marginTop: 8 }}>
-                  {paid ? "修改本年缴费" : "记录本年缴费"}
-                </Button>
-              )}
+                {plan.mode === "ANNUAL" && latestPolicy && (
+                  <Row gutter={[8, 8]} style={{ marginTop: "auto" }}>
+                    <Col xs={24} sm={12}><Button block icon={<CopyOutlined />} onClick={() => { setDirectCopyPlan(plan); setCopyTargetMemberId(undefined); }}>复制给成员</Button></Col>
+                    <Col xs={24} sm={12}><Button block icon={<PlusOutlined />} onClick={() => openAnnualPolicy(plan, "backfill")}>补录往年</Button></Col>
+                    <Col xs={24} sm={12}><Button block icon={<CopyOutlined />} onClick={() => openAnnualPolicy(plan, "renew")}>续保下一年</Button></Col>
+                    <Col xs={24} sm={12}><Button block icon={<SwapOutlined />} onClick={() => openAnnualPolicy(plan, "replace")}>更换产品</Button></Col>
+                  </Row>
+                )}
+                {plan.mode === "LONG_TERM" && latestPolicy && (
+                  <Row gutter={[8, 8]} style={{ marginTop: "auto" }}>
+                    <Col xs={24} sm={latestPolicy.active && Number(latestPolicy.annualPremium) > 0 ? 12 : 24}>
+                      <Button block icon={<CopyOutlined />} onClick={() => openCopiedPlan(plan)}>复制给家庭成员</Button>
+                    </Col>
+                    {latestPolicy.active && Number(latestPolicy.annualPremium) > 0 && (
+                      <Col xs={24} sm={12}><Button block onClick={() => openPayment(latestPolicy)}>{latestPolicy.premiumPayments.some((payment) => payment.year === currentYear) ? "修改本年缴费" : "记录本年缴费"}</Button></Col>
+                    )}
+                  </Row>
+                )}
+              </Flex>
             </Card>
           </Col>
         );
-      })}
-    </Row>
-  ) : <Empty description="还没有保险保单" />;
+  };
+
+  const policyCards = insurancePlans.length ? (
+    <Flex vertical gap={24}>
+      <Row gutter={[16, 16]}>
+        <Col xs={24} sm={12} lg={8}><Card size="small"><Statistic title="累计缴费" value={premiumDashboard.total} precision={2} prefix="¥" /></Card></Col>
+        <Col xs={24} sm={12} lg={8}><Card size="small"><Statistic title={`${currentYear} 年保费`} value={premiumDashboard.current} precision={2} prefix="¥" /></Card></Col>
+        <Col xs={24} sm={12} lg={8}><Card size="small"><Statistic title="保障项目" value={insurancePlans.length} suffix="项" /></Card></Col>
+      </Row>
+      <Card title="年度保费">
+        {premiumDashboard.byYear.length ? (
+          <div style={{ width: "100%", height: 260 }}>
+            <ResponsiveContainer>
+              <BarChart data={premiumDashboard.byYear} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="year" />
+                <YAxis tickFormatter={(value) => `¥${Number(value).toLocaleString("zh-CN")}`} width={88} />
+                <ChartTooltip formatter={(value) => money(Number(value))} />
+                <Bar dataKey="total" name="保费" fill="#1677ff" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        ) : <Empty description="暂无保费记录" />}
+        <Text type="secondary" style={{ fontSize: 12 }}>长期险未单独记录的年度按年保费估算，实缴记录优先。</Text>
+      </Card>
+      <Tabs
+        tabBarGutter={16}
+        items={premiumDashboard.memberTotals.map((group) => ({
+          key: group.key,
+          label: <Space size={6}><TeamOutlined />{group.name}<Tag>{group.plans.length}</Tag></Space>,
+          children: (
+            <Flex vertical gap={12}>
+              <Space wrap><Tag>累计 {money(group.total)}</Tag><Tag color="blue">本年 {money(group.current)}</Tag></Space>
+              <Row gutter={[16, 16]}>{group.plans.map(renderPlanCard)}</Row>
+            </Flex>
+          ),
+        }))}
+      />
+    </Flex>
+  ) : <Empty description="还没有保险保障项目" />;
 
   return (
     <div className="min-h-screen bg-gray-50 p-4 md:p-8">
@@ -445,7 +681,7 @@ export default function HouseholdAssetsPage() {
             />
             <Button onClick={syncDirections} loading={submitting}>同步本月投资方向</Button>
             <Button icon={<TeamOutlined />} onClick={() => openMember()}>添加成员</Button>
-            <Button icon={<SafetyCertificateOutlined />} onClick={() => openPolicy()}>添加保单</Button>
+            <Button icon={<SafetyCertificateOutlined />} onClick={() => openPolicy()}>添加保险保障</Button>
             <Button type="primary" icon={<PlusOutlined />} onClick={() => openAsset()}>添加资产</Button>
           </Space>
         </Flex>
@@ -465,6 +701,24 @@ export default function HouseholdAssetsPage() {
             type="info"
             message={`${currentYear} 年还有 ${unpaidPolicies.length} 张有效保单未记录缴费`}
             description={unpaidPolicies.map((policy) => policy.name).join("、")}
+            style={{ marginBottom: 16 }}
+          />
+        )}
+        {renewalDuePlans.length > 0 && (
+          <Alert
+            showIcon
+            type="warning"
+            message={`${renewalDuePlans.length} 个一年期保障项目需要续保`}
+            description={renewalDuePlans.map((plan) => `${plan.insuredMember?.name || "未指定成员"} · ${policyType(plan.type)}`).join("、")}
+            style={{ marginBottom: 16 }}
+          />
+        )}
+        {gapPlans.length > 0 && (
+          <Alert
+            showIcon
+            type="error"
+            message={`${gapPlans.length} 个一年期保障项目存在保障断档`}
+            description={gapPlans.map((plan) => `${plan.insuredMember?.name || "未指定成员"} · ${policyType(plan.type)}`).join("、")}
             style={{ marginBottom: 16 }}
           />
         )}
@@ -506,7 +760,7 @@ export default function HouseholdAssetsPage() {
                 label: `资产账户 (${assets.length + directions.length})`,
                 children: <><Title level={5}>手动资产</Title>{assetCards}<Divider /><Title level={5}>投资方向（月度快照）</Title>{directionCards}</>,
               },
-              { key: "policies", label: `保险保单 (${policies.length})`, children: policyCards },
+              { key: "policies", label: `保险保障 (${insurancePlans.length})`, children: policyCards },
               {
                 key: "members",
                 label: `家庭成员 (${members.length})`,
@@ -559,25 +813,49 @@ export default function HouseholdAssetsPage() {
         </Form>
       </Modal>
 
-      <Modal title={editingPolicy ? "编辑保单" : "添加保单"} open={policyOpen} onCancel={() => setPolicyOpen(false)} onOk={() => policyForm.submit()} confirmLoading={submitting} width={720} forceRender>
+      <Modal
+        title={`复制保障：${directCopyPlan ? policyType(directCopyPlan.type) : ""}`}
+        open={!!directCopyPlan}
+        onCancel={() => { setDirectCopyPlan(null); setCopyTargetMemberId(undefined); }}
+        onOk={copyAnnualPlan}
+        okButtonProps={{ disabled: !copyTargetMemberId }}
+        confirmLoading={submitting}
+      >
+        <Alert showIcon type="info" message="将复制全部历年保单及各年保费；若已复制过则只补齐缺失记录，唯一保单号不会复制。" style={{ marginBottom: 16 }} />
+        <Select
+          value={copyTargetMemberId}
+          onChange={setCopyTargetMemberId}
+          placeholder="选择要复制给的家庭成员"
+          style={{ width: "100%" }}
+          options={members.filter((member) => member.id !== directCopyPlan?.insuredMemberId).map((member) => ({ value: member.id, label: `${member.name}${member.relation ? `（${member.relation}）` : ""}` }))}
+        />
+      </Modal>
+
+      <Modal title={editingPolicy ? "编辑实际保单" : policyCopyMode === "renew" ? "续保下一年" : policyCopyMode === "replace" ? "更换保险产品" : policyCopyMode === "backfill" ? "补录往年保单" : policyCopyMode === "copy" ? "复制保障给家庭成员" : "添加保险保障"} open={policyOpen} onCancel={closePolicy} onOk={() => policyForm.submit()} confirmLoading={submitting} width={720} forceRender>
+        {policyCopyMode === "copy" && <Alert showIcon type="info" message="产品信息已复制，请选择新的被保人并确认保障日期和年保费；原缴费记录不会复制。" style={{ marginBottom: 16 }} />}
         <Form form={policyForm} layout="vertical" onFinish={async (values) => {
           if (await save(editingPolicy ? "PUT" : "POST", {
             resource: "policy",
             id: editingPolicy?.id,
+            planId: policyPlan?.id,
             ...values,
             startDate: values.startDate?.toISOString() || null,
             maturityDate: values.maturityDate?.toISOString() || null,
-          })) setPolicyOpen(false);
+          })) closePolicy();
         }}>
           <Row gutter={16}>
-            <Col xs={24} sm={12}><Form.Item name="name" label="保单名称" rules={[{ required: true }]}><Input maxLength={100} /></Form.Item></Col>
+            <Col xs={24} sm={12}><Form.Item name="name" label="产品 / 保单名称" rules={[{ required: true }]}><Input maxLength={100} /></Form.Item></Col>
             <Col xs={24} sm={12}><Form.Item name="provider" label="保险公司"><Input maxLength={100} /></Form.Item></Col>
-            <Col xs={24} sm={12}><Form.Item name="type" label="险种" rules={[{ required: true }]}><Select options={policyTypeOptions} /></Form.Item></Col>
-            <Col xs={24} sm={12}><Form.Item name="insuredMemberId" label="被保人"><Select allowClear options={members.map((member) => ({ value: member.id, label: member.name }))} /></Form.Item></Col>
+            <Col xs={24} sm={12}><Form.Item name="policyNumber" label="保单号"><Input maxLength={100} /></Form.Item></Col>
+            <Col xs={24} sm={12}><Form.Item name="type" label="险种" rules={[{ required: true }]}><Select disabled={!!policyPlan} options={policyTypeOptions} onChange={(type) => {
+              if (!policyPlan) policyForm.setFieldValue("coverageMode", type === "ACCIDENT" || type === "MEDICAL" ? "ANNUAL" : "LONG_TERM");
+            }} /></Form.Item></Col>
+            <Col xs={24} sm={12}><Form.Item name="insuredMemberId" label="被保人" rules={policyCopyMode === "copy" ? [{ required: true, message: "请选择新的被保人" }] : undefined}><Select disabled={!!policyPlan} allowClear options={members.map((member) => ({ value: member.id, label: member.name }))} /></Form.Item></Col>
+            <Col xs={24} sm={12}><Form.Item name="coverageMode" label="保障方式" rules={[{ required: true }]}><Select disabled={!!policyPlan} options={[{ value: "ANNUAL", label: "一年期（每年一张实际保单）" }, { value: "LONG_TERM", label: "长期缴费（同一保单逐年缴费）" }]} /></Form.Item></Col>
             <Col xs={24} sm={12}><Form.Item name="coverageAmount" label="保额" rules={[{ required: true }]}><InputNumber min={0} precision={2} prefix="¥" style={{ width: "100%" }} /></Form.Item></Col>
-            <Col xs={24} sm={12}><Form.Item name="annualPremium" label="年保费" rules={[{ required: true }]}><InputNumber min={0} precision={2} prefix="¥" style={{ width: "100%" }} /></Form.Item></Col>
-            <Col xs={24} sm={12}><Form.Item name="startDate" label="生效日"><DatePicker style={{ width: "100%" }} /></Form.Item></Col>
-            <Col xs={24} sm={12}><Form.Item name="maturityDate" label="到期日"><DatePicker style={{ width: "100%" }} /></Form.Item></Col>
+            <Col xs={24} sm={12}><Form.Item name="annualPremium" label={policyCoverageMode === "ANNUAL" ? "当期保费" : "年保费"} rules={[{ required: true }]}><InputNumber min={0} precision={2} prefix="¥" style={{ width: "100%" }} /></Form.Item></Col>
+            <Col xs={24} sm={12}><Form.Item name="startDate" label="保障生效日" rules={[{ required: policyCoverageMode === "ANNUAL", message: "请填写保障生效日" }]}><DatePicker style={{ width: "100%" }} /></Form.Item></Col>
+            <Col xs={24} sm={12}><Form.Item name="maturityDate" label="保障到期日" rules={[{ required: policyCoverageMode === "ANNUAL", message: "请填写保障到期日" }]}><DatePicker style={{ width: "100%" }} /></Form.Item></Col>
             <Col xs={24} sm={12}><Form.Item name="refundableAmount" label="到期可退金额" tooltip="护理险等到期可返还产品填写，无则填 0" rules={[{ required: true }]}><InputNumber min={0} precision={2} prefix="¥" style={{ width: "100%" }} /></Form.Item></Col>
             <Col xs={24} sm={12}><Form.Item name="active" label="保单有效" valuePropName="checked"><Switch /></Form.Item></Col>
             <Col xs={24}><Form.Item name="remark" label="备注"><Input.TextArea rows={2} maxLength={500} /></Form.Item></Col>

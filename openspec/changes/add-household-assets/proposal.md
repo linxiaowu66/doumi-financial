@@ -7,6 +7,7 @@ Family money is distributed across fund, cash, brokerage, pension, and insurance
 - Add household members and manually maintained asset accounts.
 - Preserve every manual balance update as a historical snapshot.
 - Add insurance policies, annual premium payments, and refundable maturity amounts.
+- Group policies into annual or long-term protection plans, with annual renewal and product-replacement flows.
 - Add a household-assets page with current totals, historical curves, and maintenance actions.
 - Include existing investment directions as a monthly synchronized household asset source.
 - Assign investment directions to household members for filtered totals and history.
@@ -16,7 +17,7 @@ Family money is distributed across fund, cash, brokerage, pension, and insurance
 
 ### New Capabilities
 
-- `household-assets`: Maintain household assets, insured members, policies, and annual premium payments.
+- `household-assets`: Maintain household assets, insured members, protection plans, policy terms, and annual premium payments.
 
 ### Modified Capabilities
 

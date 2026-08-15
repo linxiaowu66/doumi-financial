@@ -20,6 +20,7 @@ model User {
   householdMembers     HouseholdMember[]
   householdAssets      HouseholdAsset[]
   insurancePolicies    InsurancePolicy[]
+  insurancePlans       InsurancePlan[]
 }
 
 // 家庭成员
@@ -34,6 +35,7 @@ model HouseholdMember {
 
   assets            HouseholdAsset[]
   insurancePolicies InsurancePolicy[] @relation("InsuredMember")
+  insurancePlans    InsurancePlan[]   @relation("InsurancePlanMember")
   investmentDirections InvestmentDirection[]
 
   @@index([userId])
@@ -72,15 +74,35 @@ model HouseholdAssetHistory {
   @@index([asOfDate])
 }
 
-// 家庭保险保单
+// 家庭保险保障项目
+model InsurancePlan {
+  id              Int              @id @default(autoincrement())
+  userId          Int
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  insuredMemberId Int?
+  insuredMember   HouseholdMember? @relation("InsurancePlanMember", fields: [insuredMemberId], references: [id], onDelete: SetNull)
+  type            String
+  mode            String           @default("LONG_TERM")
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  policies        InsurancePolicy[]
+
+  @@index([userId])
+  @@index([insuredMemberId])
+}
+
+// 家庭保险实际保单
 model InsurancePolicy {
   id                  Int              @id @default(autoincrement())
+  planId              Int
+  plan                InsurancePlan    @relation(fields: [planId], references: [id], onDelete: Cascade)
   userId              Int
   user                User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   insuredMemberId     Int?
   insuredMember       HouseholdMember? @relation("InsuredMember", fields: [insuredMemberId], references: [id], onDelete: SetNull)
   name                String
   provider            String?
+  policyNumber        String?
   type                String
   coverageAmount      Decimal          @default(0) @db.Decimal(15, 2)
   annualPremium       Decimal          @default(0) @db.Decimal(15, 2)
@@ -94,6 +116,7 @@ model InsurancePolicy {
   premiumPayments     InsurancePremiumPayment[]
 
   @@index([userId])
+  @@index([planId])
   @@index([insuredMemberId])
 }
 

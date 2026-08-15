@@ -34,6 +34,116 @@ export interface HouseholdHistoryPoint {
   OTHER: number;
 }
 
+export function nextAnnualPolicyPeriod(
+  maturityDate: string | Date | null,
+  now = new Date(),
+): { startDate: Date; maturityDate: Date } {
+  const previousEnd = maturityDate ? new Date(maturityDate) : null;
+  const startDate = previousEnd && !Number.isNaN(previousEnd.getTime())
+    ? new Date(previousEnd)
+    : new Date(now);
+  startDate.setHours(0, 0, 0, 0);
+  if (previousEnd && !Number.isNaN(previousEnd.getTime())) startDate.setDate(startDate.getDate() + 1);
+
+  const nextMaturityDate = new Date(startDate);
+  nextMaturityDate.setFullYear(nextMaturityDate.getFullYear() + 1);
+  nextMaturityDate.setDate(nextMaturityDate.getDate() - 1);
+  return { startDate, maturityDate: nextMaturityDate };
+}
+
+export function previousAnnualPolicyPeriod(
+  startDate: string | Date,
+  maturityDate: string | Date,
+): { startDate: Date; maturityDate: Date } {
+  const previousStartDate = new Date(startDate);
+  const previousMaturityDate = new Date(maturityDate);
+  previousStartDate.setFullYear(previousStartDate.getFullYear() - 1);
+  previousMaturityDate.setFullYear(previousMaturityDate.getFullYear() - 1);
+  return { startDate: previousStartDate, maturityDate: previousMaturityDate };
+}
+
+interface InsurancePremiumPolicy {
+  annualPremium: number | string;
+  startDate?: string | Date | null;
+  maturityDate?: string | Date | null;
+  premiumPayments: Array<{ year: number; amount: number | string }>;
+}
+
+export function insurancePremiumsByYear(
+  mode: "ANNUAL" | "LONG_TERM",
+  policies: InsurancePremiumPolicy[],
+  now = new Date(),
+): Array<{ year: number; amount: number }> {
+  const totals = new Map<number, number>();
+  const add = (year: number, amount: number) => totals.set(year, (totals.get(year) || 0) + amount);
+  if (mode === "ANNUAL") {
+    for (const policy of policies) {
+      const start = policy.startDate ? new Date(policy.startDate) : null;
+      add(start && !Number.isNaN(start.getTime()) ? start.getFullYear() : now.getFullYear(), Number(policy.annualPremium));
+    }
+    return [...totals].map(([year, amount]) => ({ year, amount })).sort((a, b) => a.year - b.year);
+  }
+
+  for (const policy of policies) {
+    const payments = new Map(policy.premiumPayments.map((payment) => [payment.year, Number(payment.amount)]));
+    const payableYears = new Set(payments.keys());
+    const start = policy.startDate ? new Date(policy.startDate) : null;
+    const maturity = policy.maturityDate ? new Date(policy.maturityDate) : null;
+    const cutoff = maturity && !Number.isNaN(maturity.getTime()) && maturity < now ? maturity : now;
+    if (start && !Number.isNaN(start.getTime())) {
+      for (const due = new Date(start); due <= cutoff; due.setFullYear(due.getFullYear() + 1)) payableYears.add(due.getFullYear());
+    }
+    for (const year of payableYears) add(year, payments.get(year) ?? Number(policy.annualPremium));
+  }
+  return [...totals].map(([year, amount]) => ({ year, amount })).sort((a, b) => a.year - b.year);
+}
+
+export function cumulativeInsurancePremium(
+  mode: "ANNUAL" | "LONG_TERM",
+  policies: InsurancePremiumPolicy[],
+  now = new Date(),
+): number {
+  return insurancePremiumsByYear(mode, policies, now).reduce((total, item) => total + item.amount, 0);
+}
+
+export function isAnnualPolicyRenewalDue(
+  maturityDate: string | Date | null,
+  now = new Date(),
+): boolean {
+  if (!maturityDate) return true;
+  const end = new Date(maturityDate);
+  if (Number.isNaN(end.getTime())) return true;
+  const today = new Date(now);
+  today.setHours(0, 0, 0, 0);
+  end.setHours(0, 0, 0, 0);
+  return end.getTime() - today.getTime() <= 30 * 24 * 60 * 60 * 1000;
+}
+
+export function hasAnnualPolicyGap(
+  periods: Array<{ startDate: string | Date | null; maturityDate: string | Date | null }>,
+  allowedGapDays = 0,
+  now?: Date,
+): boolean {
+  const today = now ? new Date(now) : null;
+  today?.setHours(0, 0, 0, 0);
+  const datedPeriods = periods
+    .map((period) => ({
+      start: period.startDate ? new Date(period.startDate) : null,
+      end: period.maturityDate ? new Date(period.maturityDate) : null,
+    }))
+    .filter((period): period is { start: Date; end: Date } => Boolean(
+      period.start && period.end && !Number.isNaN(period.start.getTime()) && !Number.isNaN(period.end.getTime()),
+    ))
+    .sort((a, b) => a.start.getTime() - b.start.getTime());
+
+  return datedPeriods.some((period, index) => {
+    if (!index || (today && period.start.getTime() <= today.getTime())) return false;
+    const expectedStart = new Date(datedPeriods[index - 1].end);
+    expectedStart.setDate(expectedStart.getDate() + 1 + allowedGapDays);
+    return period.start.getTime() > expectedStart.getTime();
+  });
+}
+
 const HISTORY_CATEGORIES = ["QIEMAN", "YUEBAO", "HUATAI", "PERSONAL_PENSION", "OTHER"] as const;
 
 function monthKey(value: string | Date): string {

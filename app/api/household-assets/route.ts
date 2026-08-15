@@ -6,6 +6,7 @@ import { calculateDirectionMarketValue } from "@/lib/fund-daily-profit";
 
 const PLATFORMS = ["QIEMAN", "YUEBAO", "HUATAI", "PERSONAL_PENSION", "OTHER"];
 const POLICY_TYPES = ["ACCIDENT", "CRITICAL_ILLNESS", "LIFE", "MEDICAL", "NURSING", "OTHER"];
+const POLICY_MODES = ["ANNUAL", "LONG_TERM"];
 
 async function getUserId(): Promise<number | null> {
   const session = await auth();
@@ -64,7 +65,7 @@ export async function GET(request: Request) {
   const members = await prisma.householdMember.findMany({ where: { userId }, orderBy: { createdAt: "asc" } });
   if (searchParams.get("membersOnly") === "1") return NextResponse.json({ members });
 
-  const [assets, policies, directions] = await Promise.all([
+  const [assets, insurancePlans, directions] = await Promise.all([
     prisma.householdAsset.findMany({
       where: { userId, ...(memberId === null ? {} : { memberId }) },
       include: {
@@ -73,11 +74,17 @@ export async function GET(request: Request) {
       },
       orderBy: [{ platform: "asc" }, { name: "asc" }],
     }),
-    prisma.insurancePolicy.findMany({
+    prisma.insurancePlan.findMany({
       where: { userId, ...(memberId === null ? {} : { insuredMemberId: memberId }) },
       include: {
         insuredMember: true,
-        premiumPayments: { orderBy: { year: "desc" } },
+        policies: {
+          include: {
+            insuredMember: true,
+            premiumPayments: { orderBy: { year: "desc" } },
+          },
+          orderBy: [{ startDate: "desc" }, { createdAt: "desc" }],
+        },
       },
       orderBy: { createdAt: "asc" },
     }),
@@ -127,7 +134,7 @@ export async function GET(request: Request) {
     ...directions.map((direction) => direction.householdSnapshots.find((snapshot) => snapshot.month === currentMonth)?.asOfDate ?? ""),
   ];
 
-  return NextResponse.json({ members, assets, policies, directions: directionRows, history, maintenanceDates });
+  return NextResponse.json({ members, assets, insurancePlans, directions: directionRows, history, maintenanceDates });
 }
 
 export async function POST(request: Request) {
@@ -188,35 +195,111 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: true, count: directions.length, month });
   }
 
-  if (resource === "policy") {
-    const name = text(body.name);
-    const type = text(body.type);
-    const coverageAmount = amount(body.coverageAmount);
-    const annualPremium = amount(body.annualPremium);
-    const refundableAmount = amount(body.refundableAmount);
-    const insuredMemberId = body.insuredMemberId ? Number(body.insuredMemberId) : null;
-    const startDate = date(body.startDate);
-    const maturityDate = date(body.maturityDate);
-    if (!name || !POLICY_TYPES.includes(type) || coverageAmount === null || annualPremium === null || refundableAmount === null || (insuredMemberId !== null && !Number.isInteger(insuredMemberId)) || (body.startDate && !startDate) || (body.maturityDate && !maturityDate)) {
-      return invalid("请完整填写保单信息");
+  if (resource === "copyPlan") {
+    const planId = Number(body.planId);
+    const insuredMemberId = Number(body.insuredMemberId);
+    if (!Number.isInteger(planId) || !Number.isInteger(insuredMemberId) || !await ownsMember(userId, insuredMemberId)) {
+      return invalid("保障项目或被保人无效");
     }
-    if (!await ownsMember(userId, insuredMemberId)) return invalid("被保人不存在");
-    return NextResponse.json(await prisma.insurancePolicy.create({
+    const sourcePlan = await prisma.insurancePlan.findFirst({
+      where: { id: planId, userId, mode: "ANNUAL" },
+      include: { policies: { orderBy: [{ startDate: "desc" }, { createdAt: "desc" }] } },
+    });
+    if (!sourcePlan || !sourcePlan.policies.length) return invalid("一年期保障项目不存在");
+    if (sourcePlan.insuredMemberId === insuredMemberId) return invalid("请选择其他家庭成员");
+    const latest = sourcePlan.policies[0];
+    const targetPlan = await prisma.insurancePlan.findFirst({
+      where: {
+        userId,
+        insuredMemberId,
+        type: sourcePlan.type,
+        mode: sourcePlan.mode,
+        policies: { some: { name: latest.name, provider: latest.provider, startDate: latest.startDate, maturityDate: latest.maturityDate } },
+      },
+      include: { policies: true },
+    });
+    const copiedPolicies = sourcePlan.policies.map((source) => ({
+      userId,
+      insuredMemberId,
+      name: source.name,
+      provider: source.provider,
+      policyNumber: null,
+      type: source.type,
+      coverageAmount: source.coverageAmount,
+      annualPremium: source.annualPremium,
+      startDate: source.startDate,
+      maturityDate: source.maturityDate,
+      refundableAmount: source.refundableAmount,
+      active: source.active,
+      remark: source.remark,
+    }));
+    if (targetPlan) {
+      const termKey = (policy: { name: string; startDate: Date | null; maturityDate: Date | null }) => `${policy.name}|${policy.startDate?.toISOString() || ""}|${policy.maturityDate?.toISOString() || ""}`;
+      const existingTerms = new Set(targetPlan.policies.map(termKey));
+      const missingPolicies = copiedPolicies.filter((policy) => !existingTerms.has(termKey(policy)));
+      if (missingPolicies.length) await prisma.insurancePolicy.createMany({
+        data: missingPolicies.map((policy) => ({ ...policy, planId: targetPlan.id })),
+      });
+      return NextResponse.json(await prisma.insurancePlan.findUnique({
+        where: { id: targetPlan.id },
+        include: { insuredMember: true, policies: { include: { insuredMember: true, premiumPayments: true } } },
+      }));
+    }
+    return NextResponse.json(await prisma.insurancePlan.create({
       data: {
         userId,
         insuredMemberId,
-        name,
-        provider: text(body.provider) || null,
-        type,
-        coverageAmount,
-        annualPremium,
-        startDate,
-        maturityDate,
-        refundableAmount,
-        active: body.active !== false,
-        remark: text(body.remark) || null,
+        type: sourcePlan.type,
+        mode: sourcePlan.mode,
+        policies: { create: copiedPolicies },
       },
-      include: { insuredMember: true, premiumPayments: true },
+      include: { insuredMember: true, policies: { include: { insuredMember: true, premiumPayments: true } } },
+    }));
+  }
+
+  if (resource === "policy") {
+    const name = text(body.name);
+    const requestedPlanId = body.planId ? Number(body.planId) : null;
+    if (requestedPlanId !== null && !Number.isInteger(requestedPlanId)) return invalid("保障项目无效");
+    const existingPlan = requestedPlanId === null ? null : await prisma.insurancePlan.findFirst({
+      where: { id: requestedPlanId, userId },
+    });
+    if (requestedPlanId !== null && !existingPlan) return invalid("保障项目不存在");
+    const type = existingPlan?.type ?? text(body.type);
+    const coverageMode = existingPlan?.mode ?? (text(body.coverageMode) || (type === "ACCIDENT" || type === "MEDICAL" ? "ANNUAL" : "LONG_TERM"));
+    const coverageAmount = amount(body.coverageAmount);
+    const annualPremium = amount(body.annualPremium);
+    const refundableAmount = amount(body.refundableAmount);
+    const insuredMemberId = existingPlan ? existingPlan.insuredMemberId : (body.insuredMemberId ? Number(body.insuredMemberId) : null);
+    const startDate = date(body.startDate);
+    const maturityDate = date(body.maturityDate);
+    if (!name || !POLICY_TYPES.includes(type) || !POLICY_MODES.includes(coverageMode) || coverageAmount === null || annualPremium === null || refundableAmount === null || (insuredMemberId !== null && !Number.isInteger(insuredMemberId)) || (body.startDate && !startDate) || (body.maturityDate && !maturityDate) || (coverageMode === "ANNUAL" && (!startDate || !maturityDate)) || (startDate && maturityDate && maturityDate < startDate)) {
+      return invalid("请完整填写保单信息");
+    }
+    if (!await ownsMember(userId, insuredMemberId)) return invalid("被保人不存在");
+    return NextResponse.json(await prisma.$transaction(async (tx) => {
+      const plan = existingPlan ?? await tx.insurancePlan.create({
+        data: { userId, insuredMemberId, type, mode: coverageMode },
+      });
+      return tx.insurancePolicy.create({
+        data: {
+          planId: plan.id,
+          userId,
+          insuredMemberId,
+          name,
+          provider: text(body.provider) || null,
+          policyNumber: text(body.policyNumber) || null,
+          type,
+          coverageAmount,
+          annualPremium,
+          startDate,
+          maturityDate,
+          refundableAmount,
+          active: body.active !== false,
+          remark: text(body.remark) || null,
+        },
+        include: { insuredMember: true, premiumPayments: true, plan: true },
+      });
     }));
   }
 
@@ -287,23 +370,24 @@ export async function PUT(request: Request) {
   }
 
   if (resource === "policy") {
+    const existing = await prisma.insurancePolicy.findFirst({
+      where: { id, userId },
+      include: { plan: true },
+    });
+    if (!existing) return NextResponse.json({ error: "保单不存在" }, { status: 404 });
     const name = text(body.name);
-    const type = text(body.type);
     const coverageAmount = amount(body.coverageAmount);
     const annualPremium = amount(body.annualPremium);
     const refundableAmount = amount(body.refundableAmount);
-    const insuredMemberId = body.insuredMemberId ? Number(body.insuredMemberId) : null;
     const startDate = date(body.startDate);
     const maturityDate = date(body.maturityDate);
-    if (!name || !POLICY_TYPES.includes(type) || coverageAmount === null || annualPremium === null || refundableAmount === null || (insuredMemberId !== null && !Number.isInteger(insuredMemberId)) || (body.startDate && !startDate) || (body.maturityDate && !maturityDate)) return invalid("请完整填写保单信息");
-    if (!await ownsMember(userId, insuredMemberId)) return invalid("被保人不存在");
-    const result = await prisma.insurancePolicy.updateMany({
-      where: { id, userId },
+    if (!name || coverageAmount === null || annualPremium === null || refundableAmount === null || (body.startDate && !startDate) || (body.maturityDate && !maturityDate) || (existing.plan.mode === "ANNUAL" && (!startDate || !maturityDate)) || (startDate && maturityDate && maturityDate < startDate)) return invalid("请完整填写保单信息");
+    return NextResponse.json(await prisma.insurancePolicy.update({
+      where: { id },
       data: {
-        insuredMemberId,
         name,
         provider: text(body.provider) || null,
-        type,
+        policyNumber: text(body.policyNumber) || null,
         coverageAmount,
         annualPremium,
         startDate,
@@ -312,11 +396,7 @@ export async function PUT(request: Request) {
         active: body.active !== false,
         remark: text(body.remark) || null,
       },
-    });
-    if (!result.count) return NextResponse.json({ error: "保单不存在" }, { status: 404 });
-    return NextResponse.json(await prisma.insurancePolicy.findUnique({
-      where: { id },
-      include: { insuredMember: true, premiumPayments: { orderBy: { year: "desc" } } },
+      include: { insuredMember: true, premiumPayments: { orderBy: { year: "desc" } }, plan: true },
     }));
   }
 
@@ -336,9 +416,19 @@ export async function DELETE(request: Request) {
     ? await prisma.householdMember.deleteMany({ where: { id, userId } })
     : resource === "asset"
       ? await prisma.householdAsset.deleteMany({ where: { id, userId } })
-      : resource === "policy"
-        ? await prisma.insurancePolicy.deleteMany({ where: { id, userId } })
-        : null;
+      : null;
+
+  if (resource === "policy") {
+    const policy = await prisma.insurancePolicy.findFirst({ where: { id, userId }, select: { id: true, planId: true } });
+    if (!policy) return NextResponse.json({ error: "记录不存在" }, { status: 404 });
+    await prisma.$transaction(async (tx) => {
+      await tx.insurancePolicy.delete({ where: { id } });
+      if (!await tx.insurancePolicy.count({ where: { planId: policy.planId } })) {
+        await tx.insurancePlan.delete({ where: { id: policy.planId } });
+      }
+    });
+    return NextResponse.json({ success: true });
+  }
 
   if (!result) return invalid("未知资源类型");
   if (!result.count) return NextResponse.json({ error: "记录不存在" }, { status: 404 });
