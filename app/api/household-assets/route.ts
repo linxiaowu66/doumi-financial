@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import prisma from "@/lib/prisma";
-import { buildMonthlyHouseholdHistory } from "@/lib/household-assets";
+import { buildMonthlyHouseholdHistory, currentHouseholdMonth, isHouseholdMonth, keepsHouseholdDirectionHistory, monthToAsOfDate, showsHouseholdDirection, suggestSnapshotMonth, tracksHouseholdDirection } from "@/lib/household-assets";
 import { calculateDirectionMarketValue } from "@/lib/fund-daily-profit";
 
 const PLATFORMS = ["QIEMAN", "YUEBAO", "HUATAI", "PERSONAL_PENSION", "OTHER"];
@@ -27,6 +27,15 @@ function date(value: unknown): Date | null {
   if (!value) return null;
   const parsed = new Date(String(value));
   return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function month(value: unknown): string | null {
+  const parsed = text(value);
+  return isHouseholdMonth(parsed) ? parsed : null;
+}
+
+function latestNetWorthDate(dates: Array<string | null | undefined>): string | null {
+  return dates.filter((value): value is string => Boolean(value && /^\d{4}-\d{2}-\d{2}/.test(value))).sort().at(-1) ?? null;
 }
 
 async function ownsMember(userId: number, memberId: number | null): Promise<boolean> {
@@ -70,7 +79,7 @@ export async function GET(request: Request) {
       where: { userId, ...(memberId === null ? {} : { memberId }) },
       include: {
         member: true,
-        histories: { orderBy: [{ asOfDate: "asc" }, { createdAt: "asc" }] },
+        histories: { orderBy: [{ month: "desc" }, { createdAt: "desc" }] },
       },
       orderBy: [{ platform: "asc" }, { name: "asc" }],
     }),
@@ -102,17 +111,36 @@ export async function GET(request: Request) {
     }),
   ]);
 
-  const directionRows = directions.map((direction) => {
-    const latestSnapshot = direction.householdSnapshots.at(-1) || null;
+  const directionViews = directions.map((direction) => {
+    const orderedSnapshots = [...direction.householdSnapshots].sort((a, b) => a.month.localeCompare(b.month));
+    const latestSnapshot = orderedSnapshots.at(-1) || null;
+    const currentValue = calculateDirectionMarketValue(direction.funds);
+    const snapshotValues = orderedSnapshots.map((snapshot) => Number(snapshot.value));
     return {
-      id: direction.id,
-      name: direction.name,
-      type: direction.type,
-      householdMemberId: direction.householdMemberId,
-      householdMember: direction.householdMember,
-      currentValue: calculateDirectionMarketValue(direction.funds),
-      snapshotValue: latestSnapshot?.value ?? null,
-      snapshotAsOfDate: latestSnapshot?.asOfDate ?? null,
+      direction,
+      orderedSnapshots,
+      latestSnapshot,
+      currentValue,
+      snapshotValues,
+      shown: showsHouseholdDirection(currentValue, latestSnapshot ? Number(latestSnapshot.value) : null),
+      keptInHistory: keepsHouseholdDirectionHistory(currentValue, snapshotValues),
+    };
+  });
+  const directionRows = directionViews.filter((view) => view.shown).map((view) => {
+    const netWorthDate = latestNetWorthDate(view.direction.funds.map((fund) => fund.netWorthDate));
+    return {
+      id: view.direction.id,
+      name: view.direction.name,
+      type: view.direction.type,
+      householdMemberId: view.direction.householdMemberId,
+      householdMember: view.direction.householdMember,
+      currentValue: view.currentValue,
+      latestNetWorthDate: netWorthDate,
+      snapshotValue: view.latestSnapshot?.value ?? null,
+      snapshotMonth: view.latestSnapshot?.month ?? null,
+      snapshots: [...view.orderedSnapshots]
+        .reverse()
+        .map((snapshot) => ({ id: snapshot.id, month: snapshot.month, value: snapshot.value.toString() })),
     };
   });
   const history = buildMonthlyHouseholdHistory(
@@ -121,20 +149,32 @@ export async function GET(request: Request) {
       category: asset.platform,
       value: snapshot.balance.toString(),
       date: snapshot.asOfDate,
+      month: snapshot.month,
     }))),
-    directions.flatMap((direction) => direction.householdSnapshots.map((snapshot) => ({
-      sourceId: direction.id,
+    directionViews.filter((view) => view.keptInHistory).flatMap((view) => view.orderedSnapshots.map((snapshot) => ({
+      sourceId: view.direction.id,
       value: snapshot.value.toString(),
       date: snapshot.asOfDate,
+      month: snapshot.month,
     }))),
   );
-  const currentMonth = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}`;
+  const netWorthDates = directions.flatMap((direction) => direction.funds.map((fund) => fund.netWorthDate));
+  const currentMonth = currentHouseholdMonth();
   const maintenanceDates = [
-    ...assets.map((asset) => asset.asOfDate),
-    ...directions.map((direction) => direction.householdSnapshots.find((snapshot) => snapshot.month === currentMonth)?.asOfDate ?? ""),
+    ...assets.map((asset) => asset.histories[0]?.asOfDate ?? asset.asOfDate),
+    ...directionViews.filter((view) => view.shown).map((view) => view.orderedSnapshots.find((snapshot) => snapshot.month === currentMonth)?.asOfDate ?? ""),
   ];
 
-  return NextResponse.json({ members, assets, insurancePlans, directions: directionRows, history, maintenanceDates });
+  return NextResponse.json({
+    members,
+    assets,
+    insurancePlans,
+    directions: directionRows,
+    history,
+    maintenanceDates,
+    suggestedSnapshotMonth: suggestSnapshotMonth(netWorthDates),
+    latestNetWorthDate: latestNetWorthDate(netWorthDates),
+  });
 }
 
 export async function POST(request: Request) {
@@ -156,12 +196,13 @@ export async function POST(request: Request) {
     const name = text(body.name);
     const platform = text(body.platform);
     const balance = amount(body.balance);
-    const asOfDate = date(body.asOfDate);
+    const assetMonth = month(body.month);
     const memberId = body.memberId ? Number(body.memberId) : null;
-    if (!name || !PLATFORMS.includes(platform) || balance === null || !asOfDate || (memberId !== null && !Number.isInteger(memberId))) {
+    if (!name || !PLATFORMS.includes(platform) || balance === null || !assetMonth || (memberId !== null && !Number.isInteger(memberId))) {
       return invalid("请完整填写资产账户信息");
     }
     if (!await ownsMember(userId, memberId)) return invalid("家庭成员不存在");
+    const asOfDate = monthToAsOfDate(assetMonth);
     return NextResponse.json(await prisma.householdAsset.create({
       data: {
         userId,
@@ -171,28 +212,37 @@ export async function POST(request: Request) {
         balance,
         asOfDate,
         remark: text(body.remark) || null,
-        histories: { create: { balance, asOfDate } },
+        histories: { create: { balance, asOfDate, month: assetMonth } },
       },
-      include: { member: true, histories: true },
+      include: { member: true, histories: { orderBy: { month: "desc" } } },
     }));
   }
 
   if (resource === "syncDirections") {
-    const now = new Date();
-    const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    const snapshotMonth = month(body.month);
+    if (!snapshotMonth) return invalid("请选择快照月份");
+    const asOfDate = monthToAsOfDate(snapshotMonth);
     const directions = await prisma.investmentDirection.findMany({
       where: directionOwnership(userId),
-      include: { funds: { include: { transactions: { orderBy: { date: "asc" } } } } },
+      include: {
+        householdSnapshots: { select: { month: true, value: true } },
+        funds: { include: { transactions: { orderBy: { date: "asc" } } } },
+      },
     });
-    await prisma.$transaction(directions.map((direction) => {
+    const tracked = directions.flatMap((direction) => {
       const value = calculateDirectionMarketValue(direction.funds);
-      return prisma.householdDirectionSnapshot.upsert({
-        where: { directionId_month: { directionId: direction.id, month } },
-        update: { value, asOfDate: now },
-        create: { directionId: direction.id, month, value, asOfDate: now },
-      });
-    }));
-    return NextResponse.json({ success: true, count: directions.length, month });
+      const visible = tracksHouseholdDirection(
+        value,
+        direction.householdSnapshots.map((snapshot) => ({ month: snapshot.month, value: snapshot.value.toString() })),
+      );
+      return visible ? [{ id: direction.id, value }] : [];
+    });
+    await prisma.$transaction(tracked.map((direction) => prisma.householdDirectionSnapshot.upsert({
+      where: { directionId_month: { directionId: direction.id, month: snapshotMonth } },
+      update: { value: direction.value, asOfDate },
+      create: { directionId: direction.id, month: snapshotMonth, value: direction.value, asOfDate },
+    })));
+    return NextResponse.json({ success: true, count: tracked.length, month: snapshotMonth });
   }
 
   if (resource === "copyPlan") {
@@ -343,29 +393,67 @@ export async function PUT(request: Request) {
   }
 
   if (resource === "asset") {
-    const name = text(body.name);
-    const platform = text(body.platform);
-    const balance = amount(body.balance);
-    const asOfDate = date(body.asOfDate);
-    const memberId = body.memberId ? Number(body.memberId) : null;
-    if (!name || !PLATFORMS.includes(platform) || balance === null || !asOfDate || (memberId !== null && !Number.isInteger(memberId))) return invalid("请完整填写资产账户信息");
-    if (!await ownsMember(userId, memberId)) return invalid("家庭成员不存在");
     const existing = await prisma.householdAsset.findFirst({ where: { id, userId } });
     if (!existing) return NextResponse.json({ error: "资产账户不存在" }, { status: 404 });
-    const balanceChanged = !existing.balance.equals(balance);
-    const dateChanged = existing.asOfDate.getTime() !== asOfDate.getTime();
+    const historyInclude = { member: true, histories: { orderBy: { month: "desc" as const } } };
+
+    if (body.historyOnly === true) {
+      const balance = amount(body.balance);
+      const assetMonth = month(body.month);
+      const historyId = body.historyId ? Number(body.historyId) : null;
+      if (balance === null || !assetMonth || (historyId !== null && !Number.isInteger(historyId))) return invalid("请填写月份和余额");
+      const asOfDate = monthToAsOfDate(assetMonth);
+      const saved = await prisma.$transaction(async (tx) => {
+        if (historyId !== null) {
+          const row = await tx.householdAssetHistory.findFirst({ where: { id: historyId, assetId: id } });
+          if (!row) return null;
+          const conflict = await tx.householdAssetHistory.findFirst({ where: { assetId: id, month: assetMonth, id: { not: historyId } } });
+          if (conflict) return "conflict" as const;
+          await tx.householdAssetHistory.update({ where: { id: historyId }, data: { month: assetMonth, balance, asOfDate } });
+        } else {
+          const conflict = await tx.householdAssetHistory.findFirst({ where: { assetId: id, month: assetMonth } });
+          if (conflict) return "conflict" as const;
+          await tx.householdAssetHistory.create({ data: { assetId: id, month: assetMonth, balance, asOfDate } });
+        }
+        const latest = await tx.householdAssetHistory.findFirst({ where: { assetId: id }, orderBy: { month: "desc" } });
+        return tx.householdAsset.update({
+          where: { id },
+          data: { balance: latest?.balance ?? balance, asOfDate: latest?.asOfDate ?? asOfDate },
+          include: historyInclude,
+        });
+      });
+      if (saved === "conflict") return invalid("该月已有记录，请直接修改那一条");
+      if (!saved) return NextResponse.json({ error: "历史记录不存在" }, { status: 404 });
+      return NextResponse.json(saved);
+    }
+
+    const name = text(body.name);
+    const platform = text(body.platform);
+    const memberId = body.memberId ? Number(body.memberId) : null;
+    if (!name || !PLATFORMS.includes(platform) || (memberId !== null && !Number.isInteger(memberId))) return invalid("请完整填写资产账户信息");
+    if (!await ownsMember(userId, memberId)) return invalid("家庭成员不存在");
     return NextResponse.json(await prisma.householdAsset.update({
       where: { id },
-      data: {
-        memberId,
-        name,
-        platform,
-        balance,
-        asOfDate,
-        remark: text(body.remark) || null,
-        ...(balanceChanged || dateChanged ? { histories: { create: { balance, asOfDate } } } : {}),
-      },
-      include: { member: true, histories: { orderBy: [{ asOfDate: "asc" }, { createdAt: "asc" }] } },
+      data: { memberId, name, platform, remark: text(body.remark) || null },
+      include: historyInclude,
+    }));
+  }
+
+  if (resource === "directionSnapshot") {
+    const snapshotMonth = month(body.month);
+    if (!snapshotMonth) return invalid("请选择快照月份");
+    const snapshot = await prisma.householdDirectionSnapshot.findFirst({
+      where: { id, direction: directionOwnership(userId) },
+    });
+    if (!snapshot) return NextResponse.json({ error: "快照不存在" }, { status: 404 });
+    const conflict = await prisma.householdDirectionSnapshot.findFirst({
+      where: { directionId: snapshot.directionId, month: snapshotMonth, id: { not: snapshot.id } },
+      select: { id: true },
+    });
+    if (conflict) return invalid("该月已有快照，请先删除后再调整");
+    return NextResponse.json(await prisma.householdDirectionSnapshot.update({
+      where: { id: snapshot.id },
+      data: { month: snapshotMonth, asOfDate: monthToAsOfDate(snapshotMonth) },
     }));
   }
 
@@ -411,6 +499,40 @@ export async function DELETE(request: Request) {
   const resource = searchParams.get("resource");
   const id = Number(searchParams.get("id"));
   if (!Number.isInteger(id)) return invalid();
+
+  if (resource === "assetHistory") {
+    const history = await prisma.householdAssetHistory.findFirst({
+      where: { id, asset: { userId } },
+    });
+    if (!history) return NextResponse.json({ error: "记录不存在" }, { status: 404 });
+    if (await prisma.householdAssetHistory.count({ where: { assetId: history.assetId } }) <= 1) {
+      return invalid("至少保留一条月份记录");
+    }
+    await prisma.$transaction(async (tx) => {
+      await tx.householdAssetHistory.delete({ where: { id } });
+      const latest = await tx.householdAssetHistory.findFirst({
+        where: { assetId: history.assetId },
+        orderBy: { month: "desc" },
+      });
+      if (latest) {
+        await tx.householdAsset.update({
+          where: { id: history.assetId },
+          data: { balance: latest.balance, asOfDate: latest.asOfDate },
+        });
+      }
+    });
+    return NextResponse.json({ success: true });
+  }
+
+  if (resource === "directionSnapshot") {
+    const snapshot = await prisma.householdDirectionSnapshot.findFirst({
+      where: { id, direction: directionOwnership(userId) },
+      select: { id: true },
+    });
+    if (!snapshot) return NextResponse.json({ error: "记录不存在" }, { status: 404 });
+    await prisma.householdDirectionSnapshot.delete({ where: { id } });
+    return NextResponse.json({ success: true });
+  }
 
   const result = resource === "member"
     ? await prisma.householdMember.deleteMany({ where: { id, userId } })

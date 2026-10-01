@@ -56,9 +56,13 @@ import {
   hasAnnualPolicyGap,
   insurancePremiumsByYear,
   isAnnualPolicyRenewalDue,
+  formatWanAxis,
   isHouseholdAssetUpdateDue,
+  monthAxisAnchor,
   nextAnnualPolicyPeriod,
   previousAnnualPolicyPeriod,
+  shiftHouseholdMonth,
+  suggestSnapshotMonth,
 } from "@/lib/household-assets";
 
 const { Title, Text } = Typography;
@@ -95,7 +99,13 @@ interface Asset {
   balance: string;
   asOfDate: string;
   remark: string | null;
-  histories: Array<{ id: number; balance: string; asOfDate: string }>;
+  histories: Array<{ id: number; balance: string; asOfDate: string; month: string }>;
+}
+
+interface DirectionSnapshot {
+  id: number;
+  month: string;
+  value: string;
 }
 
 interface Direction {
@@ -103,8 +113,10 @@ interface Direction {
   name: string;
   householdMember: Member | null;
   currentValue: number;
+  latestNetWorthDate: string | null;
   snapshotValue: string | null;
-  snapshotAsOfDate: string | null;
+  snapshotMonth: string | null;
+  snapshots: DirectionSnapshot[];
 }
 
 interface Payment {
@@ -146,9 +158,14 @@ interface AssetFormValues {
   name: string;
   platform: string;
   memberId?: number;
-  balance: number;
-  asOfDate: Dayjs;
+  balance?: number;
+  month?: Dayjs;
   remark?: string;
+}
+
+interface MonthFormValues {
+  month: Dayjs;
+  balance: number;
 }
 
 interface PolicyFormValues {
@@ -169,6 +186,26 @@ interface PolicyFormValues {
 
 const money = (value: number | string) =>
   `¥${Number(value).toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+function MonthAxisTick({
+  x = 0,
+  y = 0,
+  payload,
+  index = 0,
+  visibleTicksCount = 0,
+}: {
+  x?: number;
+  y?: number;
+  payload?: { value?: string };
+  index?: number;
+  visibleTicksCount?: number;
+}) {
+  return (
+    <text x={x} y={y} dy={14} textAnchor={monthAxisAnchor(index, visibleTicksCount)} fill="rgba(0,0,0,0.65)" fontSize={12}>
+      {payload?.value}
+    </text>
+  );
+}
 
 export default function HouseholdAssetsPage() {
   const { message } = App.useApp();
@@ -194,8 +231,18 @@ export default function HouseholdAssetsPage() {
   const [copyTargetMemberId, setCopyTargetMemberId] = useState<number>();
   const [paymentPolicy, setPaymentPolicy] = useState<Policy | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [syncOpen, setSyncOpen] = useState(false);
+  const [syncMonth, setSyncMonth] = useState<Dayjs | null>(null);
+  const [syncDirections, setSyncDirections] = useState<Direction[]>([]);
+  const [syncNetWorthDate, setSyncNetWorthDate] = useState<string | null>(null);
+  const [monthDraft, setMonthDraft] = useState<{ historyId: number | null } | null>(null);
+  const [historyAssetId, setHistoryAssetId] = useState<number | null>(null);
+  const [snapshotEdit, setSnapshotEdit] = useState<{ id: number; directionName: string } | null>(null);
+  const [snapshotMonth, setSnapshotMonth] = useState<Dayjs | null>(null);
+  const [historyDirectionId, setHistoryDirectionId] = useState<number | null>(null);
   const [memberForm] = Form.useForm();
   const [assetForm] = Form.useForm<AssetFormValues>();
+  const [monthForm] = Form.useForm<MonthFormValues>();
   const [policyForm] = Form.useForm<PolicyFormValues>();
   const [paymentForm] = Form.useForm();
   const policyCoverageMode = Form.useWatch("coverageMode", policyForm);
@@ -208,6 +255,7 @@ export default function HouseholdAssetsPage() {
       if (!response.ok) throw new Error(data.error);
       setMembers(data.members);
       setAssets(data.assets);
+      setEditingAsset((current) => current ? (data.assets as Asset[]).find((asset) => asset.id === current.id) || null : null);
       setInsurancePlans(data.insurancePlans);
       setDirections(data.directions);
       setHistory(data.history);
@@ -223,6 +271,13 @@ export default function HouseholdAssetsPage() {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  useEffect(() => {
+    const historyAsset = assets.find((asset) => asset.id === historyAssetId);
+    if (monthDraft?.historyId == null || !historyAsset) return;
+    if (historyAsset.histories.some((history) => history.id === monthDraft.historyId)) return;
+    setMonthDraft(null);
+  }, [assets, historyAssetId, monthDraft]);
 
   const totals = useMemo(() => {
     const sum = (platforms?: string[]) => assets.reduce(
@@ -308,6 +363,11 @@ export default function HouseholdAssetsPage() {
       const response = await fetch(`/api/household-assets?resource=${resource}&id=${id}`, { method: "DELETE" });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error);
+      if (resource === "asset") {
+        setAssetOpen(false);
+        setHistoryAssetId(null);
+        setMonthDraft(null);
+      }
       if (resource === "member" && selectedMemberId === id) {
         setSelectedMemberId(null);
         message.success("删除成功");
@@ -320,8 +380,27 @@ export default function HouseholdAssetsPage() {
     }
   };
 
-  const syncDirections = async () => {
-    await save("POST", { resource: "syncDirections" }, "已更新本月投资方向快照");
+  const openSync = async () => {
+    setSubmitting(true);
+    try {
+      const response = await fetch("/api/household-assets");
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error);
+      setSyncDirections(data.directions);
+      setSyncNetWorthDate(data.latestNetWorthDate ?? null);
+      setSyncMonth(data.suggestedSnapshotMonth ? dayjs(`${data.suggestedSnapshotMonth}-01`) : dayjs());
+      setSyncOpen(true);
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : "加载投资方向失败");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const confirmSync = async () => {
+    if (!syncMonth) return;
+    const month = syncMonth.format("YYYY-MM");
+    if (await save("POST", { resource: "syncDirections", month }, `已写入 ${month} 投资方向快照`)) setSyncOpen(false);
   };
 
   const copyAnnualPlan = async () => {
@@ -344,20 +423,66 @@ export default function HouseholdAssetsPage() {
 
   const openAsset = (asset?: Asset) => {
     setEditingAsset(asset || null);
+    assetForm.resetFields();
     assetForm.setFieldsValue(asset ? {
       name: asset.name,
       platform: asset.platform,
       memberId: asset.memberId || undefined,
-      balance: Number(asset.balance),
-      asOfDate: dayjs(asset.asOfDate),
       remark: asset.remark || undefined,
     } : {
       name: "",
       platform: "QIEMAN",
       balance: 0,
-      asOfDate: dayjs(),
+      month: dayjs(`${suggestSnapshotMonth([])}-01`),
     });
     setAssetOpen(true);
+  };
+
+  const openAssetHistory = (asset: Asset) => {
+    setMonthDraft(null);
+    monthForm.resetFields();
+    setHistoryAssetId(asset.id);
+  };
+
+  const closeAssetHistory = () => {
+    setHistoryAssetId(null);
+    setMonthDraft(null);
+  };
+
+  const editAssetMonth = (history: Asset["histories"][number]) => {
+    monthForm.setFieldsValue({ month: dayjs(`${history.month}-01`), balance: Number(history.balance) });
+    setMonthDraft({ historyId: history.id });
+  };
+
+  const startNewAssetMonth = () => {
+    const historyAsset = assets.find((asset) => asset.id === historyAssetId);
+    const months = historyAsset?.histories.map((history) => history.month) ?? [];
+    const suggested = suggestSnapshotMonth([]);
+    const latest = [...months].sort().at(-1);
+    const next = !latest || !months.includes(suggested) ? suggested : shiftHouseholdMonth(latest, 1);
+    monthForm.setFieldsValue({
+      month: dayjs(`${next}-01`),
+      balance: historyAsset ? Number(historyAsset.balance) : 0,
+    });
+    setMonthDraft({ historyId: null });
+  };
+
+  const saveAssetMonth = async (values: MonthFormValues) => {
+    const historyAsset = assets.find((asset) => asset.id === historyAssetId);
+    if (!historyAsset || !monthDraft) return;
+    const saved = await save("PUT", {
+      resource: "asset",
+      historyOnly: true,
+      id: historyAsset.id,
+      historyId: monthDraft.historyId,
+      month: values.month.format("YYYY-MM"),
+      balance: values.balance,
+    }, "已保存该月");
+    if (saved) setMonthDraft(null);
+  };
+
+  const closeAsset = () => {
+    setAssetOpen(false);
   };
 
   const openPolicy = (policy?: Policy, plan?: InsurancePlan) => {
@@ -464,24 +589,36 @@ export default function HouseholdAssetsPage() {
     setPaymentOpen(true);
   };
 
+  const historyDirection = directions.find((direction) => direction.id === historyDirectionId) || null;
+  const historyAsset = assets.find((asset) => asset.id === historyAssetId) || null;
   const platform = (value: string) => platformOptions.find((option) => option.value === value);
   const policyType = (value: string) => policyTypeOptions.find((option) => option.value === value)?.label || value;
 
   const directionCards = directions.length ? (
     <Row gutter={[16, 16]}>
       {directions.map((direction) => {
-        const stale = !direction.snapshotAsOfDate || dayjs(direction.snapshotAsOfDate).format("YYYY-MM") !== dayjs().format("YYYY-MM");
+        const stale = isHouseholdAssetUpdateDue(direction.snapshotMonth ? [`${direction.snapshotMonth}-15T12:00:00.000Z`] : [""]);
+        const netWorthMonth = direction.latestNetWorthDate?.slice(0, 7);
         return (
           <Col xs={24} md={12} xl={8} key={direction.id}>
             <Card title={<Flex gap={8} wrap><span style={{ overflowWrap: "anywhere" }}>{direction.name}</span><Tag color="geekblue">投资方向</Tag></Flex>} style={{ height: "100%" }}>
               <Statistic value={Number(direction.snapshotValue || 0)} precision={2} prefix="¥" valueStyle={{ fontSize: 24 }} />
               <Descriptions size="small" column={1} style={{ marginTop: 12 }}>
                 <Descriptions.Item label="归属">{direction.householdMember?.name || "家庭共有"}</Descriptions.Item>
-                <Descriptions.Item label="快照日期">
-                  <Space>{direction.snapshotAsOfDate ? dayjs(direction.snapshotAsOfDate).format("YYYY-MM-DD") : "尚未同步"}{stale && <Tag color="warning">待更新</Tag>}</Space>
+                <Descriptions.Item label="快照月份">
+                  <Space wrap>{direction.snapshotMonth || "尚未同步"}{stale && <Tag color="warning">待更新</Tag>}</Space>
                 </Descriptions.Item>
+                <Descriptions.Item label="最新净值">{direction.latestNetWorthDate || "暂无"}</Descriptions.Item>
                 <Descriptions.Item label="当前可同步市值">{money(direction.currentValue)}</Descriptions.Item>
               </Descriptions>
+              {netWorthMonth && direction.snapshotMonth && netWorthMonth !== direction.snapshotMonth && (
+                <Text type="secondary" style={{ fontSize: 12 }}>当前市值对应的净值月份是 {netWorthMonth}</Text>
+              )}
+              {direction.snapshots.length > 0 && (
+                <Button block style={{ marginTop: 12 }} onClick={() => setHistoryDirectionId(direction.id)}>
+                  月份记录（{direction.snapshots.length}）
+                </Button>
+              )}
             </Card>
           </Col>
         );
@@ -493,27 +630,32 @@ export default function HouseholdAssetsPage() {
     <Row gutter={[16, 16]}>
       {assets.map((asset) => {
         const option = platform(asset.platform);
-        const stale = dayjs(asset.asOfDate).format("YYYY-MM") !== dayjs().format("YYYY-MM");
+        const assetMonth = asset.histories[0]?.month || dayjs(asset.asOfDate).format("YYYY-MM");
+        const stale = isHouseholdAssetUpdateDue([asset.histories[0]?.asOfDate || asset.asOfDate]);
         return (
-          <Col xs={24} md={12} xl={8} key={asset.id}>
+          <Col xs={24} md={12} xl={8} key={asset.id} style={{ display: "flex" }}>
             <Card
               title={<Flex gap={8} wrap align="center"><span style={{ overflowWrap: "anywhere" }}>{asset.name}</span><Tag color={option?.color}>{option?.label || asset.platform}</Tag></Flex>}
-              extra={<Space size={4}>
-                <Button type="text" icon={<EditOutlined />} onClick={() => openAsset(asset)} aria-label={`编辑${asset.name}`} />
-                <Popconfirm title="删除这个资产账户？" onConfirm={() => remove("asset", asset.id)}>
-                  <Button type="text" danger icon={<DeleteOutlined />} aria-label={`删除${asset.name}`} />
-                </Popconfirm>
-              </Space>}
-              style={{ height: "100%" }}
+              extra={<Popconfirm title="删除这个资产账户？" onConfirm={() => remove("asset", asset.id)}>
+                <Button type="text" danger icon={<DeleteOutlined />} aria-label={`删除${asset.name}`} />
+              </Popconfirm>}
+              style={{ flex: 1, display: "flex", flexDirection: "column" }}
+              styles={{ body: { display: "flex", flex: 1, flexDirection: "column" } }}
             >
-              <Statistic value={Number(asset.balance)} precision={2} prefix="¥" valueStyle={{ fontSize: 24 }} />
-              <Descriptions size="small" column={1} style={{ marginTop: 12 }}>
-                <Descriptions.Item label="归属">{asset.member?.name || "家庭共有"}</Descriptions.Item>
-                <Descriptions.Item label="数据日期">
-                  <Space>{dayjs(asset.asOfDate).format("YYYY-MM-DD")}{stale && <Tag color="warning">待更新</Tag>}</Space>
-                </Descriptions.Item>
-                {asset.remark && <Descriptions.Item label="备注">{asset.remark}</Descriptions.Item>}
-              </Descriptions>
+              <Flex vertical gap={12} style={{ flex: 1 }}>
+                <Statistic value={Number(asset.balance)} precision={2} prefix="¥" valueStyle={{ fontSize: 24 }} />
+                <Descriptions size="small" column={1}>
+                  <Descriptions.Item label="归属">{asset.member?.name || "家庭共有"}</Descriptions.Item>
+                  <Descriptions.Item label="数据月份">
+                    <Space wrap>{assetMonth}{stale && <Tag color="warning">待更新</Tag>}</Space>
+                  </Descriptions.Item>
+                  {asset.remark && <Descriptions.Item label="备注">{asset.remark}</Descriptions.Item>}
+                </Descriptions>
+                <Flex vertical gap={8} style={{ marginTop: "auto" }}>
+                  <Button block onClick={() => openAsset(asset)}>编辑账户</Button>
+                  <Button block onClick={() => openAssetHistory(asset)}>月份记录（{asset.histories.length}）</Button>
+                </Flex>
+              </Flex>
             </Card>
           </Col>
         );
@@ -661,6 +803,35 @@ export default function HouseholdAssetsPage() {
     </Flex>
   ) : <Empty description="还没有保险保障项目" />;
 
+  const assetMonthEditor = (
+    <Form form={monthForm} layout="vertical" onFinish={saveAssetMonth} style={{ padding: 12, background: "#e6f4ff", borderRadius: 8 }}>
+      <Row gutter={12}>
+        <Col xs={24} sm={12}>
+          <Form.Item name="month" label="月份" rules={[{ required: true, message: "请选择月份" }]}>
+            <DatePicker
+              picker="month"
+              format="YYYY-MM"
+              style={{ width: "100%" }}
+              disabledDate={(current) => {
+                const key = current?.format("YYYY-MM");
+                return Boolean(key && historyAsset?.histories.some((history) => history.month === key && history.id !== monthDraft?.historyId));
+              }}
+            />
+          </Form.Item>
+        </Col>
+        <Col xs={24} sm={12}>
+          <Form.Item name="balance" label="余额" rules={[{ required: true, message: "请填写余额" }]}>
+            <InputNumber min={0} precision={2} prefix="¥" style={{ width: "100%" }} />
+          </Form.Item>
+        </Col>
+      </Row>
+      <Flex gap={8} wrap>
+        <Button type="primary" htmlType="submit" loading={submitting}>保存该月</Button>
+        <Button onClick={() => setMonthDraft(null)}>取消</Button>
+      </Flex>
+    </Form>
+  );
+
   return (
     <div className="min-h-screen bg-gray-50 p-4 md:p-8">
       <div className="mx-auto max-w-7xl">
@@ -679,7 +850,7 @@ export default function HouseholdAssetsPage() {
                 ...members.map((member) => ({ value: member.id, label: member.name })),
               ]}
             />
-            <Button onClick={syncDirections} loading={submitting}>同步本月投资方向</Button>
+            <Button onClick={openSync} loading={submitting}>同步投资方向</Button>
             <Button icon={<TeamOutlined />} onClick={() => openMember()}>添加成员</Button>
             <Button icon={<SafetyCertificateOutlined />} onClick={() => openPolicy()}>添加保险保障</Button>
             <Button type="primary" icon={<PlusOutlined />} onClick={() => openAsset()}>添加资产</Button>
@@ -733,12 +904,12 @@ export default function HouseholdAssetsPage() {
 
           <Card title="家庭资产月度走势" style={{ marginBottom: 20 }}>
             {history.length ? (
-              <div style={{ width: "100%", height: 320, overflow: "hidden" }}>
+              <div style={{ width: "100%", height: 320 }}>
                 <ResponsiveContainer>
-                  <LineChart data={history} margin={{ top: 8, right: 8, left: 0, bottom: 8 }}>
+                  <LineChart data={history} margin={{ top: 16, right: 8, left: 4, bottom: 4 }}>
                     <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="month" minTickGap={20} />
-                    <YAxis width={64} tickFormatter={(value) => Number(value).toLocaleString("zh-CN")} />
+                    <XAxis dataKey="month" interval="preserveStartEnd" minTickGap={8} tick={MonthAxisTick} tickLine={false} />
+                    <YAxis width={52} tickFormatter={(value) => formatWanAxis(Number(value))} />
                     <ChartTooltip formatter={(value) => money(Number(value))} />
                     <Legend />
                     <Line type="monotone" dataKey="total" name="总资产" stroke="#1677ff" strokeWidth={2} />
@@ -798,19 +969,160 @@ export default function HouseholdAssetsPage() {
         </Form>
       </Modal>
 
-      <Modal title={editingAsset ? "编辑资产账户" : "添加资产账户"} open={assetOpen} onCancel={() => setAssetOpen(false)} onOk={() => assetForm.submit()} confirmLoading={submitting} width={640} forceRender>
+      <Modal
+        title={editingAsset ? "编辑资产账户" : "添加资产账户"}
+        open={assetOpen}
+        onCancel={closeAsset}
+        onOk={() => assetForm.submit()}
+        confirmLoading={submitting}
+        okText={editingAsset ? "保存账户" : "添加"}
+        cancelText={editingAsset ? "关闭" : "取消"}
+        width="min(640px, calc(100vw - 32px))"
+        styles={{ body: { maxHeight: "70vh", overflowY: "auto" } }}
+        forceRender
+      >
         <Form form={assetForm} layout="vertical" onFinish={async (values) => {
-          if (await save(editingAsset ? "PUT" : "POST", { resource: "asset", id: editingAsset?.id, ...values, asOfDate: values.asOfDate.toISOString() })) setAssetOpen(false);
+          if (!editingAsset) {
+            if (!values.month) return;
+            if (await save("POST", {
+              resource: "asset",
+              ...values,
+              month: values.month.format("YYYY-MM"),
+            })) closeAsset();
+            return;
+          }
+          if (await save("PUT", {
+            resource: "asset",
+            id: editingAsset.id,
+            name: values.name,
+            platform: values.platform,
+            memberId: values.memberId,
+            remark: values.remark,
+          })) closeAsset();
         }}>
           <Row gutter={16}>
             <Col xs={24} sm={12}><Form.Item name="name" label="账户名称" rules={[{ required: true }]}><Input placeholder="例如：且慢长期账户" maxLength={100} /></Form.Item></Col>
             <Col xs={24} sm={12}><Form.Item name="platform" label="平台" rules={[{ required: true }]}><Select options={platformOptions.map(({ value, label }) => ({ value, label }))} /></Form.Item></Col>
             <Col xs={24} sm={12}><Form.Item name="memberId" label="归属成员"><Select allowClear placeholder="家庭共有" options={members.map((member) => ({ value: member.id, label: member.name }))} /></Form.Item></Col>
-            <Col xs={24} sm={12}><Form.Item name="balance" label="当前余额" rules={[{ required: true }]}><InputNumber min={0} precision={2} prefix="¥" style={{ width: "100%" }} /></Form.Item></Col>
-            <Col xs={24} sm={12}><Form.Item name="asOfDate" label="数据日期" rules={[{ required: true }]}><DatePicker style={{ width: "100%" }} /></Form.Item></Col>
+            {!editingAsset && (
+              <>
+                <Col xs={24} sm={12}><Form.Item name="balance" label="首月余额" rules={[{ required: true, message: "请填写余额" }]}><InputNumber min={0} precision={2} prefix="¥" style={{ width: "100%" }} /></Form.Item></Col>
+                <Col xs={24} sm={12}><Form.Item name="month" label="起始月份" rules={[{ required: true, message: "请选择月份" }]}><DatePicker picker="month" format="YYYY-MM" style={{ width: "100%" }} /></Form.Item></Col>
+              </>
+            )}
             <Col xs={24}><Form.Item name="remark" label="备注"><Input.TextArea rows={2} maxLength={500} /></Form.Item></Col>
           </Row>
         </Form>
+      </Modal>
+
+      <Modal
+        title={<span style={{ overflowWrap: "anywhere" }}>{historyAsset ? `月份记录 · ${historyAsset.name}` : "月份记录"}</span>}
+        open={historyAssetId !== null}
+        onCancel={closeAssetHistory}
+        footer={null}
+        width="min(640px, calc(100vw - 32px))"
+        styles={{ body: { maxHeight: "70vh", overflowY: "auto" } }}
+      >
+        {historyAsset ? (
+          <Flex vertical gap={8}>
+            <Flex justify="space-between" align="center" gap={8} wrap>
+              <Text type="secondary">在这里查看和补记每个月的余额。</Text>
+              <Button size="small" icon={<PlusOutlined />} onClick={startNewAssetMonth}>新增月份</Button>
+            </Flex>
+            {monthDraft?.historyId === null && assetMonthEditor}
+            {historyAsset.histories.length ? historyAsset.histories.map((history) => (
+              monthDraft?.historyId === history.id ? <div key={history.id}>{assetMonthEditor}</div> : (
+                <Flex key={history.id} justify="space-between" align="center" gap={8} wrap style={{ padding: "8px 12px", background: "#fafafa", borderRadius: 8 }}>
+                  <Text>{history.month}</Text>
+                  <Text style={{ overflowWrap: "anywhere" }}>{money(history.balance)}</Text>
+                  <Space size={0} wrap>
+                    <Button type="link" size="small" onClick={() => editAssetMonth(history)}>修改</Button>
+                    {historyAsset.histories.length > 1 && (
+                      <Popconfirm title={`删除 ${history.month} 的记录？`} onConfirm={() => remove("assetHistory", history.id)}>
+                        <Button type="link" size="small" danger>删除</Button>
+                      </Popconfirm>
+                    )}
+                  </Space>
+                </Flex>
+              )
+            )) : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="还没有月份记录" />}
+          </Flex>
+        ) : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="账户不存在" />}
+      </Modal>
+
+      <Modal
+        title="同步投资方向快照"
+        open={syncOpen}
+        onCancel={() => setSyncOpen(false)}
+        onOk={confirmSync}
+        confirmLoading={submitting}
+        okText="写入该月快照"
+        okButtonProps={{ disabled: !syncMonth || syncDirections.length === 0 }}
+        width="min(640px, calc(100vw - 32px))"
+        styles={{ body: { maxHeight: "70vh", overflowY: "auto" } }}
+      >
+        <Flex vertical gap={12}>
+          <Text>快照记入所选月份，不按点击同步的当天计算。当前市值来自最新净值日 {syncNetWorthDate || "未知"}。</Text>
+          <DatePicker picker="month" format="YYYY-MM" value={syncMonth} onChange={setSyncMonth} style={{ width: "100%" }} />
+          {syncMonth && syncDirections.some((direction) => direction.snapshots.some((snapshot) => snapshot.month === syncMonth.format("YYYY-MM"))) && (
+            <Alert showIcon type="warning" message="该月已有快照，写入后会用当前市值覆盖，其他月份保持不变。" />
+          )}
+          {syncDirections.length ? syncDirections.map((direction) => {
+            const existing = direction.snapshots.find((snapshot) => snapshot.month === syncMonth?.format("YYYY-MM"));
+            return (
+              <Flex key={direction.id} justify="space-between" align="flex-start" gap={8} wrap style={{ padding: "8px 12px", background: "#fafafa", borderRadius: 8 }}>
+                <Text style={{ overflowWrap: "anywhere" }}>{direction.name}</Text>
+                <Flex vertical align="flex-end">
+                  <Text>当前市值 {money(direction.currentValue)}</Text>
+                  <Text type="secondary" style={{ fontSize: 12 }}>{existing ? `该月已有 ${money(existing.value)}` : "该月尚未记录"}</Text>
+                </Flex>
+              </Flex>
+            );
+          }) : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有可同步的投资方向" />}
+        </Flex>
+      </Modal>
+
+      <Modal
+        title={`月份记录${historyDirection ? ` · ${historyDirection.name}` : ""}`}
+        open={historyDirectionId !== null}
+        onCancel={() => setHistoryDirectionId(null)}
+        footer={null}
+        width="min(640px, calc(100vw - 32px))"
+        styles={{ body: { maxHeight: "70vh", overflowY: "auto" } }}
+      >
+        {historyDirection && historyDirection.snapshots.length > 0 ? (
+          <Flex vertical gap={8}>
+            {historyDirection.snapshots.map((snapshot) => (
+              <Flex key={snapshot.id} justify="space-between" align="center" gap={8} wrap style={{ padding: "8px 12px", background: "#fafafa", borderRadius: 8 }}>
+                <Text>{snapshot.month}</Text>
+                <Text style={{ overflowWrap: "anywhere" }}>{money(snapshot.value)}</Text>
+                <Space size={0} wrap>
+                  <Button type="link" size="small" onClick={() => { setSnapshotEdit({ id: snapshot.id, directionName: historyDirection.name }); setSnapshotMonth(dayjs(`${snapshot.month}-01`)); }}>调整</Button>
+                  <Popconfirm title={`删除 ${snapshot.month} 的快照？`} onConfirm={() => remove("directionSnapshot", snapshot.id)}>
+                    <Button type="link" size="small" danger>删除</Button>
+                  </Popconfirm>
+                </Space>
+              </Flex>
+            ))}
+          </Flex>
+        ) : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="还没有月份记录" />}
+      </Modal>
+
+      <Modal
+        title={`调整快照月份${snapshotEdit ? `：${snapshotEdit.directionName}` : ""}`}
+        open={!!snapshotEdit}
+        onCancel={() => setSnapshotEdit(null)}
+        confirmLoading={submitting}
+        onOk={async () => {
+          if (!snapshotEdit || !snapshotMonth) return;
+          if (await save("PUT", { resource: "directionSnapshot", id: snapshotEdit.id, month: snapshotMonth.format("YYYY-MM") }, "已调整快照月份")) setSnapshotEdit(null);
+        }}
+        width="min(420px, calc(100vw - 32px))"
+      >
+        <Flex vertical gap={8}>
+          <Text type="secondary">只改这条快照所属的月份，金额保持不变。目标月份已有快照时需要先删除。</Text>
+          <DatePicker picker="month" format="YYYY-MM" value={snapshotMonth} onChange={setSnapshotMonth} style={{ width: "100%" }} />
+        </Flex>
       </Modal>
 
       <Modal

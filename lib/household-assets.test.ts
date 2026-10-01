@@ -3,12 +3,18 @@ import test from "node:test";
 import {
   buildMonthlyHouseholdHistory,
   cumulativeInsurancePremium,
+  formatWanAxis,
+  monthAxisAnchor,
   hasAnnualPolicyGap,
   insurancePremiumsByYear,
   isAnnualPolicyRenewalDue,
   isHouseholdAssetUpdateDue,
   nextAnnualPolicyPeriod,
   previousAnnualPolicyPeriod,
+  keepsHouseholdDirectionHistory,
+  showsHouseholdDirection,
+  suggestSnapshotMonth,
+  tracksHouseholdDirection,
 } from "./household-assets";
 import { Decimal } from "@prisma/client/runtime/library";
 import { calculateDirectionMarketValue } from "./fund-daily-profit";
@@ -39,6 +45,49 @@ test("keeps prior manual balances and combines direction values by month", () =>
     { month: "2026-01", total: 300, YUEBAO: 100, directions: 200 },
     { month: "2026-02", total: 350, YUEBAO: 120, directions: 230 },
   ]);
+});
+
+test("files a month-end snapshot by the selected month instead of the sync day", () => {
+  const history = buildMonthlyHouseholdHistory(
+    [{ sourceId: 1, category: "YUEBAO", value: 100, date: "2026-10-01T00:56:00.000Z", month: "2026-09" }],
+    [{ sourceId: 9, value: 200, date: "2026-10-01T00:38:00.000Z", month: "2026-09" }],
+  );
+
+  assert.deepEqual(history.map(({ month, total, YUEBAO, directions }) => ({ month, total, YUEBAO, directions })), [
+    { month: "2026-09", total: 300, YUEBAO: 100, directions: 200 },
+  ]);
+  assert.equal(suggestSnapshotMonth(["2026-09-29", "2026-09-30"], new Date("2026-10-01T00:38:00.000Z")), "2026-09");
+  assert.equal(suggestSnapshotMonth([], new Date("2026-10-01T00:38:00.000Z")), "2026-09");
+  assert.equal(suggestSnapshotMonth([], new Date("2026-10-20T04:00:00.000Z")), "2026-10");
+});
+
+test("formats household chart axes in wan and keeps the last month inside", () => {
+  assert.equal(formatWanAxis(0), "0");
+  assert.equal(formatWanAxis(500000), "50w");
+  assert.equal(formatWanAxis(1000000), "100w");
+  assert.equal(formatWanAxis(1550000), "155w");
+  assert.equal(formatWanAxis(12500), "1.3w");
+  assert.equal(formatWanAxis(-20000), "-2w");
+  assert.equal(monthAxisAnchor(0, 3), "start");
+  assert.equal(monthAxisAnchor(1, 3), "middle");
+  assert.equal(monthAxisAnchor(2, 3), "end");
+  assert.equal(monthAxisAnchor(0, 1), "middle");
+});
+
+test("hides a liquidated direction that only has residual cents", () => {
+  assert.equal(showsHouseholdDirection(0.06, 0.06), false);
+  assert.equal(keepsHouseholdDirectionHistory(0.08, [0.08, 0.08]), false);
+  assert.equal(tracksHouseholdDirection(0.06, [
+    { month: "2026-08", value: "0.06" },
+    { month: "2026-09", value: "0.06" },
+  ]), false);
+  assert.equal(showsHouseholdDirection(0.06, 120000), true);
+  assert.equal(showsHouseholdDirection(50000, 0.06), true);
+  assert.equal(keepsHouseholdDirectionHistory(0.06, [120000, 0.06]), true);
+  assert.equal(tracksHouseholdDirection(0.06, [
+    { month: "2026-08", value: 120000 },
+    { month: "2026-09", value: 0.06 },
+  ]), true);
 });
 
 test("calculates the current direction market value from confirmed holdings", () => {

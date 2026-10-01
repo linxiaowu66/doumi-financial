@@ -61,15 +61,17 @@ model HouseholdAsset {
   @@index([memberId])
 }
 
-// 家庭资产余额更新历史
+// 家庭资产余额更新历史，每个账户每月一条
 model HouseholdAssetHistory {
   id        Int            @id @default(autoincrement())
   assetId   Int
   asset     HouseholdAsset @relation(fields: [assetId], references: [id], onDelete: Cascade)
   balance   Decimal        @db.Decimal(15, 2)
+  month     String         @db.VarChar(7)
   asOfDate  DateTime
   createdAt DateTime       @default(now())
 
+  @@unique([assetId, month])
   @@index([assetId])
   @@index([asOfDate])
 }
