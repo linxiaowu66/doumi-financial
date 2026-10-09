@@ -1,0 +1,6 @@
+- [x] Scope authenticated portfolio APIs by user.
+- [x] Add goal cockpit metrics and dashboard display.
+- [x] Add category allocation bands and market-value alerts.
+- [x] Add portfolio attribution and risk metrics.
+- [x] Enrich AI strategy prompts and report metadata.
+- [x] Run typecheck and diff checks.

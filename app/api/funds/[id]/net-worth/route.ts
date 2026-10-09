@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
+import { getAuthenticatedUserId } from '@/lib/auth-scope';
 
 // PUT - 更新基金净值
 export async function PUT(
@@ -7,6 +8,8 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const userId = await getAuthenticatedUserId();
+    if (!userId) return NextResponse.json({ error: '未登录' }, { status: 401 });
     const { id } = await params;
     const body = await request.json();
     const { netWorth, netWorthDate } = body;
@@ -17,6 +20,8 @@ export async function PUT(
 
     const parsedNetWorth = parseFloat(netWorth);
     const dateStr = netWorthDate || null;
+    const owner = await prisma.fund.findFirst({ where: { id: parseInt(id), direction: { userId } }, select: { id: true } });
+    if (!owner) return NextResponse.json({ error: '基金不存在' }, { status: 404 });
 
     const [fund] = await prisma.$transaction([
       prisma.fund.update({

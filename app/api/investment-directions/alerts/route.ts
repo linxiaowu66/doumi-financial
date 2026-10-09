@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { Decimal } from "@prisma/client/runtime/library";
-import { isCategoryOverweight, categoryOverweightPercent } from "@/lib/category-position";
+import { getAuthenticatedUserId } from "@/lib/auth-scope";
 
 interface FundAlertItem {
   fundId: number;
@@ -31,10 +31,13 @@ interface FundAlertItem {
 // GET - 获取所有基金的预警信息
 export async function GET() {
   try {
+    const userId = await getAuthenticatedUserId();
+    if (!userId) return NextResponse.json({ error: "未登录" }, { status: 401 });
     const alerts: FundAlertItem[] = [];
 
     // 获取所有投资方向及其基金
     const directions = await prisma.investmentDirection.findMany({
+      where: { userId },
       include: {
         funds: {
           include: {
@@ -99,7 +102,6 @@ export async function GET() {
           (t) => t.categoryName === category,
         );
 
-        let categoryHoldingCost = 0;
         const categoryFundStats: Array<{
           fund: (typeof categoryFunds)[0];
           holdingCost: number;
@@ -139,9 +141,7 @@ export async function GET() {
             parseFloat(totalShares.toString()),
           );
           const holdingCost = normalizeZero(parseFloat(totalCost.toString()));
-
           categoryFundStats.push({ fund, holdingCost, holdingShares });
-          categoryHoldingCost += holdingCost;
         }
 
         // 检查分类仓位超标
@@ -150,13 +150,20 @@ export async function GET() {
           : 0;
         let isCategoryTargetReached = false;
         if (categoryTarget && targetPercentNum > 0) {
-          const targetAmount =
-            (Number(direction.expectedAmount) * targetPercentNum) / 100;
-          if (categoryHoldingCost >= targetAmount * 0.995) {
-            isCategoryTargetReached = true;
-          }
-          if (isCategoryOverweight(categoryHoldingCost, targetAmount)) {
-            const overweightPercent = categoryOverweightPercent(categoryHoldingCost, targetAmount);
+          // 分类目标以投资方向的“预期投入”为基准，不以当前市值为基准。
+          // 例如预期投入 180,000、目标仓位 40%，目标金额就是 72,000。
+          const expectedAmount = Number(direction.expectedAmount ?? 0);
+          const categoryHoldingCost = categoryFundStats.reduce(
+            (sum, item) => sum + item.holdingCost,
+            0,
+          );
+          const actualPercent = expectedAmount > 0
+            ? categoryHoldingCost / expectedAmount * 100
+            : 0;
+          const targetAmount = expectedAmount * targetPercentNum / 100;
+          isCategoryTargetReached = categoryHoldingCost >= targetAmount;
+          if (categoryHoldingCost > targetAmount) {
+            const overweightPercent = actualPercent - targetPercentNum;
             for (const { fund, holdingShares } of categoryFundStats) {
               if (holdingShares > 0) {
                 alerts.push({
@@ -167,7 +174,7 @@ export async function GET() {
                   directionName: direction.name,
                   category: fund.category,
                   alertType: "category_overweight",
-                  alertReason: `${category} 分类仓位超标 ${overweightPercent.toFixed(1)}%`,
+                  alertReason: `${category} 已投入 ¥${categoryHoldingCost.toFixed(2)}，占预期投入 ${actualPercent.toFixed(1)}%，已超过目标金额 ¥${targetAmount.toFixed(2)}`,
                   categoryHoldingCost,
                   categoryTargetAmount: targetAmount,
                   overweightPercent,

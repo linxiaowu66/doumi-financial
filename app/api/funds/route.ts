@@ -1,13 +1,18 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
+import { getAuthenticatedUserId } from '@/lib/auth-scope';
 
 // GET - 获取基金列表（可按投资方向筛选）
 export async function GET(request: Request) {
   try {
+    const userId = await getAuthenticatedUserId();
+    if (!userId) return NextResponse.json({ error: '未登录' }, { status: 401 });
     const { searchParams } = new URL(request.url);
     const directionId = searchParams.get('directionId');
 
-    const where = directionId ? { directionId: parseInt(directionId) } : {};
+    const where = directionId
+      ? { directionId: parseInt(directionId), direction: { userId } }
+      : { direction: { userId } };
 
     const funds = await prisma.fund.findMany({
       where,
@@ -62,6 +67,8 @@ export async function GET(request: Request) {
 // POST - 创建新基金
 export async function POST(request: Request) {
   try {
+    const userId = await getAuthenticatedUserId();
+    if (!userId) return NextResponse.json({ error: '未登录' }, { status: 401 });
     const body = await request.json();
     const { 
       directionId, 
@@ -91,6 +98,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: '涨跌预警比例必须在 0 到 100 之间' }, { status: 400 });
     }
 
+    const owner = await prisma.investmentDirection.findFirst({ where: { id: parseInt(directionId), userId }, select: { id: true } });
+    if (!owner) return NextResponse.json({ error: '投资方向不存在' }, { status: 404 });
     const fund = await prisma.fund.create({
       data: {
         directionId: parseInt(directionId),

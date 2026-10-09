@@ -1,9 +1,12 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
+import { getAuthenticatedUserId } from '@/lib/auth-scope';
 
 // GET - 获取计划买入列表
 export async function GET(request: Request) {
   try {
+    const userId = await getAuthenticatedUserId();
+    if (!userId) return NextResponse.json({ error: '未登录' }, { status: 401 });
     const { searchParams } = new URL(request.url);
     const fundId = searchParams.get('fundId');
     const status = searchParams.get('status');
@@ -14,15 +17,10 @@ export async function GET(request: Request) {
     } = {};
     if (fundId) where.fundId = parseInt(fundId);
     if (status) where.status = status;
-
     const plans = await prisma.plannedPurchase.findMany({
-      where,
-      include: {
-        fund: true,
-      },
-      orderBy: {
-        createdAt: 'desc',
-      },
+      where: { ...where, fund: { direction: { userId } } },
+      include: { fund: true },
+      orderBy: { createdAt: 'desc' },
     });
 
     return NextResponse.json(plans);
@@ -35,6 +33,8 @@ export async function GET(request: Request) {
 // POST - 创建计划买入
 export async function POST(request: Request) {
   try {
+    const userId = await getAuthenticatedUserId();
+    if (!userId) return NextResponse.json({ error: '未登录' }, { status: 401 });
     const body = await request.json();
     const { fundId, plannedAmount } = body;
 
@@ -45,6 +45,8 @@ export async function POST(request: Request) {
       );
     }
 
+    const owner = await prisma.fund.findFirst({ where: { id: parseInt(fundId), direction: { userId } }, select: { id: true } });
+    if (!owner) return NextResponse.json({ error: '基金不存在' }, { status: 404 });
     const plan = await prisma.plannedPurchase.create({
       data: {
         fundId: parseInt(fundId),

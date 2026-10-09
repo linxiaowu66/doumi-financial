@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { Decimal } from '@prisma/client/runtime/library';
 import dayjs from 'dayjs';
+import { getAuthenticatedUserId } from "@/lib/auth-scope";
 
 // GET - AI分析投资方向
 export async function GET(
@@ -9,12 +10,14 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const userId = await getAuthenticatedUserId();
+    if (!userId) return NextResponse.json({ error: '未登录' }, { status: 401 });
     const { id } = await params;
     const directionId = parseInt(id);
 
     // 获取投资方向信息
     const direction = await prisma.investmentDirection.findUnique({
-      where: { id: directionId },
+      where: { id: directionId, userId },
       include: {
         categoryTargets: true,
         funds: {

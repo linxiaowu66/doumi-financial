@@ -21,6 +21,7 @@ import StatsCards from "@/components/investment-direction-detail/StatsCards";
 import ProfitChart from "@/components/investment-direction-detail/ProfitChart";
 import RecentTransactions from "@/components/investment-direction-detail/RecentTransactions";
 import IncomeSummary from "@/components/investment-direction-detail/IncomeSummary";
+import AttributionCard from "@/components/investment-direction-detail/AttributionCard";
 import FundList from "@/components/investment-direction-detail/FundList";
 import FundModal from "@/components/investment-direction-detail/FundModal";
 import TargetModal from "@/components/investment-direction-detail/TargetModal";
@@ -731,11 +732,11 @@ export default function DirectionDetailPage({
   // 打开设置分类目标弹窗
   const handleOpenTargetModal = (
     categoryName: string,
-    currentTargetPercent?: number,
+    currentTarget?: CategoryTarget,
   ) => {
     setEditingCategory(categoryName);
     targetForm.setFieldsValue({
-      targetPercent: currentTargetPercent || 0,
+      targetPercent: currentTarget?.targetPercent || 0,
     });
     setTargetModalOpen(true);
   };
@@ -816,6 +817,7 @@ export default function DirectionDetailPage({
           onRefresh={loadSummary}
           directionType={direction?.type as any}
         />
+        <AttributionCard directionId={directionId} />
 
         <FundList
           funds={funds}

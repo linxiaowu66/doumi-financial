@@ -1,10 +1,13 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { updateActualAmountByFundId } from '@/lib/investment-direction';
+import { getAuthenticatedUserId } from '@/lib/auth-scope';
 
 // POST - 创建交易记录
 export async function POST(request: Request) {
   try {
+    const userId = await getAuthenticatedUserId();
+    if (!userId) return NextResponse.json({ error: '未登录' }, { status: 401 });
     const body = await request.json();
     const {
       fundId,
@@ -58,6 +61,8 @@ export async function POST(request: Request) {
     }
 
     const parsedFundId = parseInt(fundId);
+    const owner = await prisma.fund.findFirst({ where: { id: parsedFundId, direction: { userId } }, select: { id: true } });
+    if (!owner) return NextResponse.json({ error: '基金不存在' }, { status: 404 });
     const transactionData = {
       fundId: parsedFundId,
       type,

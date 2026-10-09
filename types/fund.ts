@@ -30,6 +30,11 @@ export interface Fund {
   takeProfitTrigger?: number;
   takeProfitDrawdown?: number;
   takeProfitSellPercent?: number;
+  actualCategory?: string | null;
+  actualCategorySource?: string | null;
+  metadataAsOf?: string | null;
+  metadataFetchedAt?: string | null;
+  metadataJson?: string | null;
   direction: {
     id: number;
     name: string;

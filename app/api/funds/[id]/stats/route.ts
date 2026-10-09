@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { Decimal } from "@prisma/client/runtime/library";
+import { getAuthenticatedUserId } from "@/lib/auth-scope";
 
 // GET - 获取基金统计信息
 export async function GET(
@@ -8,12 +9,14 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const userId = await getAuthenticatedUserId();
+    if (!userId) return NextResponse.json({ error: "未登录" }, { status: 401 });
     const { id } = await params;
     const { searchParams } = new URL(request.url);
     const currentPrice = searchParams.get("currentPrice"); // 当前净值（可选）
 
     const fund = await prisma.fund.findUnique({
-      where: { id: parseInt(id) },
+      where: { id: parseInt(id), direction: { userId } },
       include: {
         transactions: {
           orderBy: { date: "asc" },

@@ -1,13 +1,17 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import prisma from "@/lib/prisma";
+import { getAuthenticatedUserId } from "@/lib/auth-scope";
 
 const PRECISION_THRESHOLD = 0.03; // 与 funds/[id]/stats 保持一致
 
 // GET - 获取所有投资方向
 export async function GET() {
   try {
+    const userId = await getAuthenticatedUserId();
+    if (!userId) return NextResponse.json({ error: "未登录" }, { status: 401 });
     const directions = await prisma.investmentDirection.findMany({
+      where: { userId },
       orderBy: {
         createdAt: "desc",
       },

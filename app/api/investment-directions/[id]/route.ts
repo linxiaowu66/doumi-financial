@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { auth } from '@/auth';
 import prisma from '@/lib/prisma';
+import { getAuthenticatedUserId } from '@/lib/auth-scope';
 
 // GET - 获取单个投资方向
 export async function GET(
@@ -8,9 +8,11 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const userId = await getAuthenticatedUserId();
+    if (!userId) return NextResponse.json({ error: '未登录' }, { status: 401 });
     const { id } = await params;
     const direction = await prisma.investmentDirection.findUnique({
-      where: { id: parseInt(id) },
+      where: { id: parseInt(id), userId },
       include: {
         householdMember: true,
         funds: {
@@ -48,15 +50,14 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await auth();
-    const userId = Number(session?.user?.id);
-    if (!Number.isInteger(userId)) return NextResponse.json({ error: '未登录' }, { status: 401 });
+    const userId = await getAuthenticatedUserId();
+    if (!userId) return NextResponse.json({ error: '未登录' }, { status: 401 });
     const { id } = await params;
     const body = await request.json();
     const { name, expectedAmount, householdMemberId: rawMemberId } = body;
     const householdMemberId = rawMemberId ? Number(rawMemberId) : null;
-    const existing = await prisma.investmentDirection.findUnique({ where: { id: parseInt(id) }, select: { userId: true } });
-    if (!existing || (existing.userId !== null && existing.userId !== userId)) {
+    const existing = await prisma.investmentDirection.findFirst({ where: { id: parseInt(id), userId }, select: { id: true } });
+    if (!existing) {
       return NextResponse.json({ error: '投资方向不存在' }, { status: 404 });
     }
     if (householdMemberId !== null && !await prisma.householdMember.findFirst({ where: { id: householdMemberId, userId } })) {
@@ -86,11 +87,14 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const userId = await getAuthenticatedUserId();
+    if (!userId) return NextResponse.json({ error: '未登录' }, { status: 401 });
     const { id } = await params;
 
-    await prisma.investmentDirection.delete({
-      where: { id: parseInt(id) },
+    const result = await prisma.investmentDirection.deleteMany({
+      where: { id: parseInt(id), userId },
     });
+    if (!result.count) return NextResponse.json({ error: '投资方向不存在' }, { status: 404 });
 
     return NextResponse.json({ success: true });
   } catch (error) {

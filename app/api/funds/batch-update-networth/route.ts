@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { isStockCode } from "@/lib/fund-price";
+import { getAuthenticatedUserId } from "@/lib/auth-scope";
 
 // 延迟函数，用于避免限流
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -137,12 +138,16 @@ async function fetchFundNetWorth(code: string) {
 
 export async function POST(request: Request) {
   try {
+    const userId = await getAuthenticatedUserId();
+    if (!userId) return NextResponse.json({ error: "未登录" }, { status: 401 });
     const { directionId } = await request.json();
 
     // 构建查询条件
     const where: {
       directionId?: number;
+      direction?: { userId: number };
     } = {};
+    where.direction = { userId };
 
     // 如果提供了 directionId，添加到查询条件中
     if (directionId) {

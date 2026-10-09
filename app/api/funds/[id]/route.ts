@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { updateInvestmentDirectionActualAmount } from '@/lib/investment-direction';
+import { getAuthenticatedUserId } from '@/lib/auth-scope';
 
 // GET - 获取基金详情
 export async function GET(
@@ -8,9 +9,11 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const userId = await getAuthenticatedUserId();
+    if (!userId) return NextResponse.json({ error: '未登录' }, { status: 401 });
     const { id } = await params;
     const fund = await prisma.fund.findUnique({
-      where: { id: parseInt(id) },
+      where: { id: parseInt(id), direction: { userId } },
       include: {
         direction: true,
         transactions: {
@@ -43,6 +46,8 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const userId = await getAuthenticatedUserId();
+    if (!userId) return NextResponse.json({ error: '未登录' }, { status: 401 });
     const { id } = await params;
     const fundId = parseInt(id);
     const body = await request.json();
@@ -69,11 +74,14 @@ export async function PUT(
 
     const oldFund = await prisma.fund.findUnique({
       where: { id: fundId },
-      select: { directionId: true },
+      select: { directionId: true, direction: { select: { userId: true } } },
     });
 
-    if (!oldFund) {
+    if (!oldFund || oldFund.direction.userId !== userId) {
       return NextResponse.json({ error: '基金不存在' }, { status: 404 });
+    }
+    if (directionId !== undefined && !await prisma.investmentDirection.findFirst({ where: { id: parseInt(directionId), userId }, select: { id: true } })) {
+      return NextResponse.json({ error: '目标投资方向不存在' }, { status: 404 });
     }
 
     const fund = await prisma.fund.update({
@@ -115,15 +123,17 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const userId = await getAuthenticatedUserId();
+    if (!userId) return NextResponse.json({ error: '未登录' }, { status: 401 });
     const { id } = await params;
     const fundId = parseInt(id);
 
     const fund = await prisma.fund.findUnique({
       where: { id: fundId },
-      select: { directionId: true },
+      select: { directionId: true, direction: { select: { userId: true } } },
     });
 
-    if (!fund) {
+    if (!fund || fund.direction.userId !== userId) {
       return NextResponse.json({ error: '基金不存在' }, { status: 404 });
     }
 

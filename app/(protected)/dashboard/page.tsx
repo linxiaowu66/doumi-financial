@@ -12,6 +12,7 @@ import {
   Modal,
   List,
   Spin,
+  Tag,
 } from "antd";
 import {
   FundOutlined,
@@ -53,6 +54,9 @@ interface DashboardSummary {
   yearProfit: string; // 今年盈亏
   yearProfitRate: string; // 今年盈亏率(%)
   annualTargetAmount?: string; // 本年度盈利目标
+  targetGap?: string;
+  remainingDays?: number;
+  requiredReturnRate?: string;
   lastTradeDate: string; // 最近交易日日期
   totalCurrentValue: string; // 当前总市值
   totalCost: string; // 持仓总成本
@@ -78,6 +82,19 @@ interface UpdateResult {
   error?: string;
 }
 
+interface FundSignal {
+  fundId: number;
+  fundName: string;
+  directionName: string;
+  signal: string;
+  trend: string;
+  return5: number;
+  weight: number;
+  targetPercent: number | null;
+  dataPoints: number;
+  dataDate?: string | null;
+}
+
 export default function HomePage() {
   const { message } = App.useApp();
   const { status } = useSession();
@@ -93,6 +110,7 @@ export default function HomePage() {
   const [analyzingStrategy, setAnalyzingStrategy] = useState(false);
   const [strategyReport, setStrategyReport] = useState<string | null>(null);
   const [strategyHistory, setStrategyHistory] = useState<Array<{ id: number; content: string; createdAt: string }>>([]);
+  const [fundSignals, setFundSignals] = useState<FundSignal[]>([]);
   const displayLastTradeDate = summary?.lastTradeDate || "";
 
   // 检测屏幕尺寸
@@ -113,6 +131,7 @@ export default function HomePage() {
     } else if (status === "authenticated") {
       loadDirections();
       loadSummary();
+      loadFundSignals();
     }
   }, [status, router]);
 
@@ -198,6 +217,15 @@ export default function HomePage() {
     setStrategyHistory(await response.json());
   };
 
+  const loadFundSignals = async () => {
+    try {
+      const response = await fetch("/api/fund-signals");
+      if (response.ok) setFundSignals((await response.json()).signals ?? []);
+    } catch (error) {
+      console.error("加载基金信号失败:", error);
+    }
+  };
+
   const handleOpenStrategyAnalysis = async () => {
     setStrategyModalOpen(true);
     setStrategyReport(null);
@@ -211,7 +239,7 @@ export default function HomePage() {
   const handleStrategyAnalysis = async () => {
     try {
       setAnalyzingStrategy(true);
-      const [assetResults, alertsResponse, settingsResponse] = await Promise.all([
+      const [assetResults, alertsResponse, settingsResponse, summaryResponse] = await Promise.all([
         Promise.all(
           directions.map(async (direction) => {
             const response = await fetch(`/api/investment-directions/${direction.id}/analyze`);
@@ -222,16 +250,26 @@ export default function HomePage() {
         ),
         fetch("/api/investment-directions/alerts"),
         fetch("/api/settings/system"),
+        fetch("/api/dashboard/summary"),
       ]);
       const alerts = await alertsResponse.json();
       const settings = await settingsResponse.json();
-      if (!alertsResponse.ok || !settingsResponse.ok) throw new Error("获取策略分析数据失败");
+      const summaryData = await summaryResponse.json();
+      if (!alertsResponse.ok || !settingsResponse.ok || !summaryResponse.ok) throw new Error("获取策略分析数据失败");
 
       const provider = (settings.ai_provider || "gemini") as AiProvider;
       const report = await analyzeStrategyWithAi(provider, settings, {
         generatedAt: new Date().toISOString(),
         directions: assetResults,
         alerts,
+        goal: {
+          annualTargetAmount: summaryData.annualTargetAmount,
+          yearProfit: summaryData.yearProfit,
+          targetGap: summaryData.targetGap,
+          remainingDays: summaryData.remainingDays,
+          requiredReturnRate: summaryData.requiredReturnRate,
+          currentValue: summaryData.totalCurrentValue,
+        },
       });
       if (typeof report !== "string" || !report.trim()) throw new Error("AI 未返回策略报告");
 
@@ -364,6 +402,32 @@ export default function HomePage() {
             </Card>
           </Col>
         </Row>
+
+        {summary?.annualTargetAmount && parseFloat(summary.annualTargetAmount) > 0 && (
+          <Card title="年度目标驾驶舱" style={{ marginBottom: isMobile ? 16 : 24 }}>
+            <Row gutter={[16, 16]}>
+              <Col xs={12} sm={6}><Statistic title="目标缺口" value={parseFloat(summary.targetGap || "0")} precision={2} prefix="¥" valueStyle={{ color: parseFloat(summary.targetGap || "0") > 0 ? "#cf1322" : "#3f8600" }} /></Col>
+              <Col xs={12} sm={6}><Statistic title="剩余天数" value={summary.remainingDays || 0} suffix="天" /></Col>
+              <Col xs={12} sm={6}><Statistic title="按当前市值所需收益率" value={parseFloat(summary.requiredReturnRate || "0")} precision={2} suffix="%" valueStyle={{ color: parseFloat(summary.requiredReturnRate || "0") > 10 ? "#cf1322" : "#faad14" }} /></Col>
+              <Col xs={12} sm={6}><Statistic title="目标完成度" value={Math.max(0, Math.min(100, (parseFloat(summary.yearProfit) / parseFloat(summary.annualTargetAmount)) * 100))} precision={1} suffix="%" /></Col>
+            </Row>
+            <div style={{ marginTop: 12, color: "#666", fontSize: 12 }}>
+              该收益率只是基于当前市值的数学缺口，不代表收益承诺；实际投入字段表示持仓成本，不等同于可用现金。
+            </div>
+          </Card>
+        )}
+
+        <Card title="今日基金信号" extra={<span style={{ color: "#999", fontSize: 12 }}>净值趋势与当前仓位研究信号</span>} style={{ marginBottom: isMobile ? 16 : 24 }}>
+          {fundSignals.length === 0 ? <Empty description="暂无足够净值历史" image={Empty.PRESENTED_IMAGE_SIMPLE} /> : (
+            <List size="small" dataSource={fundSignals.filter((item) => item.signal !== "持有").slice(0, 8)} locale={{ emptyText: "当前没有触发买入/观察信号" }} renderItem={(item) => (
+              <List.Item>
+                <List.Item.Meta title={`${item.fundName} · ${item.directionName}`} description={`${item.trend}，近5个数据点 ${item.return5 >= 0 ? "+" : ""}${item.return5}% · 已投入占预期 ${item.weight}%`} />
+                <Tag color={item.signal.includes("买入") ? "green" : "orange"}>{item.signal}</Tag>
+              </List.Item>
+            )} />
+          )}
+          <div style={{ color: "#999", fontSize: 12, marginTop: 8 }}>不含实时行情、底层持仓和自动交易；净值日期以系统最近同步数据为准。</div>
+        </Card>
 
         {/* 盈亏统计卡片 */}
         {summary && (

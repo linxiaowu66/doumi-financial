@@ -3,14 +3,17 @@ import prisma from '@/lib/prisma';
 import { calculateConfirmDate, getNextWorkday, isWorkday } from '@/lib/workday';
 import { format } from 'date-fns';
 import { getFundNetWorth } from '@/lib/fund-price';
+import { getAuthenticatedUserId } from '@/lib/auth-scope';
 
 export async function POST(request: Request) {
   const logs: string[] = [];
 
   try {
+    const userId = await getAuthenticatedUserId();
+    if (!userId) return NextResponse.json({ error: '未登录' }, { status: 401 });
     // 1. 获取所有状态为 WAITING 的待确认交易
     const pendingTransactions = await prisma.pendingTransaction.findMany({
-      where: { status: 'WAITING', type: { in: ['BUY', 'SELL'] } },
+      where: { status: 'WAITING', type: { in: ['BUY', 'SELL'] }, fund: { direction: { userId } } },
       include: { fund: true },
     });
 

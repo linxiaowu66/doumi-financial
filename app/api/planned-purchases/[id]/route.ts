@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { updateActualAmountByFundId } from '@/lib/investment-direction';
+import { getAuthenticatedUserId } from '@/lib/auth-scope';
 
 // DELETE - 删除计划买入
 export async function DELETE(
@@ -8,11 +9,13 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const userId = await getAuthenticatedUserId();
+    if (!userId) return NextResponse.json({ error: '未登录' }, { status: 401 });
     const { id } = await params;
-
-    await prisma.plannedPurchase.delete({
-      where: { id: parseInt(id) },
+    const result = await prisma.plannedPurchase.deleteMany({
+      where: { id: parseInt(id), fund: { direction: { userId } } },
     });
+    if (!result.count) return NextResponse.json({ error: '计划不存在' }, { status: 404 });
 
     return NextResponse.json({ success: true });
   } catch (error) {
@@ -27,18 +30,21 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const userId = await getAuthenticatedUserId();
+    if (!userId) return NextResponse.json({ error: '未登录' }, { status: 401 });
     const { id } = await params;
     const body = await request.json();
-
-    const plan = await prisma.plannedPurchase.update({
-      where: { id: parseInt(id) },
+    const nextStatus = body.status || 'COMPLETED';
+    const plan = await prisma.plannedPurchase.updateMany({
+      where: { id: parseInt(id), fund: { direction: { userId } } },
       data: {
-        status: body.status || 'COMPLETED',
-        purchasedAt: body.status === 'COMPLETED' ? new Date() : null,
+        status: nextStatus,
+        purchasedAt: nextStatus === 'COMPLETED' ? new Date() : null,
       },
     });
 
-    return NextResponse.json(plan);
+    if (!plan.count) return NextResponse.json({ error: '计划不存在' }, { status: 404 });
+    return NextResponse.json({ success: true });
   } catch (error) {
     console.error('更新计划买入失败:', error);
     return NextResponse.json({ error: '更新计划买入失败' }, { status: 500 });
@@ -51,6 +57,8 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const userId = await getAuthenticatedUserId();
+    if (!userId) return NextResponse.json({ error: '未登录' }, { status: 401 });
     const { id } = await params;
     const body = await request.json();
     const { price, fee, date } = body;
@@ -65,9 +73,10 @@ export async function POST(
     // 获取计划
     const plan = await prisma.plannedPurchase.findUnique({
       where: { id: parseInt(id) },
+      include: { fund: { include: { direction: { select: { userId: true } } } } },
     });
 
-    if (!plan) {
+    if (!plan || plan.fund.direction.userId !== userId) {
       return NextResponse.json({ error: '计划不存在' }, { status: 404 });
     }
 

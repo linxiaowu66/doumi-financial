@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import dayjs from 'dayjs';
+import { getAuthenticatedUserId } from "@/lib/auth-scope";
 
 // GET - 获取投资方向的每日盈亏数据
 export async function GET(
@@ -8,6 +9,8 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const userId = await getAuthenticatedUserId();
+    if (!userId) return NextResponse.json({ error: '未登录' }, { status: 401 });
     const { id } = await params;
     const { searchParams } = new URL(request.url);
     const days = parseInt(searchParams.get('days') || '30'); // 默认30天
@@ -16,7 +19,7 @@ export async function GET(
 
     // 验证投资方向是否存在
     const direction = await prisma.investmentDirection.findUnique({
-      where: { id: directionId },
+      where: { id: directionId, userId },
       select: { id: true, name: true },
     });
 

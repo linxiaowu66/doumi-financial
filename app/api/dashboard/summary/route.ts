@@ -2,12 +2,16 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { Decimal } from "@prisma/client/runtime/library";
 import dayjs from "dayjs";
+import { getAuthenticatedUserId } from "@/lib/auth-scope";
 
 // GET - 获取Dashboard汇总统计（所有投资方向）
 export async function GET() {
   try {
+    const userId = await getAuthenticatedUserId();
+    if (!userId) return NextResponse.json({ error: "未登录" }, { status: 401 });
     // 获取所有投资方向
     const directions = await prisma.investmentDirection.findMany({
+      where: { userId },
       include: {
         funds: {
           include: {
@@ -250,6 +254,11 @@ export async function GET() {
     const annualTargetAmount = annualTarget
       ? new Decimal(annualTarget.targetAmount.toString())
       : new Decimal(0);
+    const targetGap = annualTargetAmount.minus(yearProfit);
+    const remainingDays = dayjs(`${currentYear}-12-31`).diff(dayjs(), "day");
+    const requiredReturnRate = totalCurrentValue.greaterThan(0)
+      ? targetGap.dividedBy(totalCurrentValue).times(100)
+      : new Decimal(0);
 
     return NextResponse.json({
       totalProfit: totalProfit.toFixed(2), // 累计盈亏
@@ -261,6 +270,9 @@ export async function GET() {
       yearProfit: yearProfit.toFixed(2), // 今年盈亏
       yearProfitRate: yearProfitRate.toFixed(2), // 今年盈亏率(%)
       annualTargetAmount: annualTargetAmount.toFixed(2), // 本年度盈利目标
+      targetGap: targetGap.toFixed(2),
+      remainingDays: Math.max(0, remainingDays),
+      requiredReturnRate: requiredReturnRate.toFixed(2),
       lastTradeDate: lastTradeDate || "", // 最近交易日日期
       totalCurrentValue: totalCurrentValue.toFixed(2), // 当前总市值
       totalCost: totalCost.toFixed(2), // 持仓总成本

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { updateActualAmountByFundId } from '@/lib/investment-direction';
+import { getAuthenticatedUserId } from '@/lib/auth-scope';
 
 // DELETE - 删除交易记录
 export async function DELETE(
@@ -8,15 +9,17 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const userId = await getAuthenticatedUserId();
+    if (!userId) return NextResponse.json({ error: '未登录' }, { status: 401 });
     const { id } = await params;
 
     // 先获取交易记录以获取 fundId
     const transaction = await prisma.transaction.findUnique({
       where: { id: parseInt(id) },
-      select: { fundId: true },
+      select: { fundId: true, fund: { select: { direction: { select: { userId: true } } } } },
     });
 
-    if (!transaction) {
+    if (!transaction || transaction.fund.direction.userId !== userId) {
       return NextResponse.json({ error: '交易记录不存在' }, { status: 404 });
     }
 
@@ -40,6 +43,8 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const userId = await getAuthenticatedUserId();
+    if (!userId) return NextResponse.json({ error: '未登录' }, { status: 401 });
     const { id } = await params;
     const body = await request.json();
     const { type, amount, shares, price, fee, date, dividendReinvest, remark } =
@@ -50,11 +55,11 @@ export async function PUT(
       where: { id: parseInt(id) },
       select: {
         fundId: true,
-        fund: { select: { direction: { select: { type: true } } } },
+        fund: { select: { direction: { select: { type: true, userId: true } } } },
       },
     });
 
-    if (!oldTransaction) {
+    if (!oldTransaction || oldTransaction.fund.direction.userId !== userId) {
       return NextResponse.json({ error: '交易记录不存在' }, { status: 404 });
     }
 

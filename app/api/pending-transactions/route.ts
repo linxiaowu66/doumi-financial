@@ -1,12 +1,16 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
+import { getAuthenticatedUserId } from '@/lib/auth-scope';
 
 // GET - 获取待确认交易列表
 export async function GET(request: Request) {
   try {
+    const userId = await getAuthenticatedUserId();
+    if (!userId) return NextResponse.json({ error: '未登录' }, { status: 401 });
     const pendingTransactions = await prisma.pendingTransaction.findMany({
       where: {
         status: 'WAITING',
+        fund: { direction: { userId } },
       },
       include: {
         fund: {
@@ -30,6 +34,8 @@ export async function GET(request: Request) {
 // POST - 创建待确认交易
 export async function POST(request: Request) {
   try {
+    const userId = await getAuthenticatedUserId();
+    if (!userId) return NextResponse.json({ error: '未登录' }, { status: 401 });
     const body = await request.json();
     const { fundId, type, applyDate, applyAmount, applyShares } = body;
 
@@ -54,6 +60,8 @@ export async function POST(request: Request) {
       );
     }
 
+    const owner = await prisma.fund.findFirst({ where: { id: parseInt(fundId), direction: { userId } }, select: { id: true } });
+    if (!owner) return NextResponse.json({ error: '基金不存在' }, { status: 404 });
     const pendingTransaction = await prisma.pendingTransaction.create({
       data: {
         fundId: parseInt(fundId),

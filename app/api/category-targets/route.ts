@@ -1,13 +1,18 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
+import { getAuthenticatedUserId } from '@/lib/auth-scope';
 
 // GET - 获取分类目标列表
 export async function GET(request: Request) {
   try {
+    const userId = await getAuthenticatedUserId();
+    if (!userId) return NextResponse.json({ error: '未登录' }, { status: 401 });
     const { searchParams } = new URL(request.url);
     const directionId = searchParams.get('directionId');
 
-    const where = directionId ? { directionId: parseInt(directionId) } : {};
+    const where = directionId
+      ? { directionId: parseInt(directionId), direction: { userId } }
+      : { direction: { userId } };
 
     const targets = await prisma.categoryTarget.findMany({
       where,
@@ -33,8 +38,10 @@ export async function GET(request: Request) {
 // POST - 创建或更新分类目标
 export async function POST(request: Request) {
   try {
+    const userId = await getAuthenticatedUserId();
     const body = await request.json();
     const { directionId, categoryName, targetPercent } = body;
+    if (!userId) return NextResponse.json({ error: '未登录' }, { status: 401 });
 
     if (!directionId || !categoryName || targetPercent === undefined || targetPercent === null) {
       return NextResponse.json(
@@ -44,7 +51,7 @@ export async function POST(request: Request) {
     }
 
     const percentValue = parseFloat(targetPercent);
-    if (percentValue < 0 || percentValue > 100) {
+    if (!Number.isFinite(percentValue) || percentValue < 0 || percentValue > 100) {
       return NextResponse.json(
         { error: '目标仓位百分比必须在 0-100 之间' },
         { status: 400 }
@@ -52,6 +59,8 @@ export async function POST(request: Request) {
     }
 
     // 使用 upsert 创建或更新
+    const ownsDirection = await prisma.investmentDirection.findFirst({ where: { id: parseInt(directionId), userId }, select: { id: true } });
+    if (!ownsDirection) return NextResponse.json({ error: '投资方向不存在' }, { status: 404 });
     const target = await prisma.categoryTarget.upsert({
       where: {
         directionId_categoryName: {
@@ -61,11 +70,15 @@ export async function POST(request: Request) {
       },
       update: {
         targetPercent: percentValue,
+        minPercent: percentValue,
+        maxPercent: percentValue,
       },
       create: {
         directionId: parseInt(directionId),
         categoryName,
         targetPercent: percentValue,
+        minPercent: percentValue,
+        maxPercent: percentValue,
       },
     });
 

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
+import { getAuthenticatedUserId } from "@/lib/auth-scope";
 
 // GET - 获取投资方向的所有AI分析历史记录
 export async function GET(
@@ -7,8 +8,12 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const userId = await getAuthenticatedUserId();
+    if (!userId) return NextResponse.json({ error: '未登录' }, { status: 401 });
     const { id } = await params;
     const directionId = parseInt(id);
+    const owned = await prisma.investmentDirection.findFirst({ where: { id: directionId, userId }, select: { id: true } });
+    if (!owned) return NextResponse.json({ error: '投资方向不存在' }, { status: 404 });
 
     const analyses = await prisma.investmentDirectionAnalysis.findMany({
       where: { directionId },
@@ -36,12 +41,16 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const userId = await getAuthenticatedUserId();
+    if (!userId) return NextResponse.json({ error: '未登录' }, { status: 401 });
     const { id } = await params;
     const directionId = Number(id);
     const body = await request.json();
     if (!Number.isInteger(directionId) || typeof body.content !== 'string' || !body.content.trim()) {
       return NextResponse.json({ error: '分析报告内容不能为空' }, { status: 400 });
     }
+    const owned = await prisma.investmentDirection.findFirst({ where: { id: directionId, userId }, select: { id: true } });
+    if (!owned) return NextResponse.json({ error: '投资方向不存在' }, { status: 404 });
 
     const analysis = await prisma.investmentDirectionAnalysis.create({
       data: { directionId, content: body.content },

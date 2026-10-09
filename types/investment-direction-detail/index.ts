@@ -74,6 +74,8 @@ export interface CategoryTarget {
   directionId: number;
   categoryName: string;
   targetPercent: number; // 目标仓位百分比（0-100）
+  minPercent?: number;
+  maxPercent?: number;
 }
 
 export interface DirectionSummary {

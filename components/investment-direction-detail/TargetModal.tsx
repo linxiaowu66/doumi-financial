@@ -54,9 +54,7 @@ export default function TargetModal({
               message: "百分比必须在 0-100 之间",
             },
           ]}
-          tooltip={`该分类的目标仓位百分比。当前投资方向的预期投入为 ¥${
-            direction?.expectedAmount?.toLocaleString() || 0
-          }，设置后将自动计算目标金额。`}
+          tooltip="目标金额 = 投资方向预期投入 × 目标仓位。达到目标金额后，系统会提示不要继续加仓。"
         >
           <InputNumber<number>
             placeholder="请输入百分比（0-100）"
@@ -78,12 +76,7 @@ export default function TargetModal({
           form.getFieldValue("targetPercent") > 0 && (
             <Form.Item label="计算后的目标金额">
               <Text type="secondary">
-                ¥
-                {(
-                  (Number(direction.expectedAmount) *
-                    form.getFieldValue("targetPercent")) /
-                  100
-                ).toLocaleString()}
+                预期投入：¥{Number(direction.expectedAmount).toLocaleString()} × {form.getFieldValue("targetPercent")}%，目标金额：¥{(Number(direction.expectedAmount) * Number(form.getFieldValue("targetPercent") || 0) / 100).toLocaleString()}
               </Text>
             </Form.Item>
           )}

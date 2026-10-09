@@ -1,9 +1,12 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import dayjs from "dayjs";
+import { getAuthenticatedUserId } from "@/lib/auth-scope";
 
 export async function GET() {
   try {
+    const userId = await getAuthenticatedUserId();
+    if (!userId) return NextResponse.json({ error: "未登录" }, { status: 401 });
     const targets = await prisma.annualProfitTarget.findMany({
       orderBy: { year: "desc" },
     });
@@ -11,6 +14,7 @@ export async function GET() {
       if (target.actualAmount !== null) return target;
       const records = await prisma.directionDailyProfit.aggregate({
         where: {
+          direction: { userId },
           date: {
             gte: dayjs(`${target.year}-01-01`).startOf("day").toDate(),
             lt: dayjs(`${target.year + 1}-01-01`).startOf("day").toDate(),
@@ -29,6 +33,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    if (!await getAuthenticatedUserId()) return NextResponse.json({ error: "未登录" }, { status: 401 });
     const body = await request.json();
     const { year, targetAmount } = body;
 

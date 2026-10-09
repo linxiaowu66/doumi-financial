@@ -53,7 +53,7 @@ interface FundListProps {
   onTransfer: (fund: Fund) => void;
   onOpenTargetModal: (
     categoryName: string,
-    currentTargetPercent?: number,
+    currentTarget?: CategoryTarget,
   ) => void;
   isFundLiquidated: (stats: FundStats | undefined) => boolean;
 }
@@ -947,11 +947,11 @@ export default function FundList({
                           {isMobile ? "当前市值" : "当前市值"}: ¥
                           {categoryCurrentValue.toLocaleString()}
                           {!isMobile &&
-                            ` (${actualPositionPercent.toFixed(1)}%)`}
+                            `（占当前方向市值 ${actualPositionPercent.toFixed(1)}%，仅供参考）`}
                         </Text>
                         {isMobile && (
                           <Text type="secondary" style={{ fontSize: 12 }}>
-                            占比: {actualPositionPercent.toFixed(1)}%
+                            占当前方向市值: {actualPositionPercent.toFixed(1)}%
                           </Text>
                         )}
                       </>
@@ -964,14 +964,14 @@ export default function FundList({
                           当前市值: ¥{categoryCurrentValue.toLocaleString()}
                         </Text>
                         <Text type="secondary">
-                          占比: {actualPositionPercent.toFixed(1)}%
+                          占当前方向市值: {actualPositionPercent.toFixed(1)}%
                         </Text>
                       </>
                     )}
                     <Button
                       size="small"
                       type="link"
-                      onClick={() => onOpenTargetModal(category, targetPercent)}
+                      onClick={() => onOpenTargetModal(category, categoryTarget)}
                     >
                       设置目标
                     </Button>

@@ -1,12 +1,16 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { updateInvestmentDirectionActualAmount } from '@/lib/investment-direction';
+import { getAuthenticatedUserId } from '@/lib/auth-scope';
 
 // POST - 重新计算所有投资方向的实际投入金额
 export async function POST() {
   try {
+    const userId = await getAuthenticatedUserId();
+    if (!userId) return NextResponse.json({ error: '未登录' }, { status: 401 });
     // 获取所有投资方向
     const directions = await prisma.investmentDirection.findMany({
+      where: { userId },
       select: { id: true },
     });
 
