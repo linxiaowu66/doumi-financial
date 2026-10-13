@@ -113,18 +113,18 @@ async function fetchFundNetWorth(code: string) {
     }
 
     // 检查数据是否有效
-    if (!fundData || (!fundData.dwjz && !fundData.gsz)) {
+    if (!fundData || !fundData.dwjz) {
       return {
         success: false,
         code,
-        error: "基金不存在或已停售",
+        error: "未获取到正式净值，未写入估算净值",
       };
     }
 
     return {
       success: true,
       code: fundData.fundcode,
-      netWorth: fundData.dwjz || fundData.gsz,
+      netWorth: fundData.dwjz,
       netWorthDate: fundData.jzrq || "",
     };
   } catch (error) {

@@ -201,6 +201,7 @@ model Fund {
   code             String // 基金代码
   name             String // 基金名称
   category         String? // 分类标识（如"标普"）
+  strategyType     String  @default("CORE") // CORE长期核心；TREND高风险趋势
   remark           String?             @db.Text // 备注
   latestNetWorth   Decimal?            @db.Decimal(10, 4) // 最新净值
   netWorthDate     String? // 净值日期
@@ -228,6 +229,7 @@ model Fund {
   plannedPurchases    PlannedPurchase[] // 计划买入
   pendingTransactions PendingTransaction[] // 待确认交易
   netWorthHistory     FundNetWorthHistory[] // 净值历史
+  signalSnapshots     FundSignalDailySnapshot[]
   dailyProfits        FundDailyProfit[] // 每日盈亏记录
 }
 
@@ -362,6 +364,24 @@ model FundNetWorthHistory {
   @@unique([fundId, date])
   @@index([fundId])
   @@index([date])
+}
+
+model FundSignalDailySnapshot {
+  id           Int      @id @default(autoincrement())
+  userId       Int
+  directionId  Int
+  fundId       Int
+  fund         Fund     @relation(fields: [fundId], references: [id], onDelete: Cascade)
+  date         String
+  signal       String
+  score        Int
+  reason       String   @db.Text
+  dataDate     String?
+  createdAt    DateTime @default(now())
+
+  @@unique([fundId, date])
+  @@index([userId, date])
+  @@index([directionId, date])
 }
 
 // 基金每日盈亏记录

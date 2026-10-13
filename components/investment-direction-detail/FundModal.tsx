@@ -119,6 +119,20 @@ export default function FundModal({
           </Col>
         </Row>
 
+        {!isStock && (
+          <Form.Item
+            label="投资策略类型"
+            name="strategyType"
+            initialValue="CORE"
+            tooltip="核心资产长期持有；高风险趋势资产启用均线、回撤和分批减仓信号。"
+          >
+            <Select size="large" options={[
+              { value: "CORE", label: "长期核心资产" },
+              { value: "TREND", label: "高风险趋势资产" },
+            ]} />
+          </Form.Item>
+        )}
+
         {/* 对于新增股票（isStock && !editingFund）不显示确认天数与费率字段 */}
         {!(isStock && !editingFund) && (
           <Row gutter={16}>

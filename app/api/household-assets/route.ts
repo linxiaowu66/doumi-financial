@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import prisma from "@/lib/prisma";
-import { buildMonthlyHouseholdHistory, currentHouseholdMonth, isHouseholdMonth, keepsHouseholdDirectionHistory, monthToAsOfDate, showsHouseholdDirection, suggestSnapshotMonth, tracksHouseholdDirection } from "@/lib/household-assets";
-import { calculateDirectionMarketValue } from "@/lib/fund-daily-profit";
+import { buildMonthlyHouseholdAllocationHistory, buildMonthlyHouseholdHistory, currentHouseholdMonth, isHouseholdMonth, keepsHouseholdDirectionHistory, monthToAsOfDate, showsHouseholdDirection, suggestSnapshotMonth, tracksHouseholdDirection, type HouseholdAllocationCategory } from "@/lib/household-assets";
+import { calcFundSnapshot, calculateDirectionMarketValue } from "@/lib/fund-daily-profit";
+import { classifyFundAsset } from "@/lib/fund-asset-classification";
 
 const PLATFORMS = ["QIEMAN", "YUEBAO", "HUATAI", "PERSONAL_PENSION", "OTHER"];
 const POLICY_TYPES = ["ACCIDENT", "CRITICAL_ILLNESS", "LIFE", "MEDICAL", "NURSING", "OTHER"];
@@ -143,6 +144,31 @@ export async function GET(request: Request) {
         .map((snapshot) => ({ id: snapshot.id, month: snapshot.month, value: snapshot.value.toString() })),
     };
   });
+  const directionWeights = new Map<number, Partial<Record<HouseholdAllocationCategory, number>>>();
+  const allocationCurrent = new Map<HouseholdAllocationCategory, number>();
+  for (const view of directionViews) {
+    const values = new Map<HouseholdAllocationCategory, number>();
+    for (const fund of view.direction.funds) {
+      const snapshot = calcFundSnapshot(fund.transactions, fund.latestNetWorth === null ? null : Number(fund.latestNetWorth));
+      const value = Number(snapshot.holdingValue);
+      if (value <= 0) continue;
+      const assetClass = classifyFundAsset({ actualCategory: fund.actualCategory, metadataJson: fund.metadataJson, personalCategory: fund.category, fundName: fund.name }).assetClass;
+      values.set(assetClass, (values.get(assetClass) ?? 0) + value);
+    }
+    const total = [...values.values()].reduce((sum, value) => sum + value, 0);
+    const weights: Partial<Record<HouseholdAllocationCategory, number>> = {};
+    if (total > 0) {
+      for (const [category, value] of values) {
+        weights[category] = value / total;
+        allocationCurrent.set(category, (allocationCurrent.get(category) ?? 0) + value);
+      }
+    }
+    directionWeights.set(view.direction.id, weights);
+  }
+  for (const asset of assets) {
+    const category: HouseholdAllocationCategory = asset.platform === "YUEBAO" || asset.platform === "PERSONAL_PENSION" ? "CASH_FLOW" : "OTHER";
+    allocationCurrent.set(category, (allocationCurrent.get(category) ?? 0) + Number(asset.balance));
+  }
   const history = buildMonthlyHouseholdHistory(
     assets.flatMap((asset) => asset.histories.map((snapshot) => ({
       sourceId: asset.id,
@@ -158,6 +184,22 @@ export async function GET(request: Request) {
       month: snapshot.month,
     }))),
   );
+  const allocationHistory = buildMonthlyHouseholdAllocationHistory(
+    assets.flatMap((asset) => asset.histories.map((snapshot) => ({
+      sourceId: asset.id,
+      category: asset.platform,
+      value: snapshot.balance.toString(),
+      date: snapshot.asOfDate,
+      month: snapshot.month,
+    }))),
+    directionViews.filter((view) => view.keptInHistory).flatMap((view) => view.orderedSnapshots.map((snapshot) => ({
+      sourceId: view.direction.id,
+      value: snapshot.value.toString(),
+      date: snapshot.asOfDate,
+      month: snapshot.month,
+    }))),
+    directionWeights,
+  );
   const netWorthDates = directions.flatMap((direction) => direction.funds.map((fund) => fund.netWorthDate));
   const currentMonth = currentHouseholdMonth();
   const maintenanceDates = [
@@ -171,6 +213,9 @@ export async function GET(request: Request) {
     insurancePlans,
     directions: directionRows,
     history,
+    allocationCurrent: [...allocationCurrent.entries()].map(([category, value]) => ({ category, value: Number(value.toFixed(2)) })),
+    allocationHistory,
+    allocationScopeNote: "投资方向按官方分类和 metadata 的当前资产类型归类；历史月份使用当前分类比例回溯。且慢、华泰等手动账户若已包含投资方向余额，可能重复计算，请只保留一处。",
     maintenanceDates,
     suggestedSnapshotMonth: suggestSnapshotMonth(netWorthDates),
     latestNetWorthDate: latestNetWorthDate(netWorthDates),

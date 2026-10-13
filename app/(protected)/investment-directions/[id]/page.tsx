@@ -644,6 +644,7 @@ export default function DirectionDetailPage({
         code: fund.code,
         name: fund.name,
         category: fund.category,
+        strategyType: fund.strategyType ?? "CORE",
         remark: fund.remark,
         confirmDays: fund.confirmDays || 1,
         defaultBuyFee: fund.defaultBuyFee || 0.15,
@@ -659,6 +660,7 @@ export default function DirectionDetailPage({
       form.resetFields();
       form.setFieldsValue({
         confirmDays: 1,
+        strategyType: "CORE",
         defaultBuyFee: 0.15,
         defaultSellFee: 0.5,
         dividendReinvest: false,
@@ -677,6 +679,7 @@ export default function DirectionDetailPage({
     code: string;
     name: string;
     category?: string;
+    strategyType?: "CORE" | "TREND";
     remark?: string;
   }) => {
     try {

@@ -9,6 +9,7 @@ import {
   Button,
   Space,
   App,
+  Alert,
   Modal,
   List,
   Spin,
@@ -87,12 +88,36 @@ interface FundSignal {
   fundName: string;
   directionName: string;
   signal: string;
+  signalRank: number;
+  score: number;
+  reason: string;
+  strategyType: "CORE" | "TREND";
   trend: string;
   return5: number;
+  return20: number;
+  return60: number;
   weight: number;
+  currentDrawdown: number;
+  volatility20: number | null;
   targetPercent: number | null;
   dataPoints: number;
   dataDate?: string | null;
+}
+
+interface PortfolioRisk {
+  directionId: number;
+  directionName: string;
+  expectedAmount: number;
+  investedAmount: number;
+  marketValue: number;
+  budgetUsedPercent: number;
+  concentrationHHI: number;
+  categoryConcentrationHHI: number;
+  averageCorrelation: number | null;
+  highestCorrelation: number | null;
+  stressTests: Array<{ name: string; estimatedLoss: number; note: string }>;
+  signalCounts: Record<string, number>;
+  dataQuality: { totalFunds: number; heldFunds: number; freshFunds: number; insufficientFunds: number; staleMetadataFunds: number; categoryReviewFunds: number };
 }
 
 export default function HomePage() {
@@ -111,6 +136,8 @@ export default function HomePage() {
   const [strategyReport, setStrategyReport] = useState<string | null>(null);
   const [strategyHistory, setStrategyHistory] = useState<Array<{ id: number; content: string; createdAt: string }>>([]);
   const [fundSignals, setFundSignals] = useState<FundSignal[]>([]);
+  const [portfolioRisks, setPortfolioRisks] = useState<PortfolioRisk[]>([]);
+  const [signalAsOfDate, setSignalAsOfDate] = useState<string | null>(null);
   const displayLastTradeDate = summary?.lastTradeDate || "";
 
   // 检测屏幕尺寸
@@ -220,11 +247,19 @@ export default function HomePage() {
   const loadFundSignals = async () => {
     try {
       const response = await fetch("/api/fund-signals");
-      if (response.ok) setFundSignals((await response.json()).signals ?? []);
+      if (response.ok) {
+        const result = await response.json();
+        setFundSignals(result.signals ?? []);
+        setPortfolioRisks(result.portfolio ?? []);
+        setSignalAsOfDate(result.asOfDate ?? null);
+      }
     } catch (error) {
       console.error("加载基金信号失败:", error);
     }
   };
+
+  const actionableFundSignals = fundSignals.filter((item) => item.signal === "分批买入观察" || item.signal === "分批卖出");
+  const insufficientSignalCount = fundSignals.filter((item) => item.signal === "数据不足").length;
 
   const handleOpenStrategyAnalysis = async () => {
     setStrategyModalOpen(true);
@@ -417,17 +452,42 @@ export default function HomePage() {
           </Card>
         )}
 
-        <Card title="今日基金信号" extra={<span style={{ color: "#999", fontSize: 12 }}>净值趋势与当前仓位研究信号</span>} style={{ marginBottom: isMobile ? 16 : 24 }}>
-          {fundSignals.length === 0 ? <Empty description="暂无足够净值历史" image={Empty.PRESENTED_IMAGE_SIMPLE} /> : (
-            <List size="small" dataSource={fundSignals.filter((item) => item.signal !== "持有").slice(0, 8)} locale={{ emptyText: "当前没有触发买入/观察信号" }} renderItem={(item) => (
+        <Card title="今日基金信号" extra={<span style={{ color: "#999", fontSize: 12 }}>T-1：{signalAsOfDate || "暂无"}</span>} style={{ marginBottom: isMobile ? 16 : 24 }}>
+          {fundSignals.length === 0 ? <Empty description="暂无 T-1 信号数据，请先同步基金净值" image={Empty.PRESENTED_IMAGE_SIMPLE} /> : actionableFundSignals.length === 0 ? (
+            <Alert type="success" showIcon message={`已评估 ${fundSignals.length} 只基金，当前没有明确买入或卖出信号`} description={insufficientSignalCount > 0 ? `${insufficientSignalCount} 只基金历史数据不足；暂缓加仓和持有状态已隐藏。` : "暂缓加仓和持有状态已隐藏，避免干扰你的每日决策。"} />
+          ) : (
+            <List size="small" dataSource={actionableFundSignals.sort((a, b) => b.signalRank - a.signalRank).slice(0, 8)} renderItem={(item) => (
               <List.Item>
-                <List.Item.Meta title={`${item.fundName} · ${item.directionName}`} description={`${item.trend}，近5个数据点 ${item.return5 >= 0 ? "+" : ""}${item.return5}% · 已投入占预期 ${item.weight}%`} />
-                <Tag color={item.signal.includes("买入") ? "green" : "orange"}>{item.signal}</Tag>
+                <List.Item.Meta title={`${item.fundName} · ${item.directionName}`} description={<span>{item.strategyType === "TREND" ? "高风险趋势" : "长期核心"} · 评分 {item.score}/100 · {item.reason} · T-1：{item.dataDate || "无"}</span>} />
+                <Tag color={item.signal.includes("卖出") || item.signal.includes("减仓") ? "red" : item.signal.includes("买入") ? "green" : "orange"}>{item.signal}</Tag>
               </List.Item>
             )} />
           )}
-          <div style={{ color: "#999", fontSize: 12, marginTop: 8 }}>不含实时行情、底层持仓和自动交易；净值日期以系统最近同步数据为准。</div>
+          <div style={{ color: "#999", fontSize: 12, marginTop: 8 }}>仅使用最近一个完整交易日（T-1）及以前的净值；高风险趋势资产才会触发减仓/分批卖出提示，不执行自动交易。</div>
         </Card>
+
+        {portfolioRisks.length > 0 && (
+          <Card title="组合风险与数据质量" extra={<Link href="/alerts">查看策略与风险明细</Link>} style={{ marginBottom: isMobile ? 16 : 24 }}>
+            <Row gutter={[16, 16]}>
+              {portfolioRisks.map((portfolio) => (
+                <Col xs={24} lg={12} key={portfolio.directionId}>
+                  <Card size="small" title={portfolio.directionName}>
+                    <Row gutter={[12, 12]}>
+                      <Col span={8}><Statistic title="预算使用" value={portfolio.budgetUsedPercent} precision={1} suffix="%" /></Col>
+                      <Col span={8}><Statistic title="基金集中度 HHI" value={portfolio.concentrationHHI} precision={1} /></Col>
+                      <Col span={8}><Statistic title="平均相关性" value={portfolio.averageCorrelation ?? 0} precision={1} suffix={portfolio.averageCorrelation === null ? "不足" : "%"} /></Col>
+                    </Row>
+                    <div style={{ marginTop: 10, color: "#666", fontSize: 12 }}>
+                      当前持仓：{portfolio.dataQuality.heldFunds}/{portfolio.dataQuality.totalFunds} 只；持仓数据新鲜：{portfolio.dataQuality.freshFunds}/{portfolio.dataQuality.heldFunds} 只；官方资料待更新：{portfolio.dataQuality.staleMetadataFunds} 只；个人分类与官方分类有差异：{portfolio.dataQuality.categoryReviewFunds} 只。
+                    </div>
+                    <div style={{ marginTop: 6, color: "#666", fontSize: 12 }}>压力测试（情景估算，不是收益预测）：{portfolio.stressTests.map((test) => `${test.name}约 -¥${test.estimatedLoss.toLocaleString()}`).join("；")}</div>
+                  </Card>
+                </Col>
+              ))}
+            </Row>
+            <div style={{ color: "#999", fontSize: 12, marginTop: 8 }}>HHI 越高表示越集中；相关性越高表示基金可能同涨同跌。数据不足时不推断风险。</div>
+          </Card>
+        )}
 
         {/* 盈亏统计卡片 */}
         {summary && (

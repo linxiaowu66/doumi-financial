@@ -75,6 +75,7 @@ export async function POST(request: Request) {
       code, 
       name, 
       category, 
+      strategyType = 'CORE',
       remark,
       confirmDays = 1,
       defaultBuyFee = 0.15,
@@ -93,6 +94,10 @@ export async function POST(request: Request) {
       );
     }
 
+    if (!['CORE', 'TREND'].includes(strategyType)) {
+      return NextResponse.json({ error: '投资策略类型无效' }, { status: 400 });
+    }
+
     const takeProfitValues = [takeProfitTrigger, takeProfitDrawdown, takeProfitSellPercent];
     if (![alertThreshold, ...takeProfitValues].every((value) => Number.isFinite(Number(value)) && Number(value) >= 0 && Number(value) <= 100)) {
       return NextResponse.json({ error: '涨跌预警比例必须在 0 到 100 之间' }, { status: 400 });
@@ -106,6 +111,7 @@ export async function POST(request: Request) {
         code,
         name,
         category,
+        strategyType,
         remark,
         confirmDays: parseInt(confirmDays),
         defaultBuyFee,

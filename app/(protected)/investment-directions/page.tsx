@@ -2,9 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { Card, Button, Form, message, Flex, Typography } from "antd";
-import { PlusOutlined, FundOutlined, WarningOutlined } from "@ant-design/icons";
-import Link from "next/link";
-import { InvestmentDirection, FundAlert } from "@/types/investment-direction";
+import { PlusOutlined, FundOutlined } from "@ant-design/icons";
+import { InvestmentDirection } from "@/types/investment-direction";
 import StatsCard from "@/components/investment-directions/StatsCard";
 import DirectionList from "@/components/investment-directions/DirectionList";
 import DirectionModal from "@/components/investment-directions/DirectionModal";
@@ -14,9 +13,7 @@ const { Title, Text } = Typography;
 export default function InvestmentDirectionsPage() {
   const [members, setMembers] = useState<Array<{ id: number; name: string }>>([]);
   const [directions, setDirections] = useState<InvestmentDirection[]>([]);
-  const [alerts, setAlerts] = useState<FundAlert[]>([]);
   const [loading, setLoading] = useState(false);
-  const [alertsLoading, setAlertsLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingDirection, setEditingDirection] =
     useState<InvestmentDirection | null>(null);
@@ -49,23 +46,8 @@ export default function InvestmentDirectionsPage() {
     }
   };
 
-  // 加载预警信息
-  const loadAlerts = async () => {
-    setAlertsLoading(true);
-    try {
-      const response = await fetch("/api/investment-directions/alerts");
-      const data = await response.json();
-      setAlerts(data);
-    } catch {
-      message.error("加载预警信息失败");
-    } finally {
-      setAlertsLoading(false);
-    }
-  };
-
   useEffect(() => {
     loadDirections();
-    loadAlerts();
     fetch("/api/household-assets?membersOnly=1")
       .then((response) => response.json())
       .then((data) => setMembers(Array.isArray(data.members) ? data.members : []))
@@ -170,16 +152,6 @@ export default function InvestmentDirectionsPage() {
               新建投资方向
             </Button>
           </Flex>
-        </Card>
-
-        <Card
-          className="mb-4 md:mb-6"
-          title={<><WarningOutlined className="mr-2" />资产预警概要</>}
-          extra={<Link href="/alerts">查看全部预警</Link>}
-        >
-          <Text type="secondary">
-            {alertsLoading ? "正在加载预警..." : `当前有 ${alerts.length} 条预警，按投资方向和类型分类查看`}
-          </Text>
         </Card>
 
         <StatsCard directions={directions} />

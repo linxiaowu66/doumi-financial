@@ -18,6 +18,7 @@ export interface Fund {
   code: string;
   name: string;
   category: string | null;
+  strategyType?: "CORE" | "TREND";
   remark: string | null;
   latestNetWorth?: number | null;
   netWorthDate?: string | null;

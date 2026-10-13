@@ -6,6 +6,7 @@ import prisma from "@/lib/prisma";
 import { isStockCode } from "@/lib/fund-price";
 import { isWorkday } from "@/lib/workday";
 import { detectYesterdayFundDividends } from "@/lib/fund-dividend";
+import { buildFundSignalResult } from "@/lib/fund-signal-engine";
 import dayjs from "dayjs";
 
 // 延迟函数，用于避免限流
@@ -85,14 +86,14 @@ async function fetchFundNetWorth(code: string) {
       return { success: false, code, error: "解析JSON数据失败" };
     }
 
-    if (!fundData || (!fundData.dwjz && !fundData.gsz)) {
-      return { success: false, code, error: "基金不存在或已停售" };
+    if (!fundData || !fundData.dwjz) {
+      return { success: false, code, error: "未获取到正式净值，未写入估算净值" };
     }
 
     return {
       success: true,
       code: fundData.fundcode,
-      netWorth: fundData.dwjz || fundData.gsz,
+      netWorth: fundData.dwjz,
       netWorthDate: fundData.jzrq || "",
     };
   } catch (error) {
@@ -126,6 +127,7 @@ export async function POST(request: Request) {
         errors: [] as string[],
       },
       netWorthUpdate: { success: 0, failed: 0, errors: [] as string[] },
+      signalSnapshots: { saved: 0, errors: [] as string[] },
       dailyProfit: { success: 0, failed: 0, errors: [] as string[] },
     };
 
@@ -189,6 +191,25 @@ export async function POST(request: Request) {
       results.netWorthUpdate.errors.push(
         `更新净值失败: ${error instanceof Error ? error.message : "未知错误"}`,
       );
+    }
+
+    // 保存当日 T-1 研究信号快照，供后续信号复盘和历史回测使用。
+    try {
+      const users = await prisma.user.findMany({ select: { id: true } });
+      const snapshotDate = dayjs().format("YYYY-MM-DD");
+      for (const user of users) {
+        const result = await buildFundSignalResult(user.id);
+        for (const signal of result.signals) {
+          await prisma.fundSignalDailySnapshot.upsert({
+            where: { fundId_date: { fundId: signal.fundId, date: snapshotDate } },
+            create: { userId: user.id, directionId: signal.directionId, fundId: signal.fundId, date: snapshotDate, signal: signal.signal, score: signal.score, reason: signal.reason, dataDate: signal.dataDate },
+            update: { userId: user.id, directionId: signal.directionId, signal: signal.signal, score: signal.score, reason: signal.reason, dataDate: signal.dataDate },
+          });
+          results.signalSnapshots.saved++;
+        }
+      }
+    } catch (error) {
+      results.signalSnapshots.errors.push(error instanceof Error ? error.message : "策略信号快照保存失败");
     }
 
     // 2. 更新所有投资方向的实际投入金额

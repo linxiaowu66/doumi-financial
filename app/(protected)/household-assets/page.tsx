@@ -41,10 +41,13 @@ import dayjs, { Dayjs } from "dayjs";
 import {
   Bar,
   BarChart,
+  Cell,
   CartesianGrid,
   Legend,
   Line,
   LineChart,
+  Pie,
+  PieChart,
   ResponsiveContainer,
   Tooltip as ChartTooltip,
   XAxis,
@@ -74,6 +77,22 @@ const platformOptions = [
   { value: "PERSONAL_PENSION", label: "个人养老金", color: "orange" },
   { value: "OTHER", label: "其他", color: "default" },
 ];
+
+type AllocationCategory = "EQUITY" | "FIXED_INCOME" | "GOLD" | "CASH_FLOW" | "OTHER";
+const allocationLabels: Record<AllocationCategory, string> = {
+  EQUITY: "股票 / 权益",
+  FIXED_INCOME: "债券 / 固收",
+  GOLD: "黄金",
+  CASH_FLOW: "现金流 / 养老金",
+  OTHER: "待细分账户",
+};
+const allocationColors: Record<AllocationCategory, string> = {
+  EQUITY: "#1677ff",
+  FIXED_INCOME: "#52c41a",
+  GOLD: "#faad14",
+  CASH_FLOW: "#13c2c2",
+  OTHER: "#8c8c8c",
+};
 
 const policyTypeOptions = [
   { value: "ACCIDENT", label: "意外险" },
@@ -117,6 +136,16 @@ interface Direction {
   snapshotValue: string | null;
   snapshotMonth: string | null;
   snapshots: DirectionSnapshot[];
+}
+
+interface AllocationPoint {
+  month: string;
+  total: number;
+  EQUITY: number;
+  FIXED_INCOME: number;
+  GOLD: number;
+  CASH_FLOW: number;
+  OTHER: number;
 }
 
 interface Payment {
@@ -215,6 +244,9 @@ export default function HouseholdAssetsPage() {
   const [insurancePlans, setInsurancePlans] = useState<InsurancePlan[]>([]);
   const [directions, setDirections] = useState<Direction[]>([]);
   const [history, setHistory] = useState<HouseholdHistoryPoint[]>([]);
+  const [allocationCurrent, setAllocationCurrent] = useState<Array<{ category: AllocationCategory; value: number }>>([]);
+  const [allocationHistory, setAllocationHistory] = useState<AllocationPoint[]>([]);
+  const [allocationScopeNote, setAllocationScopeNote] = useState("");
   const [maintenanceDates, setMaintenanceDates] = useState<Array<string | Date>>([]);
   const [selectedMemberId, setSelectedMemberId] = useState<number | null>(null);
   const [memberOpen, setMemberOpen] = useState(false);
@@ -259,6 +291,9 @@ export default function HouseholdAssetsPage() {
       setInsurancePlans(data.insurancePlans);
       setDirections(data.directions);
       setHistory(data.history);
+      setAllocationCurrent(data.allocationCurrent ?? []);
+      setAllocationHistory(data.allocationHistory ?? []);
+      setAllocationScopeNote(data.allocationScopeNote ?? "");
       setMaintenanceDates(data.maintenanceDates);
       window.dispatchEvent(new Event("household-assets-updated"));
     } catch (error) {
@@ -294,6 +329,25 @@ export default function HouseholdAssetsPage() {
       refundable: insurancePlans.reduce((total, plan) => total + Number(plan.policies[0]?.refundableAmount || 0), 0),
     };
   }, [assets, directions, insurancePlans]);
+
+  const allocationPieData = useMemo(
+    () => allocationCurrent.filter((item) => item.value > 0).sort((a, b) => b.value - a.value),
+    [allocationCurrent],
+  );
+  const allocationPercentHistory = useMemo(
+    () => allocationHistory.map((point) => {
+      const total = point.total || 1;
+      return {
+        month: point.month,
+        EQUITY: point.EQUITY / total * 100,
+        FIXED_INCOME: point.FIXED_INCOME / total * 100,
+        GOLD: point.GOLD / total * 100,
+        CASH_FLOW: point.CASH_FLOW / total * 100,
+        OTHER: point.OTHER / total * 100,
+      };
+    }),
+    [allocationHistory],
+  );
 
   const updateDue = isHouseholdAssetUpdateDue(maintenanceDates);
   const currentYear = dayjs().year();
@@ -901,6 +955,49 @@ export default function HouseholdAssetsPage() {
             <Col xs={12} lg={6}><Card style={{ height: "100%" }}><Statistic title="现金流 / 养老金" value={totals.cash + totals.pension} precision={2} prefix="¥" styles={{ content: { fontSize: 22, color: "#52c41a" } }} /></Card></Col>
             <Col xs={12} lg={6}><Card style={{ height: "100%" }}><Statistic title="保险到期可退" value={totals.refundable} precision={2} prefix="¥" styles={{ content: { fontSize: 22, color: "#fa8c16" } }} /></Card></Col>
           </Row>
+
+          <Card title="家庭资产配置" style={{ marginBottom: 20 }}>
+            {allocationPieData.length ? (
+              <Row gutter={[24, 24]} align="middle">
+                <Col xs={24} lg={10}>
+                  <div style={{ width: "100%", height: 260 }}>
+                    <ResponsiveContainer>
+                      <PieChart>
+                        <Pie data={allocationPieData} dataKey="value" nameKey="category" innerRadius="52%" outerRadius="78%" paddingAngle={2}>
+                          {allocationPieData.map((item) => <Cell key={item.category} fill={allocationColors[item.category]} />)}
+                        </Pie>
+                        <ChartTooltip formatter={(value) => money(Number(value))} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                </Col>
+                <Col xs={24} lg={14}>
+                  <Space direction="vertical" size={8} style={{ width: "100%" }}>
+                    {allocationPieData.map((item) => {
+                      const total = allocationPieData.reduce((sum, row) => sum + row.value, 0);
+                      return <Flex key={item.category} justify="space-between" align="center"><Space><span style={{ width: 10, height: 10, borderRadius: "50%", background: allocationColors[item.category], display: "inline-block" }} /><Text>{allocationLabels[item.category]}</Text></Space><Text strong>{money(item.value)}（{total > 0 ? (item.value / total * 100).toFixed(1) : "0.0"}%）</Text></Flex>;
+                    })}
+                    <Text type="secondary" style={{ fontSize: 12 }}>{allocationScopeNote}</Text>
+                  </Space>
+                </Col>
+              </Row>
+            ) : <Empty description="补充家庭资产或投资方向月度快照后，这里会显示配置" />}
+            {allocationPercentHistory.length > 0 && (
+              <div style={{ width: "100%", height: 300, marginTop: 24 }}>
+                <Text strong>每月资产配比变化</Text>
+                <ResponsiveContainer>
+                  <BarChart data={allocationPercentHistory} margin={{ top: 16, right: 8, left: 4, bottom: 4 }}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="month" interval="preserveStartEnd" minTickGap={8} />
+                    <YAxis domain={[0, 100]} tickFormatter={(value) => `${value}%`} />
+                    <ChartTooltip formatter={(value) => `${Number(value).toFixed(1)}%`} />
+                    <Legend formatter={(value) => allocationLabels[value as AllocationCategory]} />
+                    {(Object.keys(allocationLabels) as AllocationCategory[]).map((category) => <Bar key={category} dataKey={category} name={category} stackId="allocation" fill={allocationColors[category]} />)}
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </Card>
 
           <Card title="家庭资产月度走势" style={{ marginBottom: 20 }}>
             {history.length ? (

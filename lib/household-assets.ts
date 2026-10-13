@@ -114,6 +114,77 @@ export interface HouseholdHistoryPoint {
   OTHER: number;
 }
 
+export const HOUSEHOLD_ALLOCATION_CATEGORIES = ["EQUITY", "FIXED_INCOME", "GOLD", "CASH_FLOW", "OTHER"] as const;
+export type HouseholdAllocationCategory = typeof HOUSEHOLD_ALLOCATION_CATEGORIES[number];
+
+export interface HouseholdAllocationPoint {
+  month: string;
+  total: number;
+  EQUITY: number;
+  FIXED_INCOME: number;
+  GOLD: number;
+  CASH_FLOW: number;
+  OTHER: number;
+}
+
+function allocationCategoryForPlatform(platform?: string): HouseholdAllocationCategory {
+  if (platform === "YUEBAO" || platform === "PERSONAL_PENSION") return "CASH_FLOW";
+  return "OTHER";
+}
+
+export function buildMonthlyHouseholdAllocationHistory(
+  manualSnapshots: HouseholdHistorySnapshot[],
+  directionSnapshots: HouseholdHistorySnapshot[],
+  directionWeights: Map<number, Partial<Record<HouseholdAllocationCategory, number>>>,
+): HouseholdAllocationPoint[] {
+  const manual = prepareHistory(manualSnapshots);
+  const directions = prepareHistory(directionSnapshots);
+  const eventMonths = [...manual, ...directions].map((snapshot) => snapshot.month).sort();
+  if (!eventMonths.length) return [];
+  const months: string[] = [];
+  const cursor = new Date(`${eventMonths[0]}-01T00:00:00`);
+  const last = new Date(`${eventMonths[eventMonths.length - 1]}-01T00:00:00`);
+  while (cursor <= last) {
+    months.push(monthKey(cursor));
+    cursor.setMonth(cursor.getMonth() + 1);
+  }
+
+  const manualState = new Map<number, { category: HouseholdAllocationCategory; value: number }>();
+  const directionState = new Map<number, number>();
+  let manualIndex = 0;
+  let directionIndex = 0;
+
+  return months.map((month) => {
+    while (manualIndex < manual.length && manual[manualIndex].month <= month) {
+      const snapshot = manual[manualIndex++];
+      manualState.set(snapshot.sourceId, { category: allocationCategoryForPlatform(snapshot.category), value: Number(snapshot.value) });
+    }
+    while (directionIndex < directions.length && directions[directionIndex].month <= month) {
+      const snapshot = directions[directionIndex++];
+      directionState.set(snapshot.sourceId, Number(snapshot.value));
+    }
+
+    const categories = Object.fromEntries(HOUSEHOLD_ALLOCATION_CATEGORIES.map((category) => [category, 0])) as Record<HouseholdAllocationCategory, number>;
+    for (const snapshot of manualState.values()) categories[snapshot.category] += snapshot.value;
+    for (const [directionId, value] of directionState) {
+      const weights = directionWeights.get(directionId);
+      if (!weights) {
+        categories.OTHER += value;
+        continue;
+      }
+      let allocated = 0;
+      for (const category of HOUSEHOLD_ALLOCATION_CATEGORIES) {
+        const amount = value * (weights[category] ?? 0);
+        categories[category] += amount;
+        allocated += amount;
+      }
+      categories.OTHER += value - allocated;
+    }
+    const total = HOUSEHOLD_ALLOCATION_CATEGORIES.reduce((sum, category) => sum + categories[category], 0);
+    return { month, total, ...categories };
+  });
+}
+
 export function nextAnnualPolicyPeriod(
   maturityDate: string | Date | null,
   now = new Date(),

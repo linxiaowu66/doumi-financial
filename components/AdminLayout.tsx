@@ -123,7 +123,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
     {
       key: "/alerts",
       icon: <WarningOutlined />,
-      label: <Link href="/alerts">资产预警</Link>,
+      label: <Link href="/alerts">策略与风险</Link>,
       onClick: () => {
         if (isMobile) setDrawerVisible(false);
       },

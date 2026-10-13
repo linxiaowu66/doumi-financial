@@ -55,6 +55,7 @@ export async function PUT(
       code,
       name,
       category,
+      strategyType,
       remark,
       confirmDays,
       defaultBuyFee,
@@ -68,6 +69,9 @@ export async function PUT(
     } = body;
 
     const optionalRules = { alertThreshold, takeProfitTrigger, takeProfitDrawdown, takeProfitSellPercent };
+    if (strategyType !== undefined && !['CORE', 'TREND'].includes(strategyType)) {
+      return NextResponse.json({ error: '投资策略类型无效' }, { status: 400 });
+    }
     if (Object.values(optionalRules).some((value) => value !== undefined && (!Number.isFinite(Number(value)) || Number(value) < 0 || Number(value) > 100))) {
       return NextResponse.json({ error: '涨跌预警比例必须在 0 到 100 之间' }, { status: 400 });
     }
@@ -90,6 +94,7 @@ export async function PUT(
         code,
         name,
         category,
+        strategyType,
         remark,
         confirmDays: confirmDays ? parseInt(confirmDays) : undefined,
         defaultBuyFee,
