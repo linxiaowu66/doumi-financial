@@ -1,0 +1,41 @@
+CREATE TABLE `DataSyncRun` (
+  `id` INTEGER NOT NULL AUTO_INCREMENT,
+  `userId` INTEGER NULL,
+  `kind` VARCHAR(40) NOT NULL,
+  `scope` VARCHAR(120) NULL,
+  `status` VARCHAR(191) NOT NULL DEFAULT 'RUNNING',
+  `asOfDate` VARCHAR(10) NULL,
+  `itemCount` INTEGER NOT NULL DEFAULT 0,
+  `errorMessage` TEXT NULL,
+  `detailsJson` LONGTEXT NULL,
+  `startedAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  `completedAt` DATETIME(3) NULL,
+  PRIMARY KEY (`id`),
+  INDEX `DataSyncRun_userId_kind_startedAt_idx` (`userId`, `kind`, `startedAt`),
+  INDEX `DataSyncRun_kind_startedAt_idx` (`kind`, `startedAt`),
+  CONSTRAINT `DataSyncRun_userId_fkey` FOREIGN KEY (`userId`) REFERENCES `User` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+CREATE TABLE `FundSignalExecution` (
+  `id` INTEGER NOT NULL AUTO_INCREMENT,
+  `userId` INTEGER NOT NULL,
+  `directionId` INTEGER NOT NULL,
+  `fundId` INTEGER NOT NULL,
+  `signalDate` VARCHAR(10) NOT NULL,
+  `action` VARCHAR(191) NOT NULL,
+  `suggestedAmount` DECIMAL(15,2) NOT NULL,
+  `status` VARCHAR(191) NOT NULL DEFAULT 'PENDING',
+  `executedAmount` DECIMAL(15,2) NOT NULL DEFAULT 0,
+  `executedDate` DATETIME(3) NULL,
+  `executionPrice` DECIMAL(10,4) NULL,
+  `note` TEXT NULL,
+  `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  `updatedAt` DATETIME(3) NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE INDEX `FundSignalExecution_userId_fundId_signalDate_key` (`userId`, `fundId`, `signalDate`),
+  INDEX `FundSignalExecution_userId_signalDate_idx` (`userId`, `signalDate`),
+  INDEX `FundSignalExecution_fundId_signalDate_idx` (`fundId`, `signalDate`),
+  CONSTRAINT `FundSignalExecution_userId_fkey` FOREIGN KEY (`userId`) REFERENCES `User` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `FundSignalExecution_directionId_fkey` FOREIGN KEY (`directionId`) REFERENCES `InvestmentDirection` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `FundSignalExecution_fundId_fkey` FOREIGN KEY (`fundId`) REFERENCES `Fund` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;

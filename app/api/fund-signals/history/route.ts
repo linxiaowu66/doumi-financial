@@ -9,5 +9,5 @@ export async function GET(request: Request) {
   const fundId = Number(searchParams.get("fundId"));
   const where = { userId, ...(Number.isInteger(fundId) && fundId > 0 ? { fundId } : {}) };
   const snapshots = await prisma.fundSignalDailySnapshot.findMany({ where, orderBy: { date: "desc" }, take: 365, include: { fund: { select: { name: true, code: true } } } });
-  return NextResponse.json(snapshots);
+  return NextResponse.json(snapshots.map((snapshot) => ({ ...snapshot, actionAmount: Number(snapshot.actionAmount) })));
 }

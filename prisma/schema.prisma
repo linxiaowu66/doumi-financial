@@ -10,18 +10,23 @@ datasource db {
 
 // 用户表
 model User {
-  id                   Int                   @id @default(autoincrement())
-  email                String                @unique
-  name                 String?
-  password             String // 加密后的密码
-  createdAt            DateTime              @default(now())
-  updatedAt            DateTime              @updatedAt
-  investmentDirections InvestmentDirection[] // 用户的投资方向
-  householdMembers     HouseholdMember[]
-  householdAssets      HouseholdAsset[]
-  insurancePolicies    InsurancePolicy[]
-  insurancePlans       InsurancePlan[]
+  id                        Int                         @id @default(autoincrement())
+  email                     String                      @unique
+  name                      String?
+  password                  String // 加密后的密码
+  createdAt                 DateTime                    @default(now())
+  updatedAt                 DateTime                    @updatedAt
+  investmentDirections      InvestmentDirection[] // 用户的投资方向
+  householdMembers          HouseholdMember[]
+  householdAssets           HouseholdAsset[]
+  insurancePolicies         InsurancePolicy[]
+  insurancePlans            InsurancePlan[]
   portfolioStrategyAnalyses PortfolioStrategyAnalysis[]
+  householdAssetPolicy      HouseholdAssetPolicy?
+  strategyAccounts          StrategyAccount[]
+  dataSyncRuns              DataSyncRun[]
+  signalExecutions          FundSignalExecution[]
+  virtualSignalAccounts     SignalVirtualAccount[]
 }
 
 // 家庭成员
@@ -34,9 +39,9 @@ model HouseholdMember {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  assets            HouseholdAsset[]
-  insurancePolicies InsurancePolicy[] @relation("InsuredMember")
-  insurancePlans    InsurancePlan[]   @relation("InsurancePlanMember")
+  assets               HouseholdAsset[]
+  insurancePolicies    InsurancePolicy[]     @relation("InsuredMember")
+  insurancePlans       InsurancePlan[]       @relation("InsurancePlanMember")
   investmentDirections InvestmentDirection[]
 
   @@index([userId])
@@ -44,19 +49,21 @@ model HouseholdMember {
 
 // 手动维护的家庭资产账户
 model HouseholdAsset {
-  id        Int              @id @default(autoincrement())
-  userId    Int
-  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  memberId  Int?
-  member    HouseholdMember? @relation(fields: [memberId], references: [id], onDelete: SetNull)
-  name      String
-  platform  String
-  balance   Decimal          @default(0) @db.Decimal(15, 2)
-  asOfDate  DateTime
-  remark    String?          @db.Text
-  createdAt DateTime         @default(now())
-  updatedAt DateTime         @updatedAt
-  histories HouseholdAssetHistory[]
+  id              Int                     @id @default(autoincrement())
+  userId          Int
+  user            User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  memberId        Int?
+  member          HouseholdMember?        @relation(fields: [memberId], references: [id], onDelete: SetNull)
+  name            String
+  platform        String
+  strategyName    String?                 @db.VarChar(120)
+  balance         Decimal                 @default(0) @db.Decimal(15, 2)
+  asOfDate        DateTime
+  remark          String?                 @db.Text
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+  histories       HouseholdAssetHistory[]
+  strategyAccount StrategyAccount?
 
   @@index([userId])
   @@index([memberId])
@@ -77,17 +84,93 @@ model HouseholdAssetHistory {
   @@index([asOfDate])
 }
 
+// 家庭层资产政策：只保存约束和目标，不直接产生交易
+model HouseholdAssetPolicy {
+  id                   Int      @id @default(autoincrement())
+  userId               Int      @unique
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  annualReturnTarget   Decimal  @default(5) @db.Decimal(5, 2)
+  emergencyCashAmount  Decimal  @default(0) @db.Decimal(15, 2)
+  rebalanceBandPercent Decimal  @default(5) @db.Decimal(5, 2)
+  targetAllocationJson String   @db.Text
+  reviewFrequency      String   @default("MONTHLY") @db.VarChar(20)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+}
+
+// 外部主理人组合，例如且慢里的长赢策略
+model StrategyAccount {
+  id                    Int                      @id @default(autoincrement())
+  userId                Int
+  user                  User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  householdAssetId      Int?                     @unique
+  householdAsset        HouseholdAsset?          @relation(fields: [householdAssetId], references: [id], onDelete: SetNull)
+  name                  String
+  managerName           String?
+  strategyName          String?
+  platform              String
+  sourceType            String                   @default("SCREENSHOT")
+  qiemanUserPropertyId  String?                  @db.VarChar(64)
+  qiemanUserPropertyIds String?                  @db.Text
+  qiemanBearerToken     String?                  @db.Text
+  asOfDate              DateTime?
+  note                  String?                  @db.Text
+  createdAt             DateTime                 @default(now())
+  updatedAt             DateTime                 @updatedAt
+  holdings              StrategyAccountHolding[]
+  imports               StrategyAccountImport[]
+
+  @@index([userId])
+  @@index([platform])
+  @@index([platform, qiemanUserPropertyId])
+}
+
+model StrategyAccountImport {
+  id                Int                      @id @default(autoincrement())
+  strategyAccountId Int
+  strategyAccount   StrategyAccount          @relation(fields: [strategyAccountId], references: [id], onDelete: Cascade)
+  asOfDate          DateTime
+  sourceType        String                   @default("SCREENSHOT_AI")
+  sourceFileNames   String?                  @db.Text
+  rawJson           String                   @db.LongText
+  status            String                   @default("CONFIRMED")
+  createdAt         DateTime                 @default(now())
+  holdings          StrategyAccountHolding[]
+
+  @@index([strategyAccountId, asOfDate])
+}
+
+model StrategyAccountHolding {
+  id                Int                    @id @default(autoincrement())
+  strategyAccountId Int
+  strategyAccount   StrategyAccount        @relation(fields: [strategyAccountId], references: [id], onDelete: Cascade)
+  importId          Int?
+  import            StrategyAccountImport? @relation(fields: [importId], references: [id], onDelete: SetNull)
+  asOfDate          DateTime
+  fundCode          String?
+  fundName          String
+  assetClass        String?
+  marketValue       Decimal                @db.Decimal(15, 2)
+  weight            Decimal?               @db.Decimal(7, 4)
+  confidence        Decimal?               @db.Decimal(5, 2)
+  note              String?                @db.Text
+  createdAt         DateTime               @default(now())
+
+  @@index([strategyAccountId, asOfDate])
+  @@index([fundCode])
+}
+
 // 家庭保险保障项目
 model InsurancePlan {
-  id              Int              @id @default(autoincrement())
+  id              Int               @id @default(autoincrement())
   userId          Int
-  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user            User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   insuredMemberId Int?
-  insuredMember   HouseholdMember? @relation("InsurancePlanMember", fields: [insuredMemberId], references: [id], onDelete: SetNull)
+  insuredMember   HouseholdMember?  @relation("InsurancePlanMember", fields: [insuredMemberId], references: [id], onDelete: SetNull)
   type            String
-  mode            String           @default("LONG_TERM")
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
+  mode            String            @default("LONG_TERM")
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
   policies        InsurancePolicy[]
 
   @@index([userId])
@@ -96,27 +179,27 @@ model InsurancePlan {
 
 // 家庭保险实际保单
 model InsurancePolicy {
-  id                  Int              @id @default(autoincrement())
-  planId              Int
-  plan                InsurancePlan    @relation(fields: [planId], references: [id], onDelete: Cascade)
-  userId              Int
-  user                User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  insuredMemberId     Int?
-  insuredMember       HouseholdMember? @relation("InsuredMember", fields: [insuredMemberId], references: [id], onDelete: SetNull)
-  name                String
-  provider            String?
-  policyNumber        String?
-  type                String
-  coverageAmount      Decimal          @default(0) @db.Decimal(15, 2)
-  annualPremium       Decimal          @default(0) @db.Decimal(15, 2)
-  startDate           DateTime?
-  maturityDate        DateTime?
-  refundableAmount    Decimal          @default(0) @db.Decimal(15, 2)
-  active              Boolean          @default(true)
-  remark              String?          @db.Text
-  createdAt           DateTime         @default(now())
-  updatedAt           DateTime         @updatedAt
-  premiumPayments     InsurancePremiumPayment[]
+  id               Int                       @id @default(autoincrement())
+  planId           Int
+  plan             InsurancePlan             @relation(fields: [planId], references: [id], onDelete: Cascade)
+  userId           Int
+  user             User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  insuredMemberId  Int?
+  insuredMember    HouseholdMember?          @relation("InsuredMember", fields: [insuredMemberId], references: [id], onDelete: SetNull)
+  name             String
+  provider         String?
+  policyNumber     String?
+  type             String
+  coverageAmount   Decimal                   @default(0) @db.Decimal(15, 2)
+  annualPremium    Decimal                   @default(0) @db.Decimal(15, 2)
+  startDate        DateTime?
+  maturityDate     DateTime?
+  refundableAmount Decimal                   @default(0) @db.Decimal(15, 2)
+  active           Boolean                   @default(true)
+  remark           String?                   @db.Text
+  createdAt        DateTime                  @default(now())
+  updatedAt        DateTime                  @updatedAt
+  premiumPayments  InsurancePremiumPayment[]
 
   @@index([userId])
   @@index([planId])
@@ -140,22 +223,24 @@ model InsurancePremiumPayment {
 
 // 投资方向（海外长钱、稳钱账户、长钱账户等）
 model InvestmentDirection {
-  id              Int                           @id @default(autoincrement())
-  userId          Int? // 所属用户（临时可选）
-  user            User?                         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  householdMemberId Int?
-  householdMember   HouseholdMember?            @relation(fields: [householdMemberId], references: [id], onDelete: SetNull)
-  name            String // 投资方向名称
-  type            String                        @default("FUND") // 方向类型：FUND(基金), STOCK(股票)
-  expectedAmount  Decimal                       @db.Decimal(15, 2) // 预期投入金额
-  actualAmount    Decimal                       @default(0) @db.Decimal(15, 2) // 实际投入金额
-  createdAt       DateTime                      @default(now())
-  updatedAt       DateTime                      @updatedAt
-  funds           Fund[] // 该方向下的基金
-  categoryTargets CategoryTarget[] // 该方向下的分类目标
-  dailyProfits    DirectionDailyProfit[] // 每日盈亏记录
-  analyses        InvestmentDirectionAnalysis[] // AI分析历史记录
+  id                 Int                           @id @default(autoincrement())
+  userId             Int? // 所属用户（临时可选）
+  user               User?                         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  householdMemberId  Int?
+  householdMember    HouseholdMember?              @relation(fields: [householdMemberId], references: [id], onDelete: SetNull)
+  name               String // 投资方向名称
+  type               String                        @default("FUND") // 方向类型：FUND(基金), STOCK(股票)
+  expectedAmount     Decimal                       @db.Decimal(15, 2) // 预期投入金额
+  actualAmount       Decimal                       @default(0) @db.Decimal(15, 2) // 实际投入金额
+  createdAt          DateTime                      @default(now())
+  updatedAt          DateTime                      @updatedAt
+  funds              Fund[] // 该方向下的基金
+  categoryTargets    CategoryTarget[] // 该方向下的分类目标
+  dailyProfits       DirectionDailyProfit[] // 每日盈亏记录
+  analyses           InvestmentDirectionAnalysis[] // AI分析历史记录
   householdSnapshots HouseholdDirectionSnapshot[]
+  signalExecutions   FundSignalExecution[]
+  virtualTrades      SignalVirtualTrade[]
 
   @@index([userId])
   @@index([householdMemberId])
@@ -201,7 +286,7 @@ model Fund {
   code             String // 基金代码
   name             String // 基金名称
   category         String? // 分类标识（如"标普"）
-  strategyType     String  @default("CORE") // CORE长期核心；TREND高风险趋势
+  strategyType     String              @default("CORE") // CORE长期核心；TREND高风险趋势
   remark           String?             @db.Text // 备注
   latestNetWorth   Decimal?            @db.Decimal(10, 4) // 最新净值
   netWorthDate     String? // 净值日期
@@ -217,19 +302,21 @@ model Fund {
   takeProfitDrawdown    Decimal @default(3.00) @db.Decimal(5, 2) // 高点回撤止盈比例 %
   takeProfitSellPercent Decimal @default(50.00) @db.Decimal(5, 2) // 建议卖出仓位 %
 
-  actualCategory       String?   // 数据源披露的官方分类
-  actualCategorySource String?   // 分类来源
-  metadataAsOf         String?   // 资料披露日期
+  actualCategory       String? // 数据源披露的官方分类
+  actualCategorySource String? // 分类来源
+  metadataAsOf         String? // 资料披露日期
   metadataFetchedAt    DateTime? // 最近同步时间
   metadataJson         String?   @db.LongText // 资产配置、前十大持仓等公开资料快照
 
-  createdAt           DateTime              @default(now())
-  updatedAt           DateTime              @updatedAt
+  createdAt           DateTime                  @default(now())
+  updatedAt           DateTime                  @updatedAt
   transactions        Transaction[] // 交易记录
   plannedPurchases    PlannedPurchase[] // 计划买入
   pendingTransactions PendingTransaction[] // 待确认交易
   netWorthHistory     FundNetWorthHistory[] // 净值历史
   signalSnapshots     FundSignalDailySnapshot[]
+  signalExecutions    FundSignalExecution[]
+  virtualTrades       SignalVirtualTrade[]
   dailyProfits        FundDailyProfit[] // 每日盈亏记录
 }
 
@@ -339,6 +426,25 @@ model PortfolioStrategyAnalysis {
   @@index([userId, createdAt])
 }
 
+// 数据同步任务状态，便于识别过期数据并支持重试
+model DataSyncRun {
+  id           Int       @id @default(autoincrement())
+  userId       Int?
+  user         User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind         String    @db.VarChar(40) // NET_WORTH、QIEMAN、METADATA
+  scope        String?   @db.VarChar(120)
+  status       String    @default("RUNNING") // RUNNING、SUCCESS、FAILED
+  asOfDate     String?   @db.VarChar(10)
+  itemCount    Int       @default(0)
+  errorMessage String?   @db.Text
+  detailsJson  String?   @db.LongText
+  startedAt    DateTime  @default(now())
+  completedAt  DateTime?
+
+  @@index([userId, kind, startedAt])
+  @@index([kind, startedAt])
+}
+
 // 年度盈利目标
 model AnnualProfitTarget {
   id           Int      @id @default(autoincrement())
@@ -374,6 +480,8 @@ model FundSignalDailySnapshot {
   fund         Fund     @relation(fields: [fundId], references: [id], onDelete: Cascade)
   date         String
   signal       String
+  action       String   @default("NONE") // BUY、SELL、NONE
+  actionAmount Decimal  @default(0) @db.Decimal(15, 2)
   score        Int
   reason       String   @db.Text
   dataDate     String?
@@ -382,6 +490,71 @@ model FundSignalDailySnapshot {
   @@unique([fundId, date])
   @@index([userId, date])
   @@index([directionId, date])
+}
+
+// 用户对买卖信号的实际执行反馈，不等同于交易记录
+model FundSignalExecution {
+  id              Int                 @id @default(autoincrement())
+  userId          Int
+  user            User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  directionId     Int
+  direction       InvestmentDirection @relation(fields: [directionId], references: [id], onDelete: Cascade)
+  fundId          Int
+  fund            Fund                @relation(fields: [fundId], references: [id], onDelete: Cascade)
+  signalDate      String              @db.VarChar(10)
+  action          String // BUY、SELL
+  suggestedAmount Decimal             @db.Decimal(15, 2)
+  status          String              @default("PENDING") // PENDING、EXECUTED、PARTIAL、SKIPPED
+  executedAmount  Decimal             @default(0) @db.Decimal(15, 2)
+  executedDate    DateTime?
+  executionPrice  Decimal?            @db.Decimal(10, 4)
+  note            String?             @db.Text
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  @@unique([userId, fundId, signalDate])
+  @@index([userId, signalDate])
+  @@index([fundId, signalDate])
+}
+
+// 只记录假设成交的信号账户，不等同于真实交易账户
+model SignalVirtualAccount {
+  id            Int                  @id @default(autoincrement())
+  userId        Int
+  user          User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name          String               @default("默认虚拟信号账户")
+  initialCash   Decimal              @default(0) @db.Decimal(15, 2)
+  cash          Decimal              @default(0) @db.Decimal(15, 2)
+  startingPositionsJson String         @default("{}") @db.LongText
+  asOfDate      String?              @db.VarChar(10)
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+  trades        SignalVirtualTrade[]
+
+  @@unique([userId, name])
+  @@index([userId, updatedAt])
+}
+
+model SignalVirtualTrade {
+  id                Int                 @id @default(autoincrement())
+  virtualAccountId  Int
+  virtualAccount    SignalVirtualAccount @relation(fields: [virtualAccountId], references: [id], onDelete: Cascade)
+  directionId       Int
+  direction         InvestmentDirection @relation(fields: [directionId], references: [id], onDelete: Cascade)
+  fundId            Int
+  fund              Fund                @relation(fields: [fundId], references: [id], onDelete: Cascade)
+  signalDate        String              @db.VarChar(10)
+  action            String              // BUY、SELL
+  amount            Decimal             @db.Decimal(15, 2)
+  price             Decimal             @db.Decimal(10, 4)
+  shares            Decimal             @db.Decimal(18, 6)
+  fee               Decimal             @default(0) @db.Decimal(15, 2)
+  reason            String?             @db.Text
+  createdAt         DateTime            @default(now())
+
+  @@unique([virtualAccountId, fundId, signalDate])
+  @@index([virtualAccountId, signalDate])
+  @@index([fundId, signalDate])
 }
 
 // 基金每日盈亏记录

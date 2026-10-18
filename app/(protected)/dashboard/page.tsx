@@ -14,6 +14,7 @@ import {
   List,
   Spin,
   Tag,
+  InputNumber,
 } from "antd";
 import {
   FundOutlined,
@@ -87,6 +88,8 @@ interface FundSignal {
   fundId: number;
   fundName: string;
   directionName: string;
+  action: "BUY" | "SELL" | "NONE";
+  actionAmount: number;
   signal: string;
   signalRank: number;
   score: number;
@@ -102,6 +105,14 @@ interface FundSignal {
   targetPercent: number | null;
   dataPoints: number;
   dataDate?: string | null;
+}
+
+interface SignalExecution {
+  fundId: number;
+  signalDate: string;
+  status: "PENDING" | "EXECUTED" | "PARTIAL" | "SKIPPED";
+  suggestedAmount: number;
+  executedAmount: number;
 }
 
 interface PortfolioRisk {
@@ -120,6 +131,24 @@ interface PortfolioRisk {
   dataQuality: { totalFunds: number; heldFunds: number; freshFunds: number; insufficientFunds: number; staleMetadataFunds: number; categoryReviewFunds: number };
 }
 
+interface HouseholdStrategySummary {
+  combinedValue: number;
+  directionValue: number;
+  externalAccountValue: number;
+  unclassifiedExternalValue: number;
+  rows: Array<{ assetClass: string; value: number; percent: number }>;
+  accountsNeedingReview: Array<{ name: string; value: number; reason: string }>;
+  note: string;
+}
+
+const householdAssetLabels: Record<string, string> = {
+  EQUITY: "股票 / 权益",
+  FIXED_INCOME: "债券 / 固收",
+  GOLD: "黄金",
+  CASH_FLOW: "现金流 / 养老金",
+  OTHER: "待细分账户",
+};
+
 export default function HomePage() {
   const { message } = App.useApp();
   const { status } = useSession();
@@ -136,7 +165,9 @@ export default function HomePage() {
   const [strategyReport, setStrategyReport] = useState<string | null>(null);
   const [strategyHistory, setStrategyHistory] = useState<Array<{ id: number; content: string; createdAt: string }>>([]);
   const [fundSignals, setFundSignals] = useState<FundSignal[]>([]);
+  const [signalExecutions, setSignalExecutions] = useState<Record<number, SignalExecution>>({});
   const [portfolioRisks, setPortfolioRisks] = useState<PortfolioRisk[]>([]);
+  const [householdStrategy, setHouseholdStrategy] = useState<HouseholdStrategySummary | null>(null);
   const [signalAsOfDate, setSignalAsOfDate] = useState<string | null>(null);
   const displayLastTradeDate = summary?.lastTradeDate || "";
 
@@ -251,14 +282,54 @@ export default function HomePage() {
         const result = await response.json();
         setFundSignals(result.signals ?? []);
         setPortfolioRisks(result.portfolio ?? []);
+        setHouseholdStrategy(result.household ?? null);
         setSignalAsOfDate(result.asOfDate ?? null);
+        const executionResponse = await fetch(`/api/fund-signals/executions?date=${encodeURIComponent(dayjs().format("YYYY-MM-DD"))}`);
+        if (executionResponse.ok) {
+          const executions = await executionResponse.json() as SignalExecution[];
+          setSignalExecutions(Object.fromEntries(executions.map((execution) => [execution.fundId, execution])));
+        }
       }
     } catch (error) {
       console.error("加载基金信号失败:", error);
     }
   };
 
-  const actionableFundSignals = fundSignals.filter((item) => item.signal === "分批买入观察" || item.signal === "分批卖出");
+  const saveSignalExecution = async (item: FundSignal, status: SignalExecution["status"], executedAmount: number) => {
+    try {
+      const response = await fetch("/api/fund-signals/executions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ fundId: item.fundId, signalDate: dayjs().format("YYYY-MM-DD"), status, executedAmount }) });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "保存执行记录失败");
+      setSignalExecutions((current) => ({ ...current, [item.fundId]: data }));
+      message.success(status === "SKIPPED" ? "已记录为暂不执行" : "已记录执行金额");
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : "保存执行记录失败");
+    }
+  };
+
+  const saveVirtualSignal = async (item: FundSignal) => {
+    try {
+      const response = await fetch("/api/fund-signals/virtual-account", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ fundId: item.fundId, signalDate: item.dataDate || signalAsOfDate || dayjs().subtract(1, "day").format("YYYY-MM-DD"), amount: item.actionAmount }) });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "记入虚拟账户失败");
+      message.success(`已将${item.action === "BUY" ? "买入" : "卖出"}信号记入虚拟账户`);
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : "记入虚拟账户失败");
+    }
+  };
+
+  const confirmSignalExecution = (item: FundSignal) => {
+    let amount = item.actionAmount;
+    Modal.confirm({
+      title: `记录${item.action === "BUY" ? "买入" : "卖出"}执行`,
+      content: <InputNumber min={0} max={item.actionAmount} precision={2} defaultValue={item.actionAmount} addonAfter="元" style={{ width: "100%" }} onChange={(value) => { amount = Number(value || 0); }} />,
+      okText: "保存",
+      cancelText: "取消",
+      onOk: () => saveSignalExecution(item, amount >= item.actionAmount ? "EXECUTED" : "PARTIAL", amount),
+    });
+  };
+
+  const actionableFundSignals = fundSignals.filter((item) => item.action !== "NONE" && item.actionAmount > 0);
   const insufficientSignalCount = fundSignals.filter((item) => item.signal === "数据不足").length;
 
   const handleOpenStrategyAnalysis = async () => {
@@ -459,12 +530,30 @@ export default function HomePage() {
             <List size="small" dataSource={actionableFundSignals.sort((a, b) => b.signalRank - a.signalRank).slice(0, 8)} renderItem={(item) => (
               <List.Item>
                 <List.Item.Meta title={`${item.fundName} · ${item.directionName}`} description={<span>{item.strategyType === "TREND" ? "高风险趋势" : "长期核心"} · 评分 {item.score}/100 · {item.reason} · T-1：{item.dataDate || "无"}</span>} />
-                <Tag color={item.signal.includes("卖出") || item.signal.includes("减仓") ? "red" : item.signal.includes("买入") ? "green" : "orange"}>{item.signal}</Tag>
+                <Space wrap>
+                  <Tag color={item.action === "SELL" ? "red" : "green"}>{item.action === "SELL" ? "卖出" : "买入"} ¥{item.actionAmount.toLocaleString()}</Tag>
+                  {signalExecutions[item.fundId]?.status === "EXECUTED" || signalExecutions[item.fundId]?.status === "PARTIAL" ? <Tag color="blue">已记录 ¥{signalExecutions[item.fundId].executedAmount.toLocaleString()}</Tag> : signalExecutions[item.fundId]?.status === "SKIPPED" ? <Tag>已跳过</Tag> : <><Button size="small" onClick={() => confirmSignalExecution(item)}>记录执行</Button><Button size="small" onClick={() => void saveSignalExecution(item, "SKIPPED", 0)}>跳过</Button></>}
+                  <Button size="small" onClick={() => void saveVirtualSignal(item)}>记入虚拟账户</Button>
+                </Space>
               </List.Item>
             )} />
           )}
-          <div style={{ color: "#999", fontSize: 12, marginTop: 8 }}>仅使用最近一个完整交易日（T-1）及以前的净值；高风险趋势资产才会触发减仓/分批卖出提示，不执行自动交易。</div>
+          <div style={{ color: "#999", fontSize: 12, marginTop: 8 }}>仅使用最近一个完整交易日（T-1）及以前的净值；金额按目标缺口或当前市值分批取整，按订单本金估算，最终费用以交易平台为准，不执行自动交易。</div>
         </Card>
+
+        {householdStrategy && (
+          <Card title="家庭资产策略底盘" style={{ marginBottom: isMobile ? 16 : 24 }}>
+            <Row gutter={[16, 16]}>
+              <Col xs={12} sm={6}><Statistic title="可见合计" value={householdStrategy.combinedValue} precision={0} prefix="¥" /></Col>
+              <Col xs={12} sm={6}><Statistic title="投资方向" value={householdStrategy.directionValue} precision={0} prefix="¥" /></Col>
+              <Col xs={12} sm={6}><Statistic title="外部账户" value={householdStrategy.externalAccountValue} precision={0} prefix="¥" /></Col>
+              <Col xs={12} sm={6}><Statistic title="待确认金额" value={householdStrategy.unclassifiedExternalValue} precision={0} prefix="¥" valueStyle={{ color: householdStrategy.unclassifiedExternalValue > 0 ? "#faad14" : undefined }} /></Col>
+            </Row>
+            <Space wrap style={{ marginTop: 12 }}>{householdStrategy.rows.map((row) => <Tag key={row.assetClass}>{householdAssetLabels[row.assetClass] || row.assetClass} {row.percent.toFixed(1)}%</Tag>)}</Space>
+            {householdStrategy.accountsNeedingReview.length > 0 && <Alert style={{ marginTop: 12 }} type="warning" showIcon message="有外部账户缺少底层持仓，暂不用于自动计算买卖金额" description={householdStrategy.accountsNeedingReview.map((item) => `${item.name} ¥${item.value.toLocaleString()}：${item.reason}`).join("；")} />}
+            <div style={{ color: "#999", fontSize: 12, marginTop: 8 }}>{householdStrategy.note}</div>
+          </Card>
+        )}
 
         {portfolioRisks.length > 0 && (
           <Card title="组合风险与数据质量" extra={<Link href="/alerts">查看策略与风险明细</Link>} style={{ marginBottom: isMobile ? 16 : 24 }}>

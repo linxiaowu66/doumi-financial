@@ -127,8 +127,10 @@ export interface HouseholdAllocationPoint {
   OTHER: number;
 }
 
-function allocationCategoryForPlatform(platform?: string): HouseholdAllocationCategory {
+export function allocationCategoryForPlatform(platform?: string): HouseholdAllocationCategory {
+  if (HOUSEHOLD_ALLOCATION_CATEGORIES.includes(platform as HouseholdAllocationCategory)) return platform as HouseholdAllocationCategory;
   if (platform === "YUEBAO" || platform === "PERSONAL_PENSION") return "CASH_FLOW";
+  if (platform === "HUATAI") return "EQUITY";
   return "OTHER";
 }
 

@@ -30,7 +30,7 @@ function fromPersonalCategory(category: string | null | undefined, fundName: str
   const value = `${category ?? ""}${fundName}`;
   if (/黄金|贵金属/.test(value)) return "GOLD" as const;
   if (/固收|债券|短债|纯债/.test(value)) return "FIXED_INCOME" as const;
-  if (/成长|创业|科创|科技|股票|权益/.test(value)) return "EQUITY" as const;
+  if (/成长|创业|科创|科技|股票|权益|红利|商品|大宗/.test(value)) return "EQUITY" as const;
   return "OTHER" as const;
 }
 

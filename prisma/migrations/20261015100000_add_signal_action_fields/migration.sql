@@ -1,0 +1,3 @@
+ALTER TABLE `FundSignalDailySnapshot`
+  ADD COLUMN `action` VARCHAR(191) NOT NULL DEFAULT 'NONE',
+  ADD COLUMN `actionAmount` DECIMAL(15, 2) NOT NULL DEFAULT 0;

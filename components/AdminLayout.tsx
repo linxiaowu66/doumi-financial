@@ -22,6 +22,7 @@ import {
   SettingOutlined,
   WarningOutlined,
   BankOutlined,
+  SlidersOutlined,
 } from "@ant-design/icons";
 import type { MenuProps } from "antd";
 import Link from "next/link";
@@ -141,6 +142,14 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
       },
     },
     {
+      key: "/strategy-center",
+      icon: <SlidersOutlined />,
+      label: <Link href="/strategy-center">策略中枢</Link>,
+      onClick: () => {
+        if (isMobile) setDrawerVisible(false);
+      },
+    },
+    {
       key: "/settings",
       icon: <SettingOutlined />,
       label: <Link href="/settings">系统设置</Link>,
@@ -157,6 +166,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
       return "/investment-directions";
     if (pathname.startsWith("/alerts")) return "/alerts";
     if (pathname.startsWith("/household-assets")) return "/household-assets";
+    if (pathname.startsWith("/strategy-center")) return "/strategy-center";
     if (pathname.startsWith("/settings")) return "/settings";
     return "/dashboard";
   };

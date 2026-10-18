@@ -1,0 +1,6 @@
+- [x] Add action type and amount to fund signals and daily snapshots.
+- [x] Apply target-gap, tranche, trend-break and recovery rules in the signal engine.
+- [x] Add household known/unknown allocation summary and duplicate-entry warning.
+- [x] Record strategy-account metadata for externally managed portfolios such as QIEMAN long-term strategies.
+- [x] Display action amount and reason on dashboard and strategy page.
+- [x] Run typecheck, diff checks, code graph sync and responsive browser checks. OpenSpec CLI is unavailable in this environment.

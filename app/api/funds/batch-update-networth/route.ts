@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { isStockCode } from "@/lib/fund-price";
 import { getAuthenticatedUserId } from "@/lib/auth-scope";
+import { finishDataSyncRun, startDataSyncRun } from "@/lib/data-sync";
 
 // 延迟函数，用于避免限流
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -137,10 +138,13 @@ async function fetchFundNetWorth(code: string) {
 }
 
 export async function POST(request: Request) {
+  let syncRunId: number | null = null;
   try {
     const userId = await getAuthenticatedUserId();
     if (!userId) return NextResponse.json({ error: "未登录" }, { status: 401 });
     const { directionId } = await request.json();
+    const syncRun = await startDataSyncRun(userId, "NET_WORTH", directionId ? `direction:${directionId}` : "all");
+    syncRunId = syncRun.id;
 
     // 构建查询条件
     const where: {
@@ -166,6 +170,7 @@ export async function POST(request: Request) {
     });
 
     if (funds.length === 0) {
+      await finishDataSyncRun(syncRun.id, { status: "SUCCESS", itemCount: 0 });
       return NextResponse.json({
         success: true,
         message: "没有需要更新的基金",
@@ -228,6 +233,13 @@ export async function POST(request: Request) {
     const successCount = results.filter((r) => r.success).length;
     const failCount = results.filter((r) => !r.success).length;
 
+    await finishDataSyncRun(syncRun.id, {
+      status: failCount > 0 && successCount === 0 ? "FAILED" : "SUCCESS",
+      itemCount: successCount,
+      asOfDate: results.map((item) => item.netWorthDate).filter(Boolean).sort().at(-1) || null,
+      errorMessage: failCount > 0 ? `${failCount} 个基金同步失败` : null,
+      detailsJson: { total: funds.length, successCount, failCount },
+    });
     return NextResponse.json({
       success: true,
       message: `更新完成：成功 ${successCount} 个，失败 ${failCount} 个`,
@@ -237,6 +249,7 @@ export async function POST(request: Request) {
       results,
     });
   } catch (error: unknown) {
+    if (syncRunId !== null) await finishDataSyncRun(syncRunId, { status: "FAILED", errorMessage: error instanceof Error ? error.message : "未知错误" });
     console.error("批量更新净值失败:", error);
     const message = error instanceof Error ? error.message : "未知错误";
     return NextResponse.json(

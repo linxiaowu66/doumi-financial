@@ -1,0 +1,2 @@
+name: qieman-settings-and-api-only
+description: Move Qieman credentials to system settings, remove screenshot importing, and support both Qieman accounts.

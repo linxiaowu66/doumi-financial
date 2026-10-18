@@ -8,9 +8,9 @@ import type { FundAlert } from "@/types/investment-direction";
 
 const { Title, Text } = Typography;
 
-type ActionSignal = { fundId: number; fundName: string; directionName: string; signal: string; signalRank: number; score: number; reason: string; strategyType: "CORE" | "TREND"; dataDate: string | null };
+type ActionSignal = { fundId: number; fundName: string; directionName: string; action: "BUY" | "SELL" | "NONE"; actionAmount: number; signal: string; signalRank: number; score: number; reason: string; strategyType: "CORE" | "TREND"; dataDate: string | null };
 type PortfolioRisk = { directionId: number; directionName: string; budgetUsedPercent: number; concentrationHHI: number; categoryConcentrationHHI: number; averageCorrelation: number | null; highestCorrelation: number | null; stressTests: Array<{ name: string; estimatedLoss: number; note: string }>; dataQuality: { totalFunds: number; heldFunds: number; freshFunds: number; insufficientFunds: number; staleMetadataFunds: number; categoryReviewFunds: number } };
-type BacktestResult = { fundName: string; enoughData: boolean; observations: number; strategy?: { annualizedReturn: number; maxDrawdown: number }; buyAndHold?: { annualizedReturn: number; maxDrawdown: number } };
+type BacktestResult = { fundName: string; enoughData: boolean; observations: number; strategy?: { annualizedReturn: number; annualizedVolatility: number; sharpe: number | null; maxDrawdown: number; trades: number; turnover: number }; buyAndHold?: { annualizedReturn: number; annualizedVolatility: number; maxDrawdown: number } };
 
 export default function AlertsPage() {
   const [alerts, setAlerts] = useState<FundAlert[]>([]);
@@ -106,15 +106,15 @@ export default function AlertsPage() {
               </Card>
             ))}
             <Card title="今日买入 / 卖出信号">
-              <List dataSource={signals.filter((item) => (item.signal === "分批买入观察" || item.signal === "分批卖出") && (directionId === "all" || portfolio.some((risk) => risk.directionId === directionId && risk.directionName === item.directionName))).sort((a, b) => b.signalRank - a.signalRank)} locale={{ emptyText: "当前没有明确的买入或卖出信号" }} renderItem={(item) => (
+              <List dataSource={signals.filter((item) => item.action !== "NONE" && item.actionAmount > 0 && (directionId === "all" || portfolio.some((risk) => risk.directionId === directionId && risk.directionName === item.directionName))).sort((a, b) => b.signalRank - a.signalRank)} locale={{ emptyText: "当前没有明确的买入或卖出信号" }} renderItem={(item) => (
                 <List.Item>
                   <List.Item.Meta title={`${item.fundName} · ${item.directionName}`} description={`${item.strategyType === "TREND" ? "高风险趋势" : "长期核心"} · 评分 ${item.score}/100 · ${item.reason} · T-1：${item.dataDate || "无"}`} />
-                  <Tag color={item.signal.includes("卖出") ? "red" : "green"}>{item.signal}</Tag>
+                  <Tag color={item.action === "SELL" ? "red" : "green"}>{item.action === "SELL" ? "卖出" : "买入"} ¥{item.actionAmount.toLocaleString()}</Tag>
                 </List.Item>
               )} />
             </Card>
             <Card title="趋势规则回测" extra={<Button size="small" loading={backtestLoading} onClick={runBacktest}>运行回测</Button>}>
-              {backtest.length === 0 ? <Text type="secondary">{backtestMessage || "用于比较趋势规则和买入并持有，不代表未来收益。"}</Text> : <List size="small" dataSource={backtest} renderItem={(item) => <List.Item><List.Item.Meta title={item.fundName} description={item.enoughData ? `样本 ${item.observations} 个净值点 · 趋势年化 ${item.strategy?.annualizedReturn.toFixed(2)}% / 最大回撤 ${item.strategy?.maxDrawdown.toFixed(2)}% · 买入并持有年化 ${item.buyAndHold?.annualizedReturn.toFixed(2)}% / 最大回撤 ${item.buyAndHold?.maxDrawdown.toFixed(2)}%` : `数据不足（${item.observations} 个净值点）`} /></List.Item>} />}
+              {backtest.length === 0 ? <Text type="secondary">{backtestMessage || "用于比较趋势规则和买入并持有，不代表未来收益。"}</Text> : <List size="small" dataSource={backtest} renderItem={(item) => <List.Item><List.Item.Meta title={item.fundName} description={item.enoughData ? `样本 ${item.observations} 个净值点 · 趋势年化 ${item.strategy?.annualizedReturn.toFixed(2)}% / 波动 ${item.strategy?.annualizedVolatility.toFixed(2)}% / 夏普 ${item.strategy?.sharpe?.toFixed(2) ?? "不足"} / 最大回撤 ${item.strategy?.maxDrawdown.toFixed(2)}% / 交易 ${item.strategy?.trades} 次 · 买入并持有年化 ${item.buyAndHold?.annualizedReturn.toFixed(2)}% / 最大回撤 ${item.buyAndHold?.maxDrawdown.toFixed(2)}%` : `数据不足（${item.observations} 个净值点）`} /></List.Item>} />}
             </Card>
             {visibleAlerts.length > 0 ? <AlertsOverview alerts={visibleAlerts} loading={false} /> : <Alert type="success" message="当前没有额外的交易或资料提醒" showIcon />}
           </Space>

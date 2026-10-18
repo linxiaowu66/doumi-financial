@@ -1,0 +1,4 @@
+name: upgrade-backtest-and-virtual-signals
+description: Upgrade portfolio backtests with data-quality and robustness checks, and add a paper signal account.
+created: 2026-10-18
+status: proposed

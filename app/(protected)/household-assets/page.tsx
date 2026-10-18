@@ -115,10 +115,12 @@ interface Asset {
   member: Member | null;
   name: string;
   platform: string;
+  strategyName: string | null;
   balance: string;
   asOfDate: string;
   remark: string | null;
   histories: Array<{ id: number; balance: string; asOfDate: string; month: string }>;
+  strategyAccount?: { id: number; holdings: Array<{ id: number; asOfDate: string; assetClass: string | null; marketValue: string }> } | null;
 }
 
 interface DirectionSnapshot {
@@ -186,6 +188,7 @@ interface InsurancePlan {
 interface AssetFormValues {
   name: string;
   platform: string;
+  strategyName?: string;
   memberId?: number;
   balance?: number;
   month?: Dayjs;
@@ -481,6 +484,7 @@ export default function HouseholdAssetsPage() {
     assetForm.setFieldsValue(asset ? {
       name: asset.name,
       platform: asset.platform,
+      strategyName: asset.strategyName || undefined,
       memberId: asset.memberId || undefined,
       remark: asset.remark || undefined,
     } : {
@@ -700,6 +704,8 @@ export default function HouseholdAssetsPage() {
                 <Statistic value={Number(asset.balance)} precision={2} prefix="¥" valueStyle={{ fontSize: 24 }} />
                 <Descriptions size="small" column={1}>
                   <Descriptions.Item label="归属">{asset.member?.name || "家庭共有"}</Descriptions.Item>
+                  {asset.strategyName && <Descriptions.Item label="跟随策略">{asset.strategyName}</Descriptions.Item>}
+                  {asset.platform === "QIEMAN" && asset.strategyAccount?.holdings.length ? <Descriptions.Item label="配置统计"><Tag color="success">已按底层持仓计入</Tag></Descriptions.Item> : null}
                   <Descriptions.Item label="数据月份">
                     <Space wrap>{assetMonth}{stale && <Tag color="warning">待更新</Tag>}</Space>
                   </Descriptions.Item>
@@ -1093,6 +1099,7 @@ export default function HouseholdAssetsPage() {
             id: editingAsset.id,
             name: values.name,
             platform: values.platform,
+            strategyName: values.strategyName,
             memberId: values.memberId,
             remark: values.remark,
           })) closeAsset();
@@ -1101,6 +1108,7 @@ export default function HouseholdAssetsPage() {
             <Col xs={24} sm={12}><Form.Item name="name" label="账户名称" rules={[{ required: true }]}><Input placeholder="例如：且慢长期账户" maxLength={100} /></Form.Item></Col>
             <Col xs={24} sm={12}><Form.Item name="platform" label="平台" rules={[{ required: true }]}><Select options={platformOptions.map(({ value, label }) => ({ value, label }))} /></Form.Item></Col>
             <Col xs={24} sm={12}><Form.Item name="memberId" label="归属成员"><Select allowClear placeholder="家庭共有" options={members.map((member) => ({ value: member.id, label: member.name }))} /></Form.Item></Col>
+            <Col xs={24}><Form.Item name="strategyName" label="跟随策略（可选）" extra="例如：某主理人｜某组合"><Input placeholder="如果是且慢主理人组合，请填写策略名称" maxLength={120} /></Form.Item></Col>
             {!editingAsset && (
               <>
                 <Col xs={24} sm={12}><Form.Item name="balance" label="首月余额" rules={[{ required: true, message: "请填写余额" }]}><InputNumber min={0} precision={2} prefix="¥" style={{ width: "100%" }} /></Form.Item></Col>

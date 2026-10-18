@@ -37,12 +37,21 @@ const strategyPrompt = (data: Record<string, unknown>) => `你是一个谨慎、
 ${JSON.stringify(data, null, 2)}
 \`\`\``;
 
+type AiResponse = {
+  error?: { message?: string };
+  message?: string;
+  choices?: Array<{ message?: { content?: string } }>;
+  content?: Array<{ text?: string }>;
+  candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+};
+
 async function requestAi(provider: AiProvider, settings: AiSettings, input: string) {
   const key = settings[`ai_${provider}_key`];
   if (!key) throw new Error(`请先在系统设置中配置 ${provider} API Key`);
 
   const model = settings[`ai_${provider}_model`];
   const baseUrl = settings[`ai_${provider}_base_url`];
+  if (!model || !baseUrl) throw new Error(`请先在系统设置中补充 ${provider} 的模型名和 Base URL`);
   let response: Response;
 
   if (provider === "chatgpt") {
@@ -60,7 +69,7 @@ async function requestAi(provider: AiProvider, settings: AiSettings, input: stri
         "anthropic-version": "2023-06-01",
         "anthropic-dangerous-direct-browser-access": "true",
       },
-      body: JSON.stringify({ model, max_tokens: 4096, messages: [{ role: "user", content: input }] }),
+      body: JSON.stringify({ model, max_tokens: 4096, messages: [{ role: "user", content: [{ type: "text", text: input }] }] }),
     });
   } else {
     response = await fetch(`${joinUrl(baseUrl, `v1beta/models/${encodeURIComponent(model)}:generateContent`)}?key=${encodeURIComponent(key)}`, {
@@ -70,8 +79,14 @@ async function requestAi(provider: AiProvider, settings: AiSettings, input: stri
     });
   }
 
-  const result = await response.json();
-  if (!response.ok) throw new Error(result.error?.message || result.message || "AI 分析请求失败");
+  const responseText = await response.text();
+  let result: AiResponse = {};
+  try {
+    result = responseText ? JSON.parse(responseText) : {};
+  } catch {
+    throw new Error(`${provider} 返回了无法解析的响应（HTTP ${response.status}）`);
+  }
+  if (!response.ok) throw new Error(result.error?.message || result.message || `AI 分析请求失败（HTTP ${response.status}）`);
   return provider === "chatgpt"
     ? result.choices?.[0]?.message?.content
     : provider === "claude"

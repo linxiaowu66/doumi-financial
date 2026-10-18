@@ -8,6 +8,7 @@ import { isWorkday } from "@/lib/workday";
 import { detectYesterdayFundDividends } from "@/lib/fund-dividend";
 import { buildFundSignalResult } from "@/lib/fund-signal-engine";
 import dayjs from "dayjs";
+import { finishDataSyncRun, startDataSyncRun } from "@/lib/data-sync";
 
 // 延迟函数，用于避免限流
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -118,6 +119,7 @@ export async function POST(request: Request) {
     }
 
     const startTime = Date.now();
+    let netWorthSyncRunId: number | null = null;
     const results = {
       dividendDetection: {
         paymentDate: "",
@@ -142,6 +144,8 @@ export async function POST(request: Request) {
 
     // 1. 更新所有基金的净值
     try {
+      const syncRun = await startDataSyncRun(null, "NET_WORTH", "cron");
+      netWorthSyncRunId = syncRun.id;
       const funds = await prisma.fund.findMany({
         select: {
           id: true,
@@ -187,7 +191,14 @@ export async function POST(request: Request) {
         // 延迟避免限流
         await delay(500);
       }
+      await finishDataSyncRun(syncRun.id, {
+        status: results.netWorthUpdate.failed > 0 && results.netWorthUpdate.success === 0 ? "FAILED" : "SUCCESS",
+        itemCount: results.netWorthUpdate.success,
+        errorMessage: results.netWorthUpdate.failed > 0 ? `${results.netWorthUpdate.failed} 个基金净值同步失败` : null,
+        detailsJson: { total: funds.length, success: results.netWorthUpdate.success, failed: results.netWorthUpdate.failed },
+      });
     } catch (error) {
+      if (netWorthSyncRunId !== null) await finishDataSyncRun(netWorthSyncRunId, { status: "FAILED", errorMessage: error instanceof Error ? error.message : "净值同步失败" });
       results.netWorthUpdate.errors.push(
         `更新净值失败: ${error instanceof Error ? error.message : "未知错误"}`,
       );
@@ -202,8 +213,8 @@ export async function POST(request: Request) {
         for (const signal of result.signals) {
           await prisma.fundSignalDailySnapshot.upsert({
             where: { fundId_date: { fundId: signal.fundId, date: snapshotDate } },
-            create: { userId: user.id, directionId: signal.directionId, fundId: signal.fundId, date: snapshotDate, signal: signal.signal, score: signal.score, reason: signal.reason, dataDate: signal.dataDate },
-            update: { userId: user.id, directionId: signal.directionId, signal: signal.signal, score: signal.score, reason: signal.reason, dataDate: signal.dataDate },
+            create: { userId: user.id, directionId: signal.directionId, fundId: signal.fundId, date: snapshotDate, signal: signal.signal, action: signal.action, actionAmount: signal.actionAmount, score: signal.score, reason: signal.reason, dataDate: signal.dataDate },
+            update: { userId: user.id, directionId: signal.directionId, signal: signal.signal, action: signal.action, actionAmount: signal.actionAmount, score: signal.score, reason: signal.reason, dataDate: signal.dataDate },
           });
           results.signalSnapshots.saved++;
         }

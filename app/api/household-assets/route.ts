@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import prisma from "@/lib/prisma";
-import { buildMonthlyHouseholdAllocationHistory, buildMonthlyHouseholdHistory, currentHouseholdMonth, isHouseholdMonth, keepsHouseholdDirectionHistory, monthToAsOfDate, showsHouseholdDirection, suggestSnapshotMonth, tracksHouseholdDirection, type HouseholdAllocationCategory } from "@/lib/household-assets";
+import { allocationCategoryForPlatform, buildMonthlyHouseholdAllocationHistory, buildMonthlyHouseholdHistory, currentHouseholdMonth, isHouseholdMonth, keepsHouseholdDirectionHistory, monthToAsOfDate, showsHouseholdDirection, suggestSnapshotMonth, tracksHouseholdDirection, type HouseholdAllocationCategory } from "@/lib/household-assets";
 import { calcFundSnapshot, calculateDirectionMarketValue } from "@/lib/fund-daily-profit";
 import { classifyFundAsset } from "@/lib/fund-asset-classification";
+import { normalizeQiemanHoldingClass } from "@/lib/qieman-client";
 
 const PLATFORMS = ["QIEMAN", "YUEBAO", "HUATAI", "PERSONAL_PENSION", "OTHER"];
 const POLICY_TYPES = ["ACCIDENT", "CRITICAL_ILLNESS", "LIFE", "MEDICAL", "NURSING", "OTHER"];
@@ -81,6 +82,12 @@ export async function GET(request: Request) {
       include: {
         member: true,
         histories: { orderBy: [{ month: "desc" }, { createdAt: "desc" }] },
+        strategyAccount: {
+          select: {
+            id: true,
+            holdings: { orderBy: [{ asOfDate: "desc" }, { marketValue: "desc" }] },
+          },
+        },
       },
       orderBy: [{ platform: "asc" }, { name: "asc" }],
     }),
@@ -165,10 +172,59 @@ export async function GET(request: Request) {
     }
     directionWeights.set(view.direction.id, weights);
   }
+  const qiemanAllocationSnapshots = assets.flatMap((asset) => {
+    const holdings = asset.strategyAccount?.holdings ?? [];
+    if (asset.platform !== "QIEMAN" || holdings.length === 0) return [];
+    const grouped = new Map<string, { category: HouseholdAllocationCategory; value: number; date: Date }>();
+    for (const holding of holdings) {
+      const category = allocationCategoryForPlatform(normalizeQiemanHoldingClass(holding.assetClass, holding.fundName, holding.note));
+      const dateKey = new Date(holding.asOfDate).toISOString().slice(0, 10);
+      const key = `${dateKey}:${category}`;
+      const current = grouped.get(key);
+      if (current) current.value += Number(holding.marketValue);
+      else grouped.set(key, { category, value: Number(holding.marketValue), date: holding.asOfDate });
+    }
+    const categoryIds = new Map<HouseholdAllocationCategory, number>([
+      ["EQUITY", 1], ["FIXED_INCOME", 2], ["GOLD", 3], ["CASH_FLOW", 4], ["OTHER", 5],
+    ]);
+    return [...grouped.entries()].map(([key, snapshot]) => ({
+      sourceId: -(asset.strategyAccount!.id * 10 + categoryIds.get(snapshot.category)! ),
+      category: snapshot.category,
+      value: snapshot.value,
+      date: snapshot.date,
+      month: key.slice(0, 7),
+    }));
+  });
   for (const asset of assets) {
-    const category: HouseholdAllocationCategory = asset.platform === "YUEBAO" || asset.platform === "PERSONAL_PENSION" ? "CASH_FLOW" : "OTHER";
+    const holdings = asset.strategyAccount?.holdings ?? [];
+    const latestDate = holdings.map((holding) => new Date(holding.asOfDate).toISOString().slice(0, 10)).sort().at(-1);
+    const latestHoldings = asset.platform === "QIEMAN" && latestDate
+      ? holdings.filter((holding) => new Date(holding.asOfDate).toISOString().slice(0, 10) === latestDate)
+      : [];
+    if (latestHoldings.length > 0) {
+      const holdingValue = latestHoldings.reduce((sum, holding) => sum + Number(holding.marketValue), 0);
+      const residual = Number(asset.balance) - holdingValue;
+      if (residual > 0.01) allocationCurrent.set("OTHER", (allocationCurrent.get("OTHER") ?? 0) + residual);
+      for (const holding of latestHoldings) {
+        const category = allocationCategoryForPlatform(normalizeQiemanHoldingClass(holding.assetClass, holding.fundName, holding.note));
+        allocationCurrent.set(category, (allocationCurrent.get(category) ?? 0) + Number(holding.marketValue));
+      }
+      continue;
+    }
+    const category: HouseholdAllocationCategory = allocationCategoryForPlatform(asset.platform);
     allocationCurrent.set(category, (allocationCurrent.get(category) ?? 0) + Number(asset.balance));
   }
+  const allocationManualSnapshots = assets.flatMap((asset) => {
+    const hasQiemanHoldings = asset.platform === "QIEMAN" && Boolean(asset.strategyAccount?.holdings.length);
+    if (hasQiemanHoldings) return [];
+    return asset.histories.map((snapshot) => ({
+      sourceId: snapshot.id,
+      category: asset.platform,
+      value: snapshot.balance.toString(),
+      date: snapshot.asOfDate,
+      month: snapshot.month,
+    }));
+  });
   const history = buildMonthlyHouseholdHistory(
     assets.flatMap((asset) => asset.histories.map((snapshot) => ({
       sourceId: asset.id,
@@ -185,13 +241,7 @@ export async function GET(request: Request) {
     }))),
   );
   const allocationHistory = buildMonthlyHouseholdAllocationHistory(
-    assets.flatMap((asset) => asset.histories.map((snapshot) => ({
-      sourceId: asset.id,
-      category: asset.platform,
-      value: snapshot.balance.toString(),
-      date: snapshot.asOfDate,
-      month: snapshot.month,
-    }))),
+    [...allocationManualSnapshots, ...qiemanAllocationSnapshots],
     directionViews.filter((view) => view.keptInHistory).flatMap((view) => view.orderedSnapshots.map((snapshot) => ({
       sourceId: view.direction.id,
       value: snapshot.value.toString(),
@@ -215,7 +265,7 @@ export async function GET(request: Request) {
     history,
     allocationCurrent: [...allocationCurrent.entries()].map(([category, value]) => ({ category, value: Number(value.toFixed(2)) })),
     allocationHistory,
-    allocationScopeNote: "投资方向按官方分类和 metadata 的当前资产类型归类；历史月份使用当前分类比例回溯。且慢、华泰等手动账户若已包含投资方向余额，可能重复计算，请只保留一处。",
+    allocationScopeNote: "投资方向按官方分类和 metadata 归类；已同步底层持仓的且慢账户按最新基金大类计入，盈米宝归入现金流，账户余额不会与底层持仓重复计算。未同步底层明细的外部账户仍需确认是否和投资方向重复。",
     maintenanceDates,
     suggestedSnapshotMonth: suggestSnapshotMonth(netWorthDates),
     latestNetWorthDate: latestNetWorthDate(netWorthDates),
@@ -254,6 +304,7 @@ export async function POST(request: Request) {
         memberId,
         name,
         platform,
+        strategyName: text(body.strategyName) || null,
         balance,
         asOfDate,
         remark: text(body.remark) || null,
@@ -479,7 +530,7 @@ export async function PUT(request: Request) {
     if (!await ownsMember(userId, memberId)) return invalid("家庭成员不存在");
     return NextResponse.json(await prisma.householdAsset.update({
       where: { id },
-      data: { memberId, name, platform, remark: text(body.remark) || null },
+      data: { memberId, name, platform, strategyName: text(body.strategyName) || null, remark: text(body.remark) || null },
       include: historyInclude,
     }));
   }

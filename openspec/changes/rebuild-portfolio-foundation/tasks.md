@@ -1,0 +1,6 @@
+- [x] Add household policy and market-value allocation models/API/UI.
+- [x] Add strategy-account, holding, and batch import models/API/UI.
+- [x] Add browser-side screenshot extraction preview and confirmed bulk save.
+- [x] Rebuild the trend backtest with T-1 execution and fee/turnover metrics.
+- [x] Switch target-gap calculations from holding cost to market value.
+- [x] Run Prisma migration, typecheck, diff checks, CodeGraph sync, and responsive browser checks. The OpenSpec CLI is unavailable in this environment.
