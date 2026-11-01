@@ -33,7 +33,7 @@ export async function POST(request: Request) {
     const accountId = Number(body.accountId);
     const account = await prisma.strategyAccount.findFirst({
       where: { id: accountId, userId, platform: "QIEMAN" },
-      select: { id: true, qiemanUserPropertyId: true, qiemanUserPropertyIds: true, qiemanBearerToken: true },
+      select: { id: true, householdAssetId: true, qiemanUserPropertyId: true, qiemanUserPropertyIds: true, qiemanBearerToken: true },
     });
     if (!account) return NextResponse.json({ error: "且慢策略账户不存在" }, { status: 404 });
     const propertyIds = accountPropertyIds(account);
@@ -94,7 +94,18 @@ export async function POST(request: Request) {
           note: row.note,
         })),
       });
-      return tx.strategyAccount.update({ where: { id: account.id }, data: { sourceType: "QIEMAN_API", asOfDate } });
+      const savedAccount = await tx.strategyAccount.update({ where: { id: account.id }, data: { sourceType: "QIEMAN_API", asOfDate } });
+      if (account.householdAssetId) {
+        const balance = totalAsset;
+        const month = asOfDateText!.slice(0, 7);
+        await tx.householdAsset.update({ where: { id: account.householdAssetId }, data: { balance, asOfDate } });
+        await tx.householdAssetHistory.upsert({
+          where: { assetId_month: { assetId: account.householdAssetId, month } },
+          create: { assetId: account.householdAssetId, month, balance, asOfDate },
+          update: { balance, asOfDate },
+        });
+      }
+      return savedAccount;
     });
     await finishDataSyncRun(syncRun.id, { status: "SUCCESS", asOfDate: asOfDateText, itemCount: rows.length, detailsJson: { propertyIds, count: rows.length } });
     return NextResponse.json({
@@ -106,7 +117,7 @@ export async function POST(request: Request) {
       shareAsset,
       holdingProfit,
       accountCount: propertyIds.length,
-      note: "本次同步的是多个且慢长赢子账户，已合并为策略账户快照，未覆盖合并家庭资产余额。",
+      note: "本次同步的是多个且慢长赢子账户，已合并为策略账户快照，并同步更新关联家庭资产余额。",
     });
   } catch (error) {
     if (syncRunId !== null) await finishDataSyncRun(syncRunId, { status: "FAILED", errorMessage: error instanceof Error ? error.message : "同步且慢资产失败" });

@@ -141,6 +141,14 @@ interface HouseholdStrategySummary {
   note: string;
 }
 
+interface InvestmentPlan {
+  gate: "READY" | "REVIEW" | "BLOCKED";
+  decision: string;
+  guardrails: string[];
+  actions: Array<{ key: string; kind: "BUY" | "SELL" | "REVIEW"; title: string; amount: number; reason: string }>;
+  generatedAt: string;
+}
+
 const householdAssetLabels: Record<string, string> = {
   EQUITY: "股票 / 权益",
   FIXED_INCOME: "债券 / 固收",
@@ -169,6 +177,7 @@ export default function HomePage() {
   const [portfolioRisks, setPortfolioRisks] = useState<PortfolioRisk[]>([]);
   const [householdStrategy, setHouseholdStrategy] = useState<HouseholdStrategySummary | null>(null);
   const [signalAsOfDate, setSignalAsOfDate] = useState<string | null>(null);
+  const [investmentPlan, setInvestmentPlan] = useState<InvestmentPlan | null>(null);
   const displayLastTradeDate = summary?.lastTradeDate || "";
 
   // 检测屏幕尺寸
@@ -190,6 +199,7 @@ export default function HomePage() {
       loadDirections();
       loadSummary();
       loadFundSignals();
+      loadInvestmentPlan();
     }
   }, [status, router]);
 
@@ -202,6 +212,15 @@ export default function HomePage() {
       console.error("加载投资方向失败:", error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadInvestmentPlan = async () => {
+    try {
+      const response = await fetch("/api/investment-plan", { cache: "no-store" });
+      if (response.ok) setInvestmentPlan(await response.json());
+    } catch (error) {
+      console.error("加载家庭投资计划失败:", error);
     }
   };
 
@@ -255,6 +274,7 @@ export default function HomePage() {
               // 刷新投资方向数据和汇总数据
               loadDirections();
               loadSummary();
+              loadInvestmentPlan();
             } else {
               message.error(data.error || "更新失败");
             }
@@ -520,6 +540,19 @@ export default function HomePage() {
             <div style={{ marginTop: 12, color: "#666", fontSize: 12 }}>
               该收益率只是基于当前市值的数学缺口，不代表收益承诺；实际投入字段表示持仓成本，不等同于可用现金。
             </div>
+          </Card>
+        )}
+
+        {investmentPlan && (
+          <Card
+            title="今日家庭投资计划"
+            extra={<Tag color={investmentPlan.gate === "READY" ? "green" : investmentPlan.gate === "BLOCKED" ? "red" : "orange"}>{investmentPlan.gate === "READY" ? "可按计划执行" : investmentPlan.gate === "BLOCKED" ? "买入已暂停" : "需复核"}</Tag>}
+            style={{ marginBottom: isMobile ? 16 : 24 }}
+          >
+            <Alert type={investmentPlan.gate === "BLOCKED" ? "warning" : investmentPlan.gate === "READY" ? "success" : "info"} showIcon message={investmentPlan.decision} />
+            {investmentPlan.guardrails.length > 0 && <div style={{ marginTop: 10, color: "#ad6800", fontSize: 12 }}>{investmentPlan.guardrails.join("；")}</div>}
+            {investmentPlan.actions.length === 0 ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无需要执行的动作" /> : <List size="small" style={{ marginTop: 10 }} dataSource={investmentPlan.actions} renderItem={(action) => <List.Item><List.Item.Meta title={<Space wrap><Tag color={action.kind === "BUY" ? "green" : action.kind === "SELL" ? "red" : "orange"}>{action.kind === "BUY" ? "买入" : action.kind === "SELL" ? "卖出" : "复核"}</Tag><span>{action.title}</span>{action.amount > 0 && <span>¥{action.amount.toLocaleString()}</span>}</Space>} description={action.reason} /></List.Item>} />}
+            <div style={{ color: "#999", fontSize: 12, marginTop: 8 }}>规则先于观点：先检查现金安全垫与数据完整性，再按优先级分批执行；这里是决策参考，不会自动下单。</div>
           </Card>
         )}
 

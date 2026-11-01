@@ -21,7 +21,7 @@ function propertyIds(account: { qiemanUserPropertyId: string | null; qiemanUserP
 export async function POST(request: Request) {
   const cronSecret = process.env.CRON_SECRET;
   if (cronSecret && request.headers.get("authorization") !== `Bearer ${cronSecret}`) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const accounts = await prisma.strategyAccount.findMany({ where: { platform: "QIEMAN", qiemanBearerToken: { not: null } }, select: { id: true, userId: true, qiemanUserPropertyId: true, qiemanUserPropertyIds: true, qiemanBearerToken: true } });
+  const accounts = await prisma.strategyAccount.findMany({ where: { platform: "QIEMAN", qiemanBearerToken: { not: null } }, select: { id: true, userId: true, householdAssetId: true, qiemanUserPropertyId: true, qiemanUserPropertyIds: true, qiemanBearerToken: true } });
   const results: Array<{ accountId: number; success: boolean; count?: number; error?: string }> = [];
   for (const account of accounts) {
     const run = await startDataSyncRun(account.userId, "QIEMAN", `account:${account.id}`);
@@ -47,6 +47,12 @@ export async function POST(request: Request) {
         await tx.strategyAccountHolding.deleteMany({ where: { strategyAccountId: account.id, asOfDate } });
         await tx.strategyAccountHolding.createMany({ data: rows.map((row) => ({ strategyAccountId: account.id, importId: imported.id, asOfDate, fundCode: row.fundCode, fundName: row.fundName, assetClass: row.assetClass, marketValue: row.marketValue, weight: row.weight, confidence: row.confidence, note: row.note })) });
         await tx.strategyAccount.update({ where: { id: account.id }, data: { sourceType: "QIEMAN_API", asOfDate } });
+        if (account.householdAssetId) {
+          const balance = totalAsset;
+          const month = asOfDateText!.slice(0, 7);
+          await tx.householdAsset.update({ where: { id: account.householdAssetId }, data: { balance, asOfDate } });
+          await tx.householdAssetHistory.upsert({ where: { assetId_month: { assetId: account.householdAssetId, month } }, create: { assetId: account.householdAssetId, month, balance, asOfDate }, update: { balance, asOfDate } });
+        }
       });
       await finishDataSyncRun(run.id, { status: "SUCCESS", asOfDate: asOfDateText, itemCount: rows.length, detailsJson: { ids, count: rows.length } });
       results.push({ accountId: account.id, success: true, count: rows.length });
