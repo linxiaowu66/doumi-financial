@@ -94,6 +94,15 @@ const allocationColors: Record<AllocationCategory, string> = {
   OTHER: "#8c8c8c",
 };
 
+const historySeries = [
+  { key: "total", label: "总资产", color: "#1677ff" },
+  { key: "directions", label: "投资方向", color: "#722ed1" },
+  { key: "QIEMAN", label: "且慢", color: "#13c2c2" },
+  { key: "YUEBAO", label: "余额宝", color: "#52c41a" },
+  { key: "HUATAI", label: "华泰", color: "#fa8c16" },
+  { key: "PERSONAL_PENSION", label: "个人养老金", color: "#eb2f96" },
+] as const;
+
 const policyTypeOptions = [
   { value: "ACCIDENT", label: "意外险" },
   { value: "CRITICAL_ILLNESS", label: "重疾险" },
@@ -250,6 +259,7 @@ export default function HouseholdAssetsPage() {
   const [allocationCurrent, setAllocationCurrent] = useState<Array<{ category: AllocationCategory; value: number }>>([]);
   const [allocationHistory, setAllocationHistory] = useState<AllocationPoint[]>([]);
   const [allocationScopeNote, setAllocationScopeNote] = useState("");
+  const [visibleHistorySeries, setVisibleHistorySeries] = useState<string[]>(historySeries.map((item) => item.key));
   const [maintenanceDates, setMaintenanceDates] = useState<Array<string | Date>>([]);
   const [selectedMemberId, setSelectedMemberId] = useState<number | null>(null);
   const [memberOpen, setMemberOpen] = useState(false);
@@ -351,6 +361,12 @@ export default function HouseholdAssetsPage() {
     }),
     [allocationHistory],
   );
+  const toggleHistorySeries = (key: string) => {
+    setVisibleHistorySeries((current) => {
+      if (current.length === 1 && current[0] === key) return historySeries.map((item) => item.key);
+      return [key];
+    });
+  };
 
   const updateDue = isHouseholdAssetUpdateDue(maintenanceDates);
   const currentYear = dayjs().year();
@@ -1014,13 +1030,11 @@ export default function HouseholdAssetsPage() {
                     <XAxis dataKey="month" interval="preserveStartEnd" minTickGap={8} tick={MonthAxisTick} tickLine={false} />
                     <YAxis width={52} tickFormatter={(value) => formatWanAxis(Number(value))} />
                     <ChartTooltip formatter={(value) => money(Number(value))} />
-                    <Legend />
-                    <Line type="monotone" dataKey="total" name="总资产" stroke="#1677ff" strokeWidth={2} />
-                    <Line type="monotone" dataKey="directions" name="投资方向" stroke="#722ed1" />
-                    <Line type="monotone" dataKey="QIEMAN" name="且慢" stroke="#13c2c2" />
-                    <Line type="monotone" dataKey="YUEBAO" name="余额宝" stroke="#52c41a" />
-                    <Line type="monotone" dataKey="HUATAI" name="华泰" stroke="#fa8c16" />
-                    <Line type="monotone" dataKey="PERSONAL_PENSION" name="个人养老金" stroke="#eb2f96" />
+                    <Legend
+                      onClick={(entry) => toggleHistorySeries(String(entry.dataKey || entry.value || ""))}
+                      formatter={(value, entry) => <span style={{ cursor: "pointer", opacity: visibleHistorySeries.includes(String(entry.dataKey || value)) ? 1 : 0.4 }}>{value}</span>}
+                    />
+                    {historySeries.map((series) => <Line key={series.key} type="monotone" dataKey={series.key} name={series.label} stroke={series.color} strokeWidth={series.key === "total" ? 2 : 1.5} hide={!visibleHistorySeries.includes(series.key)} />)}
                   </LineChart>
                 </ResponsiveContainer>
               </div>
